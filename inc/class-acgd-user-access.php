@@ -346,22 +346,28 @@ class ACGD_User_Access {
 		 * __( 'Update User' ) )` choice, so this notice always names the label actually printed on this screen's
 		 * submit button (UI test finding, issue #4: the notice previously hardcoded "Update User", but the only
 		 * button core prints on one's own profile.php is "Update Profile" — "Update User" does not exist there).
-		 * render_verify_notice() is only ever called for $is_self (render_fields()), but $is_self alone does not
-		 * decide the button label: a manage_options admin can also reach their own account through
-		 * user-edit.php?user_id=<self> (the "Edit User" screen from the Users list), where IS_PROFILE_PAGE is
-		 * false even though the target user is themselves, and core prints "Update User" there. IS_PROFILE_PAGE
-		 * is defined by wp-admin/user-edit.php before it fires the show_user_profile/edit_user_profile hooks
-		 * that lead here, so it is already set by the time this method runs.
+		 * render_verify_notice() is only ever called for $is_self (render_fields()), where IS_PROFILE_PAGE is
+		 * always true (see the class docblock: core decides IS_PROFILE_PAGE purely by whether the target user
+		 * ID equals the current user's own ID, which is exactly what $is_self already checks — there is no
+		 * known case in which the two disagree). Reading IS_PROFILE_PAGE directly here, rather than reusing
+		 * $is_self, is still the more robust choice: it is the very same variable core's own submit_button()
+		 * call above switches on, so this notice cannot drift from the label actually printed even if some
+		 * future change altered how core decides IS_PROFILE_PAGE. IS_PROFILE_PAGE is defined by
+		 * wp-admin/user-edit.php before it fires the show_user_profile/edit_user_profile hooks that lead here,
+		 * so it is already set by the time this method runs.
 		 * wp-admin/user-edit.php 自身の `submit_button( IS_PROFILE_PAGE ? __( 'Update Profile' ) :
 		 * __( 'Update User' ) )` の出し分けに合わせる。そうすることで、この通知は常にこの画面で実際に出ている
 		 * 送信ボタンのラベルを言う（UIテストでの指摘、issue #4：この通知は以前「ユーザーを更新」に固定していた
 		 * が、本人自身の profile.php で本体が出すボタンは「プロフィールを更新」だけで、「ユーザーを更新」は
 		 * この画面に存在しない）。render_verify_notice() は $is_self のときにしか呼ばれない（render_fields()）
-		 * が、ボタンのラベルを決めるのは $is_self だけではない：manage_options を持つ管理者は
-		 * user-edit.php?user_id=<自分自身>（ユーザー一覧からの「ユーザーを編集」画面）経由でも自分自身の画面に
-		 * 来られ、対象が自分自身でも IS_PROFILE_PAGE は false のままで、本体はそこで「ユーザーを更新」を出す。
-		 * IS_PROFILE_PAGE は、ここに至る show_user_profile / edit_user_profile フックを発火する前に
-		 * wp-admin/user-edit.php が定義しているため、このメソッドの実行時点で既に定義済み。
+		 * が、そこでは IS_PROFILE_PAGE は常に true（クラスの docblock を参照：本体が IS_PROFILE_PAGE を決める
+		 * のは対象ユーザー ID が現在のユーザー自身の ID と一致するかどうかだけであり、これは $is_self が既に
+		 * 見ていることと同じで、両者が食い違う既知のケースは無い）。それでもここで $is_self を使い回さず
+		 * IS_PROFILE_PAGE を直接参照するのには意味がある：これは本体自身の上記 submit_button() 呼び出しが
+		 * 分岐に使っているのと全く同じ変数であるため、将来 本体が IS_PROFILE_PAGE を決める条件を変えたとしても、
+		 * この通知が実際に出ているラベルからずれることは無い。IS_PROFILE_PAGE は、ここに至る
+		 * show_user_profile / edit_user_profile フックを発火する前に wp-admin/user-edit.php が定義している
+		 * ため、このメソッドの実行時点で既に定義済み。
 		 */
 		$update_label = ( defined( 'IS_PROFILE_PAGE' ) && IS_PROFILE_PAGE )
 			? __( 'Update Profile', 'etbs-account-guard' )
