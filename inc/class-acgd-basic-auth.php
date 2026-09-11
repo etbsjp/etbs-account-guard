@@ -787,6 +787,28 @@ class ACGD_Basic_Auth {
 	private static function validated_redirect_to( $default ) {
 		$raw = isset( $_REQUEST['redirect_to'] ) ? (string) wp_unslash( $_REQUEST['redirect_to'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only; the value itself is validated by wp_validate_redirect() below, and nothing is changed by reading it.
 
+		if ( '' === $raw ) {
+			// wp_validate_redirect() does NOT fall back to $default when $raw is '' (core bug-for-bug
+			// behavior, wp-includes/pluggable.php): parse_url('') returns an array with no 'host', so the
+			// host-mismatch branch that substitutes $default never fires, and '' is returned unchanged.
+			// That empty string then reaches wp_safe_redirect()/wp_redirect(), whose
+			// `if ( ! $location ) { return false; }` guard silently emits no headers and no body at all —
+			// a "200 OK, 0 bytes" response instead of a redirect. This hit the plugin's most ordinary path
+			// (unauthenticated wp-admin access → challenge screen → correct credentials), since
+			// redirect_to_challenge() also routes through this method without a redirect_to request param
+			// (issue #4, UI test finding). Fall back ourselves; never leave it to wp_validate_redirect().
+			// wp_validate_redirect() は $raw が '' のとき $default へフォールバックしない（本体の仕様。
+			// wp-includes/pluggable.php）：parse_url('') は 'host' を持たない配列を返すため、$default に
+			// 差し替えるホスト不一致の分岐が発火せず、'' がそのまま返る。その空文字が
+			// wp_safe_redirect()/wp_redirect() に渡ると、`if ( ! $location ) { return false; }` の
+			// ガードに引っかかり、ヘッダーも本文も一切出さずに終わる——リダイレクトではなく
+			// 「200 OK・本文0バイト」になる。redirect_to_challenge() も redirect_to のリクエストパラメータ
+			// 無しでこのメソッドを通るため、このプラグインで一番普通の導線（未認証での wp-admin アクセス→
+			// 確認画面→正しい資格情報）がまるごと壊れていた（issue #4、UIテストで判明）。ここで自分で
+			// フォールバックする。wp_validate_redirect() 任せにしない。
+			return $default;
+		}
+
 		return wp_validate_redirect( $raw, $default );
 	}
 
