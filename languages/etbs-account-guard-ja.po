@@ -1,0 +1,235 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: ETBS Account Guard 1.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/etbsjp/etbs-account-guard/issues\n"
+"PO-Revision-Date: 2026-09-11 12:00+0900\n"
+"Last-Translator: ETBS\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Domain: etbs-account-guard\n"
+
+#. Plugin Name of the plugin
+msgid "ETBS Account Guard"
+msgstr "ETBS Account Guard"
+
+#. Plugin URI of the plugin
+msgid "https://etbs.jp/product-category/wordpress-tools/"
+msgstr "https://etbs.jp/product-category/wordpress-tools/"
+
+#. Description of the plugin
+msgid "Protects the accounts that manage your site. Keeps the login names of your users away from visitors who are not logged in."
+msgstr "サイトを管理するアカウントを守ります。ログインしていない訪問者に、ユーザーのログイン名を渡しません。"
+
+#. Author of the plugin
+msgid "ETBS (DAI)"
+msgstr "ETBS (DAI)"
+
+#. Author URI of the plugin
+msgid "https://etbs.jp"
+msgstr "https://etbs.jp"
+
+msgid "Error:"
+msgstr "エラー:"
+
+msgid "The username or password you entered is incorrect."
+msgstr "ユーザー名またはパスワードが正しくありません。"
+
+msgid "Lost your password?"
+msgstr "パスワードをお忘れですか ?"
+
+msgid "Login Name Protection"
+msgstr "ログイン名の保護"
+
+msgid "Protection items"
+msgstr "保護する項目"
+
+msgid "REST API"
+msgstr "REST API"
+
+#. translators: %s: REST API route of the users, such as /wp/v2/users
+msgid "Hide the user endpoints (%s) from visitors who are not logged in"
+msgstr "ユーザー関連のエンドポイント (%s) をログインしていない訪問者に返さない"
+
+msgid "Author data embedded in posts is hidden as well."
+msgstr "投稿に埋め込まれる投稿者の情報も返しません。"
+
+msgid "Logged-in users, including the block editor, can use them as before."
+msgstr "ログイン中のユーザー (ブロックエディターを含む) は従来どおり使えます。"
+
+msgid "oEmbed"
+msgstr "oEmbed"
+
+msgid "Use the site name and home page URL as the author of embedded posts"
+msgstr "埋め込まれた投稿の投稿者を、サイト名とトップページの URL にする"
+
+msgid "This applies when another site embeds one of your posts."
+msgstr "他のサイトがこのサイトの投稿を埋め込むときに効きます。"
+
+msgid "Sitemap"
+msgstr "サイトマップ"
+
+#. translators: %s: file name of the user sitemap, such as wp-sitemap-users-1.xml
+msgid "Remove the user sitemap (%s)"
+msgstr "ユーザーのサイトマップ (%s) を出さない"
+
+msgid "Sitemaps of posts and pages are not affected."
+msgstr "投稿と固定ページのサイトマップには影響しません。"
+
+msgid "Class names"
+msgstr "クラス名"
+
+msgid "Remove class names that contain the user name"
+msgstr "ユーザー名を含むクラス名を外す"
+
+#. translators: 1: class name added to comments by registered users, 2: class name added to author pages
+msgid "This removes %1$s from comments by registered users and %2$s from author pages."
+msgstr "登録ユーザーのコメントから %1$s を、投稿者ページから %2$s を外します。"
+
+#. translators: %s: example of a class name that contains the user ID
+msgid "Class names that contain the user ID, such as %s, are kept."
+msgstr "%s のようなユーザー ID を含むクラス名は残します。"
+
+msgid "Author ID links"
+msgstr "投稿者 ID のリンク"
+
+#. translators: %s: example of a link by author ID, such as /?author=1
+msgid "Redirect %s to the home page"
+msgstr "%s をトップページへ転送する"
+
+msgid "Otherwise WordPress redirects these links to the author page, whose URL contains the user name."
+msgstr "オフのときは、WordPress はこのリンクを、URL にユーザー名を含む投稿者ページへ転送します。"
+
+msgid "Filtering by author in the admin screens is not affected."
+msgstr "管理画面での投稿者による絞り込みには影響しません。"
+
+msgid "Login errors"
+msgstr "ログインエラー"
+
+msgid "Show the same error for an unknown username and a wrong password"
+msgstr "存在しないユーザー名とパスワードの誤りで、同じエラーを出す"
+
+msgid "On the lost password screen, an unknown username or email address leads to the same screen as a registered one, and no email is sent."
+msgstr "パスワード再発行の画面では、登録されていないユーザー名やメールアドレスでも登録済みのときと同じ画面へ進み、メールは送りません。"
+
+msgid "Errors from other plugins, such as CAPTCHA or login lockout, are shown as they are."
+msgstr "画像認証やログインロックなど、他のプラグインのエラーはそのまま表示します。"
+
+msgid "Author pages"
+msgstr "投稿者ページ"
+
+#. translators: %s: URL of an author page, such as /author/{name}/
+msgid "Return 404 (Page not found) for author pages (%s)"
+msgstr "投稿者ページ (%s) を404 (ページが見つかりません) にする"
+
+msgid "Turn this on if your theme does not show links to author pages, because those links will lead to a Page not found screen."
+msgstr "オンにすると投稿者ページへのリンクが「ページが見つかりません」の画面になるため、テーマが投稿者ページへのリンクを出していない場合にオンにしてください。"
+
+msgid "Settings tabs"
+msgstr "設定のタブ"
+
+msgid "Each item hides login names from visitors who are not logged in at one place in WordPress."
+msgstr "各項目は、WordPress の中の1か所で、ログインしていない訪問者からログイン名を隠します。"
+
+msgid "Uncheck an item only if it conflicts with your theme or another plugin."
+msgstr "テーマや他のプラグインと衝突する場合にだけ、その項目のチェックを外してください。"
+
+msgid "Users whose public name is their login name"
+msgstr "公開される名前がログイン名と同じユーザー"
+
+msgid "Display names and nicknames are shown to visitors, for example as the author of posts and comments and in feeds."
+msgstr "表示名とニックネームは、投稿やコメントの投稿者、フィードなどで訪問者に表示されます。"
+
+msgid "For each user below, open the profile, change the nickname, and choose a different name in \"Display name publicly as\"."
+msgstr "下の各ユーザーのプロフィールを開き、ニックネームを変えたうえで「ブログ上の表示名」で別の名前を選んでください。"
+
+msgid "This plugin does not change them automatically."
+msgstr "このプラグインは自動では変更しません。"
+
+msgid "No users have a display name or nickname that is the same as their login name."
+msgstr "表示名またはニックネームがログイン名と同じユーザーはいません。"
+
+#. translators: 1: number of users shown, 2: number of matching users
+msgid "Showing the first %1$d of %2$d users."
+msgstr "%2$d人中、最初の%1$d人を表示しています。"
+
+msgid "Login name"
+msgstr "ログイン名"
+
+msgid "Display name"
+msgstr "表示名"
+
+msgid "Nickname"
+msgstr "ニックネーム"
+
+msgid "Same as the login name"
+msgstr "ログイン名と同じもの"
+
+msgid "Display name and nickname"
+msgstr "表示名とニックネーム"
+
+msgid "ETBS Account Guard keeps the login names of your users away from visitors who are not logged in."
+msgstr "ETBS Account Guard は、ログインしていない訪問者に、ユーザーのログイン名を渡さないようにします。"
+
+msgid "How to use"
+msgstr "使い方"
+
+msgid "Most protections work as soon as the plugin is activated."
+msgstr "ほとんどの保護は、プラグインを有効化した時点で働きます。"
+
+msgid "You can turn each one on or off on the settings screen."
+msgstr "項目ごとに、設定画面でオン・オフを切り替えられます。"
+
+msgid "The settings screen also lists users whose display name or nickname is the same as their login name."
+msgstr "設定画面には、表示名またはニックネームがログイン名と同じユーザーの一覧も出ます。"
+
+msgid "Change them from the profile of each user."
+msgstr "各ユーザーのプロフィールから変更してください。"
+
+msgid "Notes"
+msgstr "注意事項"
+
+#. translators: %s: URL of an author page, such as /author/{name}/
+msgid "Author pages (%s) are still shown by default."
+msgstr "投稿者ページ (%s) は、既定では従来どおり表示されます。"
+
+msgid "To return 404 for them, turn on \"Author pages\" on the settings screen."
+msgstr "404にするには、設定画面で「投稿者ページ」をオンにしてください。"
+
+msgid "The lost password form of WooCommerce My Account is not covered."
+msgstr "WooCommerce のマイアカウントのパスワード再発行フォームは対象外です。"
+
+msgid "Two-factor authentication, login attempt limits and CAPTCHA are not included."
+msgstr "二段階認証・ログイン試行の回数制限・画像認証は含みません。"
+
+msgid "Use a dedicated security plugin for them."
+msgstr "それらには専用のセキュリティプラグインをお使いください。"
+
+msgid "Support"
+msgstr "サポート"
+
+msgid "Open the settings"
+msgstr "設定を開く"
+
+#. translators: %s: link inviting the reader to support the development of this plugin
+msgid "If ETBS Account Guard is useful to you, please %s."
+msgstr "ETBS Account Guard がお役に立ちましたら、%s。"
+
+msgid "consider supporting its development"
+msgstr "開発の支援をご検討ください"
+
+#. translators: %s: link for requesting custom development
+msgid "For custom development, please %s."
+msgstr "カスタマイズをご希望の場合は、%s。"
+
+msgid "send us a request"
+msgstr "開発をご依頼ください"
+
+msgid "Support development"
+msgstr "開発を支援"
+
+msgid "Request development"
+msgstr "開発のご依頼"
