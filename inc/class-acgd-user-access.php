@@ -427,7 +427,34 @@ class ACGD_User_Access {
 				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
 				return;
 			}
-			if ( '' === $final_id || ( ! $had_hash && ! $new_password ) ) {
+			// Pick up a fresh "Verify" confirmation for the exact ID being saved *before* deciding whether a
+			// password was even supplied (HIGH fix, issue #4 / UX review, PR #6): consume_verification() is
+			// single-use (see its own docblock), so this call must stay the only one — the $is_self block
+			// further below reuses this same result instead of calling it again. Checking it here matters
+			// specifically for an admin who has never had BASIC credentials before ($had_hash === false): a
+			// successful "Verify" always leaves the password field blank on the very next redisplay, exactly
+			// like any other resubmit (render_fields() never redisplays a password), so the two cases —
+			// "just confirmed, field is blank" and "never confirmed anything" — were indistinguishable to the
+			// "ID and password both required" check below when that check ran first. That silently rejected an
+			// already-confirmed, first-time BASIC setup with "Not saved." even though "Verify" had reported
+			// success and told the admin to click "Update User". Only meaningful for $is_self:
+			// consume_verification() is keyed to the current admin's own confirmation (see its docblock), so
+			// nobody else's save can ever consume it.
+			// まさに保存しようとしている ID について、パスワードが入力されたかどうかを判定する（すぐ下の）
+			// チェックより前に、「確認」(Verify) 済みの結果を先に探しにいく（HIGH 修正、issue #4／UX レビュー、
+			// PR #6）。consume_verification() は1回きり（自身の docblock を参照）なので、この呼び出しが唯一の
+			// 呼び出し箇所であり続ける必要がある——さらに下の $is_self ブロックは呼び直さず、ここで得た結果を
+			// そのまま使い回す。この順序が特に効くのは、これまで BASIC 資格情報を一度も持ったことのない
+			// 管理者（$had_hash === false）の場合：render_fields() はパスワードを一切出し直さないため、
+			// 「確認」に成功していても、次に出し直されたパスワード欄は他のどの出し直しとも同じく必ず空欄になる。
+			// 「確認済みだが欄は空」と「一度も確認していない」の2つを、下の「ID とパスワードの両方が必須」
+			// チェックを先に評価すると区別できず、「確認」が成功を報告し「ユーザーを更新をクリック」と案内した
+			// 直後でも、確認済みの初回 BASIC 設定が「Not saved.」で無言で弾かれていた。$is_self のときだけ
+			// 意味を持つ（consume_verification() は今の管理者自身の確認に紐づくため。docblock を参照。
+			// 他人の保存がこれを消費することは無い）。
+			$confirmed_hash = $is_self ? ACGD_Basic_Auth::consume_verification( $user_id, $final_id, $new_password ? $basic_pass : null ) : null;
+
+			if ( '' === $final_id || ( ! $had_hash && ! $new_password && null === $confirmed_hash ) ) {
 				self::$pending_error = esc_html__( 'Enter both a BASIC authentication ID and a password before choosing "BASIC authentication" mode. Not saved.', 'etbs-account-guard' );
 				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
 				return;
@@ -453,37 +480,26 @@ class ACGD_User_Access {
 			$credentials_changing = $new_password || ( $final_id !== $existing_id );
 			$prior_mode            = ACGD_Access_Restriction::get_user_mode( $user_id );
 			// Whether this save needs a fresh "Verify" confirmation at all: entering BASIC mode for the first
-			// time, or actually changing the ID or typing a new password just now. NOT sufficient on its own to
-			// decide whether to look one up, though (see immediately below) — MEDIUM-1 fix.
+			// time, or actually changing the ID or typing a new password just now. Used only to decide whether
+			// the *absence* of a confirmed hash (looked up once, above, before the "ID and password both
+			// required" check) is an error — MEDIUM-1 / HIGH fix.
 			// この保存に「確認」が必要かどうか：初めて BASIC モードにする、または今まさに ID を変える／新しい
-			// パスワードを入力した場合。ただし、これだけでは「確認済みの結果を探すかどうか」の判断には
-			// 使えない（すぐ下を参照。MEDIUM-1 の修正）。
+			// パスワードを入力した場合。確認済みハッシュが無かったこと（探索は上で「ID とパスワードの両方が
+			// 必須」チェックより前に一度だけ行っている）をエラーとするかどうかの判定にだけ使う
+			// （MEDIUM-1／HIGH の修正）。
 			$requires_confirmation = $is_self && ( 'basic' !== $prior_mode || $credentials_changing );
 			if ( $is_self ) {
-				// Always attempt to pick up a fresh "Verify" confirmation for the exact ID being saved, whether
-				// or not the password field was retyped this time. $credentials_changing above only looks at
-				// what was actually typed in *this* submission, so it is blind to a confirmation obtained a
-				// moment ago and still waiting to be applied: render_fields() never redisplays a password, so
-				// a blank field after a successful Verify does not mean "nothing changed" — it is simply how
-				// that screen always looks (MEDIUM-1 fix, PR #6 review: previously this whole lookup only ran
-				// when $requires_confirmation was true, so a password confirmed but then left blank on
-				// resubmit, with the ID and mode otherwise unchanged, silently kept the old hash even though
-				// "Verify" had just reported success and told the admin to click "Update User" to save it).
-				// A miss here (no matching, unconsumed confirmation) is only an error when one was actually
+				// $confirmed_hash was already looked up above (before the "ID and password both required"
+				// check), not re-looked-up here: consume_verification() is single-use, so calling it a second
+				// time here would always come back null and defeat the fix made at that first call site.
+				// A miss (no matching, unconsumed confirmation) is only an error when one was actually
 				// required; otherwise it just means there was nothing to pick up, which is the ordinary case
 				// for a save that has nothing to do with BASIC credentials at all.
-				// たった今入力し直したかどうかに関わらず、保存しようとしているまさにその ID について、確認済みの
-				// 結果を常に探しにいく。上の $credentials_changing は「今回の送信で実際に入力されたもの」しか
-				// 見ないため、少し前に得た確認——まだ適用されるのを待っているもの——には気づけない：
-				// render_fields() はパスワードを一切出し直さないため、「確認」成功後に欄が空なのは「何も
-				// 変わっていない」ことを意味しない。単にその画面はいつもそう見えるというだけ（MEDIUM-1 の修正。
-				// PR #6 レビュー：修正前はこの探索自体が $requires_confirmation が真のときにしか走らず、
-				// パスワードを確認はしたが出し直しでは空欄のまま、ID・モードは変えていない、という場合に、
-				// 「確認」が成功を報告し「保存するにはユーザーを更新をクリック」と案内した直後でも、
-				// 古いハッシュが無言で残っていた）。ここで見つからない（一致する未消費の確認が無い）ことが
-				// エラーになるのは、確認が実際に必要なときだけ。そうでなければ単に拾うものが無かっただけで、
-				// BASIC の資格情報とは無関係な保存では通常そうなる。
-				$confirmed_hash = ACGD_Basic_Auth::consume_verification( $user_id, $final_id, $new_password ? $basic_pass : null );
+				// $confirmed_hash は（「ID とパスワードの両方が必須」チェックより前に）上で既に探索済みであり、
+				// ここでは探索し直さない：consume_verification() は1回きりなので、ここでもう一度呼ぶと
+				// 常に null が返り、最初の呼び出し箇所で入れた修正が無効になってしまう。
+				// 見つからない（一致する未消費の確認が無い）ことがエラーになるのは、確認が実際に必要なときだけ。
+				// そうでなければ単に拾うものが無かっただけで、BASIC の資格情報とは無関係な保存では通常そうなる。
 				if ( null !== $confirmed_hash ) {
 					$final_hash = $confirmed_hash; // Reuses the hash computed at Verify time; never hash the (possibly blank) submitted password again. / 「確認」時に計算済みのハッシュをそのまま使う。（空かもしれない）送信されたパスワードを改めてハッシュ化することは無い。
 				} elseif ( $requires_confirmation ) {
