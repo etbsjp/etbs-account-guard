@@ -3,9 +3,13 @@
  * Entry point of the implementation: modules, translations and support links.
  * 実装本体の入口。モジュールの読み込み・翻訳の登録・支援リンクを扱う。
  *
- * The protections themselves are in class-acgd-login-name.php and the settings screen is in
- * class-acgd-settings.php. The dashboard widget and the update checker are loaded from the main file.
- * 保護の本体は class-acgd-login-name.php、設定画面は class-acgd-settings.php にある。
+ * Login Name Protection (1.0.0) lives in class-acgd-login-name.php. Access Restriction (1.1.0) lives in
+ * class-acgd-access-restriction.php (IP restriction and the shared foundation) and class-acgd-user-access.php
+ * (the per-user screens). The settings screen is in class-acgd-settings.php. The dashboard widget and the
+ * update checker are loaded from the main file.
+ * 「ログイン名の保護」（1.0.0）は class-acgd-login-name.php にある。「アクセス制限」（1.1.0）は
+ * class-acgd-access-restriction.php（IP 制限と共通の土台）と class-acgd-user-access.php
+ * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。
  * ダッシュボードのウィジェットと更新チェッカーは本体ファイルから読み込む。
  *
  * @package etbs-account-guard
@@ -17,6 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/class-acgd-invalid-credentials.php';
 require_once __DIR__ . '/class-acgd-login-name.php';
+require_once __DIR__ . '/class-acgd-access-restriction.php';
+require_once __DIR__ . '/class-acgd-user-access.php';
 require_once __DIR__ . '/class-acgd-settings.php';
 
 /*-------------------------------------------*/
@@ -58,6 +64,8 @@ add_action( 'init', 'acgd_load_textdomain' );
 
 ACGD_Invalid_Credentials::init();
 ACGD_Login_Name::init();
+ACGD_Access_Restriction::init();
+ACGD_User_Access::init();
 ACGD_Settings::init();
 
 /*-------------------------------------------*/

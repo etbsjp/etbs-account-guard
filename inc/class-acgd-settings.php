@@ -3,10 +3,10 @@
  * Settings screen: Settings > ETBS Account Guard (screen ID settings_page_etbs-account-guard).
  * 設定画面「設定 > ETBS Account Guard」（画面ID settings_page_etbs-account-guard）。
  *
- * The screen is built as tabs. 1.0.0 has one tab, Login Name Protection; 1.1.0 adds Access Restriction
- * and Denial Log by adding entries to get_tabs() and a renderer for each.
- * 画面はタブの形で作る。1.0.0 のタブは「ログイン名の保護」の1つだけで、1.1.0 で get_tabs() に項目を足し、
- * それぞれの描画関数を足して「アクセス制限」「拒否の記録」を加える。
+ * The screen is built as tabs, added to get_tabs() with one renderer each: Login Name Protection (1.0.0),
+ * and Access Restriction and Denial Log (1.1.0).
+ * 画面はタブの形で作る。get_tabs() に項目を足し、それぞれに描画関数を持たせる：
+ * 「ログイン名の保護」（1.0.0）、「アクセス制限」「拒否の記録」（1.1.0）。
  *
  * @package etbs-account-guard
  */
@@ -52,7 +52,24 @@ class ACGD_Settings {
 	const LOGIN_NAME_SECTIONS = 'etbs-account-guard-login-name';
 
 	/**
-	 * Maximum number of users listed in item h. / h の一覧に出すユーザーの上限。
+	 * Settings group of the Access Restriction tab (the option_page value sent to options.php).
+	 * 「アクセス制限」タブの設定グループ（options.php へ送る option_page の値）。
+	 *
+	 * @var string
+	 */
+	const ACCESS_GROUP = 'acgd_access_restriction';
+
+	/**
+	 * Page ID of the Settings API sections of the Access Restriction tab.
+	 * 「アクセス制限」タブの Settings API のセクションを束ねるページID。
+	 *
+	 * @var string
+	 */
+	const ACCESS_SECTIONS = 'etbs-account-guard-access';
+
+	/**
+	 * Maximum number of users listed in item h, and in the "resulting restricted users" list of the Access
+	 * Restriction tab. h の一覧と、「アクセス制限」タブの「結果として制限されるユーザーの一覧」に出すユーザーの上限。
 	 *
 	 * @var int
 	 */
@@ -67,6 +84,44 @@ class ACGD_Settings {
 	const PUBLIC_NAMES_ID = 'acgd-public-names';
 
 	/**
+	 * Prefix of the transient that holds a rejected Access Restriction tab submission, so the form can be
+	 * redisplayed with what the admin actually typed instead of the unchanged saved value (UX review).
+	 * Keyed by the submitting user (options.php redirects to a fresh GET, so $_POST itself does not survive;
+	 * this transient is the bridge). Read once and deleted immediately after (see get_resubmit_data()), and
+	 * expires on its own after RESUBMIT_TTL regardless, so it needs no entry in uninstall.php.
+	 * 「アクセス制限」タブの、拒否された送信内容を保持する transient の接頭辞。保存済みの値ではなく、
+	 * 管理者が実際に入力した内容でフォームを出し直すために使う（UX レビュー）。送信した本人ごとに分ける
+	 * （options.php は新しい GET へ転送するため $_POST 自体は残らず、この transient が橋渡しになる）。
+	 * 一度読んだら即座に消し（get_resubmit_data() を参照）、そうでなくても RESUBMIT_TTL で自然に消えるため、
+	 * uninstall.php への記載は不要。
+	 *
+	 * @var string
+	 */
+	const RESUBMIT_TRANSIENT_PREFIX = 'acgd_access_resubmit_';
+
+	/**
+	 * How long a rejected submission is kept for redisplay. Long enough to cover the redirect-then-render
+	 * round trip; short enough that a stale one from an abandoned attempt does not resurface later.
+	 * 拒否された送信内容を残しておく時間。転送されてから描画されるまでの往復には十分長く、
+	 * 途中でやめた入力が後になって出てこないよう十分短くする。
+	 *
+	 * @var int
+	 */
+	const RESUBMIT_TTL = MINUTE_IN_SECONDS;
+
+	/**
+	 * In-request cache of get_resubmit_data(), so the transient is fetched and deleted only once even
+	 * though both render_access_roles_field() and render_access_ips_field() need it on the same page load.
+	 * false = not yet loaded. null = loaded, and there was nothing to redisplay.
+	 * get_resubmit_data() のリクエスト内キャッシュ。render_access_roles_field() と render_access_ips_field()
+	 * が同じページ読み込みで両方これを必要とするため、transient の取得・削除は1回だけにする。
+	 * false = 未取得。null = 取得済みで、出し直す内容が無かった。
+	 *
+	 * @var array|null|false
+	 */
+	private static $resubmit_cache = false;
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -74,20 +129,20 @@ class ACGD_Settings {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_page' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
+		add_action( 'admin_init', array( __CLASS__, 'register_access_restriction_settings' ) );
 	}
 
 	/**
 	 * Returns the tabs of the settings screen: slug => label.
 	 * 設定画面のタブを返す（スラッグ => ラベル）。
 	 *
-	 * 1.1.0 adds 'access' (Access Restriction) and 'log' (Denial Log) here.
-	 * 1.1.0 でここに 'access'（アクセス制限）と 'log'（拒否の記録）を足す。
-	 *
 	 * @return string[] Tabs. / タブ。
 	 */
 	public static function get_tabs() {
 		return array(
 			'login-name' => __( 'Login Name Protection', 'etbs-account-guard' ),
+			'access'     => __( 'Access Restriction', 'etbs-account-guard' ),
+			'log'        => __( 'Denial Log', 'etbs-account-guard' ),
 		);
 	}
 
@@ -394,10 +449,20 @@ class ACGD_Settings {
 			</nav>
 
 			<?php
-			// One renderer per tab. 1.1.0 adds the renderers of its tabs here.
-			// タブごとに描画関数を1つ持つ。1.1.0 でそのタブの描画関数をここに足す。
+			// The Access Restriction tab warns here, above the tab content, when this feature is currently
+			// stopped (docs/spec.md 5.5): a fault of its own, or the emergency switch.
+			// 「アクセス制限」タブでは、この機能が止まっているとき（docs/spec.md 5.5：自分自身の故障、
+			// または非常用スイッチ）に、タブの中身より上でここに警告を出す。
+			if ( 'access' === $current ) {
+				self::render_access_restriction_notices();
+			}
+			// One renderer per tab. / タブごとに描画関数を1つ持つ。
 			if ( 'login-name' === $current ) {
 				self::render_login_name_tab();
+			} elseif ( 'access' === $current ) {
+				self::render_access_tab();
+			} elseif ( 'log' === $current ) {
+				self::render_log_tab();
 			}
 			?>
 		</div>
@@ -585,5 +650,626 @@ class ACGD_Settings {
 
 		/* translators: %s: display name or nickname that is the same as the login name */
 		return sprintf( __( '%s (same as the login name)', 'etbs-account-guard' ), $name );
+	}
+
+	/*-------------------------------------------*/
+	/* Access Restriction tab: settings / 「アクセス制限」タブ：設定
+	/*-------------------------------------------*/
+
+	/**
+	 * Registers the option, the section and the fields of the Access Restriction tab.
+	 * 「アクセス制限」タブのオプション・セクション・項目を登録する。
+	 *
+	 * A separate admin_init callback from register_settings(), so that a change to one tab's registration
+	 * never risks the other's. The option is saved by core's options.php, so, like the Login Name Protection
+	 * option, it never appears in an update_option() search (see uninstall.php).
+	 * register_settings() とは別の admin_init コールバックにし、片方のタブの登録を変えても
+	 * もう片方に影響しないようにする。このオプションも本体の options.php が保存するため、
+	 * 「ログイン名の保護」のオプションと同じく update_option() を検索しても現れない（uninstall.php を参照）。
+	 *
+	 * @return void
+	 */
+	public static function register_access_restriction_settings() {
+		register_setting(
+			self::ACCESS_GROUP,
+			ACGD_Access_Restriction::OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_access_restriction_settings' ),
+				'show_in_rest'      => false,
+			)
+		);
+
+		add_settings_section(
+			'acgd_access_roles',
+			__( 'Restriction by role', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_roles_section' ),
+			self::ACCESS_SECTIONS
+		);
+		add_settings_field(
+			'acgd_access_roles_table',
+			__( 'Roles', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_roles_field' ),
+			self::ACCESS_SECTIONS,
+			'acgd_access_roles'
+		);
+
+		add_settings_section(
+			'acgd_access_ips',
+			__( 'Site-wide IP list', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_ips_section' ),
+			self::ACCESS_SECTIONS
+		);
+		add_settings_field(
+			'acgd_access_site_ips',
+			__( 'Allowed IP addresses', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_ips_field' ),
+			self::ACCESS_SECTIONS,
+			'acgd_access_ips',
+			// label_for makes the Settings API wrap the title in <label for="...">, matching the id the
+			// textarea uses (render_access_ips_field()). Without it the field has no accessible name.
+			// label_for を渡すと、Settings API が見出しを <label for="..."> で包む。テキストエリアの id
+			// （render_access_ips_field() を参照）と合わせている。無いと、この項目だけアクセシブルな名前を持たない。
+			array( 'label_for' => 'acgd-access-site-ips' )
+		);
+	}
+
+	/**
+	 * Sanitizes and validates the Access Restriction tab, and applies save-time checks 1 and 2 (docs/spec.md 5.1).
+	 * 「アクセス制限」タブを検証し、保存時のチェック1・2（docs/spec.md 5.1）を適用する。
+	 *
+	 * Check 3 (every BASIC-mode user has credentials set) is not implemented here: BASIC mode is not offered
+	 * by this screen yet (see sanitize_role_modes()), so it cannot be reached from here (issue #4).
+	 * On any failure, the previously saved value is returned unchanged and an error is queued with
+	 * add_settings_error(), which the Settings API prints back on this same tab.
+	 * チェック3（BASIC モードのユーザー全員が資格情報を設定済み）はここでは実装しない。この画面では
+	 * まだ BASIC モードを選べない（sanitize_role_modes() を参照）ため、ここには到達しない（issue #4）。
+	 * どの判定に失敗しても、保存済みの値をそのまま返し、add_settings_error() でエラーを積む。
+	 * Settings API が同じタブにそれを出し直す。
+	 *
+	 * @param mixed $input Submitted value. / 送信された値。
+	 * @return array The value to save. / 保存する値。
+	 */
+	public static function sanitize_access_restriction_settings( $input ) {
+		$existing = get_option( ACGD_Access_Restriction::OPTION, array() );
+		if ( ! is_array( $existing ) ) {
+			$existing = array();
+		}
+		if ( ! is_array( $input ) ) {
+			$input = array();
+		}
+
+		$new_roles = self::sanitize_role_modes( isset( $input['roles'] ) ? $input['roles'] : array() );
+		$ip_text   = isset( $input['site_ips'] ) ? (string) wp_unslash( $input['site_ips'] ) : '';
+		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
+
+		if ( $validated['invalid'] ) {
+			add_settings_error(
+				ACGD_Access_Restriction::OPTION,
+				'acgd_invalid_ip',
+				sprintf(
+					/* translators: 1: line number, 2: the line's content */
+					esc_html__( 'Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s', 'etbs-account-guard' ),
+					(int) key( $validated['invalid'] ),
+					// settings_errors() prints this message unescaped, and this line is the admin's own raw
+					// submitted input; escape it here rather than trust it.
+					// settings_errors() はこのメッセージを未エスケープで出力するため、ここで自前でエスケープする。
+					// この行は管理者自身が送信した生の入力である。
+					esc_html( reset( $validated['invalid'] ) )
+				)
+			);
+			self::stash_resubmit( $new_roles, $ip_text );
+			return $existing;
+		}
+
+		// Save-time check 1 (docs/spec.md 5.1): at least one unrestricted manage_options user must remain.
+		// 保存時のチェック1（docs/spec.md 5.1）：制限されていない manage_options のユーザーが1人以上残ること。
+		if ( ACGD_Access_Restriction::count_unrestricted_admins( $new_roles ) < 1 ) {
+			add_settings_error(
+				ACGD_Access_Restriction::OPTION,
+				'acgd_no_unrestricted_admin',
+				// Says where to go, not just what is wrong (UX review): switch someone who can manage
+				// options, on this tab or on their own user edit screen, back to no restriction.
+				// settings_errors() prints this unescaped; the string has no user input, but esc_html__()
+				// is used anyway for consistency with the messages below that do carry user input.
+				// 何が悪いかだけでなく、どこへ行けばよいかも書く（UX レビュー）。設定を管理できる誰かを、
+				// このタブかその人自身の編集画面で「制限なし」に戻す。settings_errors() はこれを未エスケープで
+				// 出力する。この文字列自体に利用者の入力は無いが、利用者の入力を含む下のメッセージと
+				// 揃えるため esc_html__() にしている。
+				esc_html__( 'This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to "No restriction" here or on their own user edit screen. Not saved.', 'etbs-account-guard' )
+			);
+			self::stash_resubmit( $new_roles, $ip_text );
+			return $existing;
+		}
+
+		// Save-time check 2 (docs/spec.md 5.1): the current access must satisfy the new settings.
+		// 保存時のチェック2（docs/spec.md 5.1）：いまのアクセスが新しい設定を満たしていること。
+		if ( ! ACGD_Access_Restriction::current_user_still_allowed( $new_roles, $validated['entries'] ) ) {
+			$remote = ACGD_Access_Restriction::get_remote_addr();
+			add_settings_error(
+				ACGD_Access_Restriction::OPTION,
+				'acgd_self_lockout',
+				// Names the address to add, so recovering does not require first finding it elsewhere on
+				// the tab (UX review). null $remote (unreadable REMOTE_ADDR) falls back to a plain message.
+				// 直す手がかりとして、追加すべきアドレスをここに書く。タブの別の場所で先に探す必要が無いように
+				// する（UX レビュー）。$remote が null（REMOTE_ADDR を読めない）ときは、そのままの文言に倒す。
+				null === $remote
+					? esc_html__( 'Your own account, from where you are connecting right now, would not satisfy these new settings. Not saved.', 'etbs-account-guard' )
+					: sprintf(
+						/* translators: %s: the current user's own IP address, to add to the site-wide IP list */
+						esc_html__( 'Your own account would not satisfy these new settings: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved.', 'etbs-account-guard' ),
+						// $remote already passed inet_pton() validation in get_remote_addr(); esc_html() here
+						// is defense in depth, not a load-bearing escape.
+						// $remote は get_remote_addr() 内で inet_pton() の検証を通過済み。ここでの esc_html() は
+						// 保険であり、これが無いと危険という意味ではない。
+						esc_html( $remote )
+					)
+			);
+			self::stash_resubmit( $new_roles, $ip_text );
+			return $existing;
+		}
+
+		ACGD_Access_Restriction::clear_fault();
+		// A save can only succeed here after a fresh page load without a pending resubmit (the resubmit
+		// path always redisplays the form and stops before another sanitize call happens), so this is only
+		// ever a no-op in practice. Deleted anyway, so a leftover from an abandoned failed attempt within
+		// RESUBMIT_TTL can never outlive a successful save.
+		// ここに到達する保存は、保留中の再表示が無い状態（再表示の経路は必ずフォームを出し直して止まり、
+		// もう一度 sanitize を呼ばない）から来るので、実際には常に無害な呼び出しになる。それでも消しておき、
+		// RESUBMIT_TTL 以内に途中でやめた失敗の残りが、成功した保存より後まで残らないようにする。
+		delete_transient( self::RESUBMIT_TRANSIENT_PREFIX . get_current_user_id() );
+
+		return array(
+			'roles'    => $new_roles,
+			'site_ips' => $ip_text,
+		);
+	}
+
+	/**
+	 * Stashes a rejected Access Restriction tab submission, so the form can be redisplayed with it.
+	 * See RESUBMIT_TRANSIENT_PREFIX for why a transient, rather than returning it as the option value,
+	 * is used.
+	 * 拒否された「アクセス制限」タブの送信内容を、フォームの出し直しに使えるよう保存する。
+	 * なぜオプションの値として返す（保存する）のではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
+	 *
+	 * @param string[] $roles   Sanitized (but possibly check-1/check-2-failing) role => mode. / サニタイズ済み（チェック1・2には失敗しうる）の権限 => モード。
+	 * @param string   $ip_text Raw site-wide IP list text, exactly as submitted (may contain invalid lines). / 送信された生のサイトの IP 一覧（不正な行を含みうる）。
+	 * @return void
+	 */
+	private static function stash_resubmit( $roles, $ip_text ) {
+		set_transient(
+			self::RESUBMIT_TRANSIENT_PREFIX . get_current_user_id(),
+			array(
+				'roles'    => $roles,
+				'site_ips' => $ip_text,
+			),
+			self::RESUBMIT_TTL
+		);
+	}
+
+	/**
+	 * Returns a rejected submission stashed by stash_resubmit(), if any, for the current user. Reads the
+	 * transient once per request (both render_access_roles_field() and render_access_ips_field() call this
+	 * on the same page load) and deletes it immediately, so it is shown exactly once.
+	 * stash_resubmit() が保存した、拒否された送信内容を、現在のユーザーの分だけ返す（無ければ null）。
+	 * transient はリクエストにつき1回だけ読み（render_access_roles_field() と render_access_ips_field() が
+	 * 同じページ読み込みでどちらもこれを呼ぶ）、読んだ直後に消すので、一度だけ表示される。
+	 *
+	 * @return array|null {
+	 *     @type string[] $roles    Role => mode, as submitted. / 送信された 権限 => モード。
+	 *     @type string   $site_ips Raw site-wide IP list text, as submitted. / 送信された生のサイトの IP 一覧。
+	 * }
+	 */
+	private static function get_resubmit_data() {
+		if ( false === self::$resubmit_cache ) {
+			$key  = self::RESUBMIT_TRANSIENT_PREFIX . get_current_user_id();
+			$data = get_transient( $key );
+			delete_transient( $key );
+			self::$resubmit_cache = is_array( $data ) ? $data : null;
+		}
+
+		return self::$resubmit_cache;
+	}
+
+	/**
+	 * Keeps only known roles and known modes from the submitted per-role table.
+	 * 送信された権限ごとの表から、既知の権限・既知のモードだけを残す。
+	 *
+	 * administrator never appears in the result, whatever was submitted for it: it is always unrestricted at
+	 * the role level (docs/spec.md 5.1). 'basic' is a valid stored mode (see ACGD_Access_Restriction), but
+	 * this screen does not offer it yet (BASIC authentication itself is issue #4), so it is not in the list
+	 * of modes accepted here; an unknown or missing value falls back to 'none'.
+	 * administrator は、送信内容にかかわらず結果に現れない。権限単位では常に制限なしのため
+	 * （docs/spec.md 5.1）。'basic' は保存できるモードの1つだが（ACGD_Access_Restriction を参照）、
+	 * この画面ではまだ選べない（BASIC 認証そのものは issue #4）ため、ここで受け付けるモードの一覧には無く、
+	 * 未知の値・未送信は 'none' に倒す。
+	 *
+	 * @param mixed $input Submitted value: role => mode. / 送信された値（権限 => モード）。
+	 * @return string[] Role => mode ('none' or 'ip' only). / 権限 => モード（'none' か 'ip' のみ）。
+	 */
+	private static function sanitize_role_modes( $input ) {
+		if ( ! is_array( $input ) ) {
+			$input = array();
+		}
+
+		$allowed_modes = array( ACGD_Access_Restriction::MODE_NONE, ACGD_Access_Restriction::MODE_IP );
+		$output        = array();
+
+		foreach ( array_keys( wp_roles()->get_names() ) as $role ) {
+			if ( 'administrator' === $role ) {
+				continue;
+			}
+			$mode            = isset( $input[ $role ] ) ? sanitize_key( wp_unslash( $input[ $role ] ) ) : ACGD_Access_Restriction::MODE_NONE;
+			$output[ $role ] = in_array( $mode, $allowed_modes, true ) ? $mode : ACGD_Access_Restriction::MODE_NONE;
+		}
+
+		return $output;
+	}
+
+	/*-------------------------------------------*/
+	/* Access Restriction tab: screen / 「アクセス制限」タブ：画面
+	/*-------------------------------------------*/
+
+	/**
+	 * Prints the Access Restriction tab: warnings are printed separately, before the tabs, by
+	 * render_access_restriction_notices(), called from render_page().
+	 * 「アクセス制限」タブを出力する。警告は render_page() から呼ぶ render_access_restriction_notices() が、
+	 * タブより前に別に出す。
+	 *
+	 * @return void
+	 */
+	private static function render_access_tab() {
+		?>
+		<form method="post" action="options.php">
+			<?php
+			settings_fields( self::ACCESS_GROUP );
+			do_settings_sections( self::ACCESS_SECTIONS );
+			submit_button();
+			?>
+		</form>
+		<?php
+		self::render_restricted_users_list();
+		self::render_emergency_switch_notice();
+	}
+
+	/**
+	 * Prints a warning when Access Restriction is currently stopped (docs/spec.md 5.5): a fault of its own,
+	 * or the emergency switch. Printed above the tab content by render_page().
+	 * アクセス制限が止まっているとき（docs/spec.md 5.5：自分自身の故障、または非常用スイッチ）に警告を出す。
+	 * render_page() が、タブの中身より前にこれを出す。
+	 *
+	 * @return void
+	 */
+	private static function render_access_restriction_notices() {
+		if ( ACGD_Access_Restriction::has_fault() ) {
+			?>
+			<div class="notice notice-error"><p><?php esc_html_e( 'Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Saving this tab again, once the settings are valid, clears this warning.', 'etbs-account-guard' ); ?></p></div>
+			<?php
+		}
+		if ( ACGD_Access_Restriction::is_switch_disabled() ) {
+			?>
+			<div class="notice notice-warning"><p><?php echo wp_kses( sprintf( /* translators: %s: PHP constant name, ACGD_DISABLE_RESTRICTION */ esc_html__( 'The emergency switch (%s in wp-config.php) is turned on, so Access Restriction is stopped. Login Name Protection is not affected.', 'etbs-account-guard' ), self::code( 'ACGD_DISABLE_RESTRICTION' ) ), self::allowed_field_html() ); ?></p></div>
+			<?php
+		}
+	}
+
+	/**
+	 * Prints the introduction of the per-role restriction section. / 権限ごとの制限の前置きを出力する。
+	 *
+	 * @return void
+	 */
+	public static function render_access_roles_section() {
+		?>
+		<p>
+			<?php
+			echo wp_kses(
+				acgd_join_sentences(
+					array(
+						esc_html__( 'Choose a mode for each role. Everyone with that role is restricted, unless their own user setting overrides it.', 'etbs-account-guard' ),
+						esc_html__( 'A user who holds more than one role, with different modes, is held to all of them.', 'etbs-account-guard' ),
+					)
+				),
+				self::allowed_field_html()
+			);
+			?>
+		</p>
+		<p><?php esc_html_e( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead.', 'etbs-account-guard' ); ?></p>
+		<p><?php esc_html_e( 'BASIC authentication will be added by a later update; only "No restriction" and "IP restriction" can be chosen here for now.', 'etbs-account-guard' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Prints the per-role mode table. / 権限ごとのモードの表を出力する。
+	 *
+	 * Redisplays a rejected submission (UX review) rather than the saved value, when there is one for the
+	 * current user (get_resubmit_data()), so a save-time check failure does not also discard the roles the
+	 * admin had just chosen.
+	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
+	 * 保存時のチェックに落ちても、管理者が選んだばかりの権限の内容まで失われないようにするため。
+	 *
+	 * @return void
+	 */
+	public static function render_access_roles_field() {
+		$resubmit    = self::get_resubmit_data();
+		$saved_roles = ( $resubmit && isset( $resubmit['roles'] ) ) ? $resubmit['roles'] : ACGD_Access_Restriction::get_role_modes();
+		$all_roles   = wp_roles()->get_names();
+		?>
+		<table class="widefat fixed striped" style="max-width:600px;">
+			<thead>
+				<tr>
+					<th scope="col"><?php esc_html_e( 'Role', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'Mode', 'etbs-account-guard' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $all_roles as $role => $label ) : ?>
+					<?php $role_label = translate_user_role( $label ); ?>
+					<tr>
+						<th scope="row"><?php echo esc_html( $role_label ); ?></th>
+						<td>
+							<?php if ( 'administrator' === $role ) : ?>
+								<?php esc_html_e( 'No restriction (fixed)', 'etbs-account-guard' ); ?>
+							<?php else : ?>
+								<?php
+								$field_id   = 'acgd-access-role-' . $role;
+								$mode       = isset( $saved_roles[ $role ] ) ? $saved_roles[ $role ] : ACGD_Access_Restriction::MODE_NONE;
+								$field_name = ACGD_Access_Restriction::OPTION . '[roles][' . $role . ']';
+								?>
+								<select id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name, such as Editor */ __( 'Mode for %s', 'etbs-account-guard' ), $role_label ) ); ?>">
+									<option value="none" <?php selected( 'none', $mode ); ?>><?php esc_html_e( 'No restriction', 'etbs-account-guard' ); ?></option>
+									<option value="ip" <?php selected( 'ip', $mode ); ?>><?php esc_html_e( 'IP restriction', 'etbs-account-guard' ); ?></option>
+								</select>
+							<?php endif; ?>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Prints the introduction of the site-wide IP list section, including the current connection (moved
+	 * here, ahead of the field and the Save button, per UX review: an admin filling in this field, or
+	 * recovering from the self-lockout error of check 2, needs their own address before typing, not after
+	 * scrolling past the submit button).
+	 * サイトの IP 一覧の前置きを出力する。いまの接続元もここに含める（UX レビューにより、項目・保存ボタンより
+	 * 前に移した。この項目に入力する管理者や、チェック2の締め出しエラーから復帰する管理者は、
+	 * 送信ボタンを過ぎてスクロールした後ではなく、入力する前に自分のアドレスを知る必要があるため）。
+	 *
+	 * @return void
+	 */
+	public static function render_access_ips_section() {
+		self::render_current_connection();
+		?>
+		<p>
+			<?php
+			echo wp_kses(
+				acgd_join_sentences(
+					array(
+						sprintf(
+							/* translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation */
+							esc_html__( 'One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note, and blank lines are ignored.', 'etbs-account-guard' ),
+							self::code( '192.0.2.10' ),
+							self::code( '192.0.2.0/24' )
+						),
+						esc_html__( 'A restricted user is let in from any address on this list, plus any address added just for them on their own user edit screen.', 'etbs-account-guard' ),
+						esc_html__( 'Judged from the address the server sees for this connection only; headers such as X-Forwarded-For are never used.', 'etbs-account-guard' ),
+					)
+				),
+				self::allowed_field_html()
+			);
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Prints the site-wide IP list textarea. / サイトの IP 一覧のテキストエリアを出力する。
+	 *
+	 * Redisplays a rejected submission (UX review) rather than the saved value, when there is one for the
+	 * current user (get_resubmit_data()); see render_access_roles_field() for the same reasoning.
+	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
+	 * 理由は render_access_roles_field() と同じ。
+	 *
+	 * @return void
+	 */
+	public static function render_access_ips_field() {
+		$resubmit = self::get_resubmit_data();
+		$ip_text  = ( $resubmit && isset( $resubmit['site_ips'] ) ) ? $resubmit['site_ips'] : ACGD_Access_Restriction::get_site_ip_text();
+		?>
+		<textarea id="acgd-access-site-ips" name="<?php echo esc_attr( ACGD_Access_Restriction::OPTION . '[site_ips]' ); ?>" rows="8" cols="50" class="large-text code"><?php echo esc_textarea( $ip_text ); ?></textarea>
+		<?php
+	}
+
+	/**
+	 * Prints the address the server currently sees for this connection (docs/spec.md 5.2,
+	 * "サーバから見えている、いまの接続元"). Read only, but printed inside the form (called from
+	 * render_access_ips_section(), ahead of the IP list field), so it is visible before typing an address
+	 * and while recovering from the self-lockout error of check 2.
+	 * サーバが今のこの接続について見ているアドレスを出力する（docs/spec.md 5.2
+	 * 「サーバから見えている、いまの接続元」）。読み取りのみだが、フォームの中（render_access_ips_section() から、
+	 * IP 一覧の項目より前に）呼ぶ。アドレスを入力する前や、チェック2の締め出しエラーから復帰するときに見えるようにするため。
+	 *
+	 * @return void
+	 */
+	private static function render_current_connection() {
+		$remote = ACGD_Access_Restriction::get_remote_addr();
+		?>
+		<p>
+			<strong><?php esc_html_e( 'Your current connection:', 'etbs-account-guard' ); ?></strong>
+			<?php
+			if ( null === $remote ) {
+				esc_html_e( 'The server cannot tell what address you are connecting from right now.', 'etbs-account-guard' );
+			} else {
+				echo wp_kses(
+					sprintf(
+						/* translators: %s: the visitor's IP address, as the server sees it for this connection */
+						esc_html__( 'The server sees this connection as coming from %s.', 'etbs-account-guard' ),
+						self::code( $remote )
+					),
+					self::allowed_field_html()
+				);
+			}
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Prints the list of users who end up restricted under the saved settings (docs/spec.md 5.6,
+	 * "結果として制限されるユーザーの一覧"). Read only.
+	 * 保存済みの設定のもとで、結果として制限されるユーザーの一覧を出力する（docs/spec.md 5.6
+	 * 「結果として制限されるユーザーの一覧」）。読み取りのみ。
+	 *
+	 * Only users who can end up restricted are loaded, a batch at a time, stopping at PUBLIC_NAME_LIST_LIMIT
+	 * (see ACGD_Access_Restriction::find_restricted_users()); the order and the content of the list are the
+	 * same as when every user was loaded and judged.
+	 * 制限されうるユーザーだけを小分けに読み込み、PUBLIC_NAME_LIST_LIMIT 人で止める
+	 * （ACGD_Access_Restriction::find_restricted_users() を参照）。一覧の順序と中身は、全ユーザーを読み込んで
+	 * 判定していたときと同じ。
+	 *
+	 * @return void
+	 */
+	private static function render_restricted_users_list() {
+		$restricted = ACGD_Access_Restriction::find_restricted_users( ACGD_Access_Restriction::get_role_modes(), self::PUBLIC_NAME_LIST_LIMIT );
+		?>
+		<h2><?php esc_html_e( 'Users who are currently restricted', 'etbs-account-guard' ); ?></h2>
+		<?php if ( ! $restricted ) : ?>
+			<p><?php esc_html_e( 'No user is restricted right now.', 'etbs-account-guard' ); ?></p>
+			<?php
+			return;
+		endif;
+		?>
+		<?php // Horizontal scroll wrapper for narrow viewports (UX review). / 狭い画面幅での横スクロール対策（UX レビュー）。 ?>
+		<div style="overflow-x:auto;">
+			<table class="widefat fixed striped">
+				<thead>
+					<tr>
+						<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Mode', 'etbs-account-guard' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $restricted as $row ) : ?>
+						<tr>
+							<td><?php echo esc_html( $row['user']->user_login ); ?></td>
+							<td><?php echo esc_html( ACGD_User_Access::describe_modes( $row['modes'] ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Prints the explanation of the emergency switch (docs/spec.md 5.5). One of the three places it is
+	 * documented (README.md / readme.txt, this tab, and the dashboard widget notes).
+	 * 非常用スイッチ（docs/spec.md 5.5）の説明を出力する。書く3か所のうちの1つ
+	 * （README.md・readme.txt、このタブ、ダッシュボードのウィジェットの注意事項）。
+	 *
+	 * @return void
+	 */
+	private static function render_emergency_switch_notice() {
+		?>
+		<h2><?php esc_html_e( 'Emergency switch', 'etbs-account-guard' ); ?></h2>
+		<p>
+			<?php
+			echo wp_kses(
+				sprintf(
+					/* translators: %s: PHP constant to add to wp-config.php, ACGD_DISABLE_RESTRICTION */
+					esc_html__( 'If Access Restriction locks everyone out, add %s to wp-config.php. This stops Access Restriction only; Login Name Protection keeps working.', 'etbs-account-guard' ),
+					self::code( "define( 'ACGD_DISABLE_RESTRICTION', true );" )
+				),
+				self::allowed_field_html()
+			);
+			?>
+		</p>
+		<?php
+	}
+
+	/*-------------------------------------------*/
+	/* Denial Log tab / 「拒否の記録」タブ
+	/*-------------------------------------------*/
+
+	/**
+	 * Prints the Denial Log tab (docs/spec.md 5.4): the most recent denials, newest first. Read only; there
+	 * is nothing to save on this tab.
+	 * 「拒否の記録」タブ（docs/spec.md 5.4）を出力する（直近の拒否を新しい順で）。読み取りのみで、
+	 * このタブに保存するものは無い。
+	 *
+	 * @return void
+	 */
+	private static function render_log_tab() {
+		$log = ACGD_Access_Restriction::get_denial_log();
+		?>
+		<p>
+			<?php
+			printf(
+				/* translators: %d: maximum number of entries kept in the denial log */
+				esc_html__( 'The most recent %d denials are kept here.', 'etbs-account-guard' ),
+				(int) ACGD_Access_Restriction::DENIAL_LOG_MAX
+			);
+			?>
+		</p>
+		<?php if ( ! $log ) : ?>
+			<p><?php esc_html_e( 'No denials have been recorded.', 'etbs-account-guard' ); ?></p>
+			<?php
+			return;
+		endif;
+		?>
+		<?php // Horizontal scroll wrapper for narrow viewports (UX review). / 狭い画面幅での横スクロール対策（UX レビュー）。 ?>
+		<div style="overflow-x:auto;">
+			<table class="widefat fixed striped">
+				<thead>
+					<tr>
+						<th scope="col"><?php esc_html_e( 'Date and time', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'User', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'IP address', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Where', 'etbs-account-guard' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $log as $entry ) : ?>
+						<?php
+						$user = ! empty( $entry['user_id'] ) ? get_userdata( (int) $entry['user_id'] ) : false;
+						?>
+						<tr>
+							<td>
+								<?php
+								// date_i18n(), not wp_date() (WordPress 5.3+): this plugin declares no minimum WordPress version.
+								// date_i18n()（wp_date() は WordPress 5.3 以降のため使わない）。このプラグインは WordPress の下限を宣言していない。
+								echo esc_html( date_i18n( 'Y-m-d H:i:s', isset( $entry['time'] ) ? (int) $entry['time'] : 0 ) );
+								?>
+							</td>
+							<td><?php echo esc_html( $user ? $user->user_login : (string) ( isset( $entry['user_id'] ) ? $entry['user_id'] : '' ) ); ?></td>
+							<td><?php echo esc_html( isset( $entry['ip'] ) ? (string) $entry['ip'] : '' ); ?></td>
+							<td><?php echo esc_html( self::describe_denial_context( isset( $entry['context'] ) ? (string) $entry['context'] : '' ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Describes one denial log context in words. / 拒否の記録の場面を文字で表す。
+	 *
+	 * @param string $context One of 'login', 'session' or 'rest'. / 'login'・'session'・'rest' のいずれか。
+	 * @return string Description, not escaped. / 説明（未エスケープ）。
+	 */
+	private static function describe_denial_context( $context ) {
+		switch ( $context ) {
+			case 'login':
+				return __( 'Login', 'etbs-account-guard' );
+			case 'session':
+				return __( 'After login', 'etbs-account-guard' );
+			case 'rest':
+				return __( 'REST API', 'etbs-account-guard' );
+			default:
+				return $context;
+		}
 	}
 }
