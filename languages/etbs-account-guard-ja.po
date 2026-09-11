@@ -589,8 +589,15 @@ msgstr "もう一度試す"
 msgid "Unexpected response to the diagnosis request (status: %d)."
 msgstr "診断リクエストへの応答が想定外でした（ステータス: %d）。"
 
-msgid "Verified. Your BASIC authentication ID and password work. Click \"Update User\" below to save."
-msgstr "確認できました。BASIC 認証の ID とパスワードは正しく動作します。保存するには下の「ユーザーを更新」をクリックしてください。"
+msgid "Update Profile"
+msgstr "プロフィールを更新"
+
+msgid "Update User"
+msgstr "ユーザーを更新"
+
+#. translators: %s: the label of this screen's own submit button, either "Update Profile" or "Update User"
+msgid "Verified. Your BASIC authentication ID and password work. Click \"%s\" below to save."
+msgstr "確認できました。BASIC 認証の ID とパスワードは正しく動作します。保存するには下の「%s」をクリックしてください。"
 
 msgid "The password field below will stay blank; the confirmed password is saved anyway."
 msgstr "下のパスワード欄は空欄のままになりますが、確認済みの内容がそのまま保存されます。"

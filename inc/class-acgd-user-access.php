@@ -341,6 +341,32 @@ class ACGD_User_Access {
 		// print. 表示のみ。ここでフォームの内容は読まず、値は固定文言の出し分けにしか使わない。
 		$flag = isset( $_GET['acgd_basic_verify'] ) ? sanitize_key( wp_unslash( $_GET['acgd_basic_verify'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
 
+		/*
+		 * Mirrors wp-admin/user-edit.php's own `submit_button( IS_PROFILE_PAGE ? __( 'Update Profile' ) :
+		 * __( 'Update User' ) )` choice, so this notice always names the label actually printed on this screen's
+		 * submit button (UI test finding, issue #4: the notice previously hardcoded "Update User", but the only
+		 * button core prints on one's own profile.php is "Update Profile" — "Update User" does not exist there).
+		 * render_verify_notice() is only ever called for $is_self (render_fields()), but $is_self alone does not
+		 * decide the button label: a manage_options admin can also reach their own account through
+		 * user-edit.php?user_id=<self> (the "Edit User" screen from the Users list), where IS_PROFILE_PAGE is
+		 * false even though the target user is themselves, and core prints "Update User" there. IS_PROFILE_PAGE
+		 * is defined by wp-admin/user-edit.php before it fires the show_user_profile/edit_user_profile hooks
+		 * that lead here, so it is already set by the time this method runs.
+		 * wp-admin/user-edit.php 自身の `submit_button( IS_PROFILE_PAGE ? __( 'Update Profile' ) :
+		 * __( 'Update User' ) )` の出し分けに合わせる。そうすることで、この通知は常にこの画面で実際に出ている
+		 * 送信ボタンのラベルを言う（UIテストでの指摘、issue #4：この通知は以前「ユーザーを更新」に固定していた
+		 * が、本人自身の profile.php で本体が出すボタンは「プロフィールを更新」だけで、「ユーザーを更新」は
+		 * この画面に存在しない）。render_verify_notice() は $is_self のときにしか呼ばれない（render_fields()）
+		 * が、ボタンのラベルを決めるのは $is_self だけではない：manage_options を持つ管理者は
+		 * user-edit.php?user_id=<自分自身>（ユーザー一覧からの「ユーザーを編集」画面）経由でも自分自身の画面に
+		 * 来られ、対象が自分自身でも IS_PROFILE_PAGE は false のままで、本体はそこで「ユーザーを更新」を出す。
+		 * IS_PROFILE_PAGE は、ここに至る show_user_profile / edit_user_profile フックを発火する前に
+		 * wp-admin/user-edit.php が定義しているため、このメソッドの実行時点で既に定義済み。
+		 */
+		$update_label = ( defined( 'IS_PROFILE_PAGE' ) && IS_PROFILE_PAGE )
+			? __( 'Update Profile', 'etbs-account-guard' )
+			: __( 'Update User', 'etbs-account-guard' );
+
 		$messages = array(
 			// The second sentence exists only because this notice and the password field's own description
 			// (render_fields()) sit next to each other right after a successful "Verify": the field is always
@@ -352,7 +378,14 @@ class ACGD_User_Access {
 			// この1文が無いと「空欄＝保存されない」に見えてしまう。パスワード欄の既存の説明文（「空欄なら
 			// 既存のものを保持」）は他人の編集時にも当てはまる一般文であり、確認直後のこの状況には正確ではない
 			// ため（UX レビュー、issue #4）。
-			'ok'         => array( 'success', __( 'Verified. Your BASIC authentication ID and password work. Click "Update User" below to save.', 'etbs-account-guard' ) . ' ' . __( 'The password field below will stay blank; the confirmed password is saved anyway.', 'etbs-account-guard' ) ),
+			'ok'         => array(
+				'success',
+				sprintf(
+					/* translators: %s: the label of this screen's own submit button, either "Update Profile" or "Update User" */
+					__( 'Verified. Your BASIC authentication ID and password work. Click "%s" below to save.', 'etbs-account-guard' ),
+					$update_label
+				) . ' ' . __( 'The password field below will stay blank; the confirmed password is saved anyway.', 'etbs-account-guard' ),
+			),
 			'expired'    => array( 'warning', __( 'The verification has expired. Enter the ID and password again and click Verify.', 'etbs-account-guard' ) ),
 			'not_self'   => array( 'error', __( 'The "Verify" button only works for your own account.', 'etbs-account-guard' ) ),
 			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password, and set the mode to "BASIC authentication" before verifying.', 'etbs-account-guard' ) ),
