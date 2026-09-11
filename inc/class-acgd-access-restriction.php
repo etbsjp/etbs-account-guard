@@ -1207,13 +1207,19 @@ class ACGD_Access_Restriction {
 	}
 
 	/**
-	 * Records a fault of this feature (docs/spec.md 5.5: "アクセス制限を止めて通す").
-	 * この機能の故障を記録する（docs/spec.md 5.5「アクセス制限を止めて通す」）。
+	 * Records a fault of this feature (docs/spec.md 5.5: "アクセス制限を止めて通す"). Public: this is the one
+	 * shared recording point for every `catch ( Throwable $e )` that fails this feature open, including
+	 * ACGD_Basic_Auth::maybe_strip_own_header() (MEDIUM-2 fix, PR #6 review — it fails open the same way but,
+	 * before this fix, had no way to reach this method and so never raised the 5.5 warning).
+	 * この機能の故障を記録する（docs/spec.md 5.5「アクセス制限を止めて通す」）。public にしているのは、
+	 * この機能を止めて通すあらゆる `catch ( Throwable $e )` が使う、共通の記録先がここだけであるため。
+	 * ACGD_Basic_Auth::maybe_strip_own_header() も含む（MEDIUM-2 の修正。PR #6 レビュー：同じように止めて
+	 * 通してはいたが、修正前はここへ到達する手段が無く、5.5 の警告が一度も出なかった）。
 	 *
 	 * @param string $message Exception message. / 例外のメッセージ。
 	 * @return void
 	 */
-	private static function record_fault( $message ) {
+	public static function record_fault( $message ) {
 		update_option(
 			self::FAULT_OPTION,
 			array(
@@ -1455,7 +1461,23 @@ class ACGD_Access_Restriction {
 			}
 
 			if ( in_array( self::MODE_BASIC, $modes, true ) && ! ACGD_Basic_Auth::request_satisfies( $user ) ) {
-				self::log_denial( $user->ID, $remote, 'basic' );
+				// MEDIUM-3 fix (PR #6 review): log only an actual failed attempt (credentials were submitted
+				// and did not satisfy this user), not the ordinary case of no BASIC header at all. BASIC keeps
+				// the session alive (docs/spec.md 5.3), so unlike an IP denial just above (which discards the
+				// session and so is only ever logged once), this "not satisfied" outcome repeats on every
+				// single REST call this plugin's own realm has not yet challenged the browser for. Logging it
+				// unconditionally would flood the 100-entry log (docs/spec.md 5.4) with ordinary browsing
+				// instead of signal. See the matching comment in check_access_on_request().
+				// MEDIUM-3 の修正（PR #6 レビュー）：実際に失敗した試行（資格情報が送られてきて、このユーザーを
+				// 満たさなかった）だけを記録する。BASIC ヘッダーが一切無い、というだけの通常のケースは記録しない。
+				// BASIC はセッションを温存する（docs/spec.md 5.3）ため、すぐ上の IP の拒否（セッションを破棄
+				// するので一度しか記録されない）と違い、このプラグインの realm でまだ一度もブラウザに確認を
+				// 求めていない REST 呼び出しでは、この「満たしていない」という結果が毎回のリクエストで
+				// 繰り返される。無条件に記録すると、直近100件の記録（docs/spec.md 5.4）が通常の閲覧だけで
+				// 埋まり、兆候として使えなくなる。check_access_on_request() の同じ内容のコメントも参照。
+				if ( null !== ACGD_Basic_Auth::get_submitted_credentials() ) {
+					self::log_denial( $user->ID, $remote, 'basic' );
+				}
 				wp_set_current_user( 0 ); // This request only; cookie and session are kept (docs/spec.md 5.3). / このリクエストだけ。cookie・セッションは残す（docs/spec.md 5.3）。
 			}
 
@@ -1522,7 +1544,28 @@ class ACGD_Access_Restriction {
 			}
 
 			if ( in_array( self::MODE_BASIC, $modes, true ) && ! ACGD_Basic_Auth::request_satisfies( $user ) ) {
-				self::log_denial( $user->ID, $remote, 'basic' );
+				// MEDIUM-3 fix (PR #6 review): log only an actual failed attempt (credentials were submitted
+				// and did not satisfy this user), not the ordinary case of no BASIC header at all. The
+				// confirmation screen this method redirects to below is limited to admin-screen navigation
+				// (its own docblock), but this "not satisfied" branch itself runs on every access after login,
+				// including the front end and admin-ajax/admin-post, where the browser is never challenged and
+				// so never attaches the header. Because BASIC keeps the session alive (docs/spec.md 5.3, unlike
+				// an IP denial just above, which discards the session and so is only ever logged once), a
+				// BASIC-mode user's ordinary browsing would otherwise re-log this exact "no header" outcome on
+				// every single such request, flooding the 100-entry log (docs/spec.md 5.4) with normal use
+				// instead of signal.
+				// MEDIUM-3 の修正（PR #6 レビュー）：実際に失敗した試行（資格情報が送られてきて、このユーザーを
+				// 満たさなかった）だけを記録する。BASIC ヘッダーが一切無い、というだけの通常のケースは記録しない。
+				// このメソッドが下でリダイレクトする確認画面は管理画面ナビゲーションに限定している（メソッド
+				// 自身の docblock）が、この「満たしていない」分岐自体はログイン後の毎回のアクセス——フロント・
+				// admin-ajax・admin-post を含む——で走り、そこではブラウザは一度も確認を求められておらず
+				// ヘッダーを一切付けない。BASIC はセッションを温存する（docs/spec.md 5.3。すぐ上の IP の拒否は
+				// セッションを破棄するので一度しか記録されないのと対照的）ため、記録しなければ BASIC モードの
+				// 通常の閲覧だけで、この「ヘッダー無し」という同じ結果を毎回のアクセスのたびに記録し、
+				// 直近100件の記録（docs/spec.md 5.4）を通常の利用で埋め尽くしてしまう。
+				if ( null !== ACGD_Basic_Auth::get_submitted_credentials() ) {
+					self::log_denial( $user->ID, $remote, 'basic' );
+				}
 				wp_set_current_user( 0 ); // This request only; cookie and session are kept (docs/spec.md 5.3). / このリクエストだけ。cookie・セッションは残す（docs/spec.md 5.3）。
 
 				// See the method docblock for why admin-ajax.php and admin-post.php are excluded.

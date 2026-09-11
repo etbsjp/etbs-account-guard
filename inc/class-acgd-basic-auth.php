@@ -71,11 +71,23 @@ class ACGD_Basic_Auth {
 	const PENDING_TRANSIENT_PREFIX = 'acgd_basic_pending_';
 
 	/**
-	 * Prefix of the transient that records a successful VERIFY_ACTION confirmation, keyed by the admin and by
-	 * a hash of the exact (id, password) pair that was confirmed, so a later save can only use a confirmation
-	 * of the same values (not a stale one from a different attempt).
-	 * VERIFY_ACTION の確認成功を記録する transient の接頭辞。管理者と、確認した (id, password) の組そのものの
-	 * ハッシュで分ける。保存時に使えるのは、同じ値を確認した結果だけにするため（別の試行の古い確認を使えない）。
+	 * Prefix of the transient that records a successful VERIFY_ACTION confirmation, keyed by the admin. Holds
+	 * the confirmed ID and the password_hash() of the confirmed password (computed once, at confirmation
+	 * time — see handle_verify()), so consume_verification() can hand that same hash straight to save_fields()
+	 * even when the password field comes back blank on the profile screen (MEDIUM-1 fix, PR #6 review):
+	 * render_fields() never redisplays a password, so requiring it to be retyped before the hash could be
+	 * looked up meant a blank field on the "Update User" click right after a successful Verify silently kept
+	 * the old password. A later save can still only use a confirmation of the same ID (not a stale one from a
+	 * different attempt), and a password retyped anyway must still be the one that was confirmed
+	 * (see consume_verification()).
+	 * VERIFY_ACTION の確認成功を記録する transient の接頭辞。管理者ごとに分ける。確認できた ID と、確認できた
+	 * パスワードの password_hash()（確認できた時点で一度だけ計算する。handle_verify() を参照）を持つ。
+	 * これにより、プロフィール画面でパスワード欄が空のまま出し直されても（MEDIUM-1 の修正。PR #6 レビュー：
+	 * render_fields() はパスワードを一切出し直さないため、ハッシュを引くのに再入力を必須にすると、「確認」
+	 * 成功直後に空欄のまま「ユーザーを更新」を押した場合に古いパスワードが無言で残ってしまっていた）、
+	 * consume_verification() が同じハッシュをそのまま save_fields() へ渡せる。それでも、後の保存で使えるのは
+	 * 同じ ID を確認した結果だけ（別の試行の古い確認は使えない）。パスワードを改めて入力した場合も、それが
+	 * 確認済みのものと一致することを求める（consume_verification() を参照）。
 	 *
 	 * @var string
 	 */
@@ -326,9 +338,16 @@ class ACGD_Basic_Auth {
 				self::clear_submitted_credentials_from_server();
 			}
 		} catch ( Throwable $e ) {
-			// Fail open: never let a fault here break core's own authentication for this request.
+			// Fail open: never let a fault here break core's own authentication for this request. Also record
+			// it through ACGD_Access_Restriction's own shared fault log (docs/spec.md 5.5, MEDIUM-2 fix, PR #6
+			// review), so a manage_options user sees the same "Access Restriction is stopped" warning that the
+			// other four Throwable catches already raise; record_fault() is the one method that writes it.
 			// 止めて通す：ここでの故障が、このリクエストの本体側の認証を壊すことは絶対に無いようにする。
+			// あわせて ACGD_Access_Restriction 側の共通の故障記録にも残す（docs/spec.md 5.5、MEDIUM-2 の修正。
+			// PR #6 レビュー）。これにより、他の4箇所の Throwable の catch と同じ「アクセス制限は停止中」の
+			// 警告が manage_options の人に出るようになる。それを書き込む唯一のメソッドが record_fault()。
 			self::$matched_user = null;
+			ACGD_Access_Restriction::record_fault( $e->getMessage() );
 		}
 
 		return $input;
@@ -671,7 +690,14 @@ class ACGD_Basic_Auth {
 			delete_transient( $pending_key );
 			set_transient(
 				self::VERIFIED_TRANSIENT_PREFIX . $admin_id,
-				self::verification_hash( $pending['id'], $pending['password'] ),
+				array(
+					'id'   => $pending['id'],
+					// Computed once, here, so a later resubmit with a blank password field (MEDIUM-1 fix) can
+					// still reuse this exact hash instead of needing the password retyped. / ここで一度だけ
+					// 計算しておく。パスワード欄が空のまま出し直されても（MEDIUM-1 の修正）、再入力なしに
+					// このハッシュをそのまま使い回せるようにするため。
+					'hash' => password_hash( $pending['password'], PASSWORD_DEFAULT ),
+				),
 				self::VERIFY_TTL
 			);
 			wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'ok', $redirect_to ) );
@@ -698,46 +724,51 @@ class ACGD_Basic_Auth {
 	}
 
 	/**
-	 * Derives the value stored in the VERIFIED_TRANSIENT_PREFIX transient, from the exact (id, password) pair
-	 * that was confirmed. wp_hash() (keyed with the site's own secret salts) rather than a plain hash, so the
-	 * transient value itself does not simply reveal the password to whoever can read the options/transients
-	 * table, even though it is short-lived either way.
-	 * VERIFIED_TRANSIENT_PREFIX の transient に保存する値を、確認できた (id, password) の組そのものから
-	 * 作る。単純なハッシュではなく wp_hash()（サイト固有の秘密のソルトで鍵付け）にすることで、
-	 * transient の値自体からパスワードがそのまま読み取れないようにする（どちらにせよ短命ではある）。
+	 * Tells whether a fresh "Verify" confirmation exists for the given admin and ID, and consumes it (deletes
+	 * the transient) so it cannot be reused for a different save. Called by ACGD_User_Access::save_fields()
+	 * when an admin is setting their own mode to BASIC authentication.
 	 *
-	 * @param string $id       Confirmed ID. / 確認できた ID。
-	 * @param string $password Confirmed password. / 確認できたパスワード。
-	 * @return string Value to store and later compare with hash_equals(). / 保存し、後で hash_equals() で比べる値。
-	 */
-	private static function verification_hash( $id, $password ) {
-		return wp_hash( $id . "\0" . $password, 'acgd_basic_verify' );
-	}
-
-	/**
-	 * Tells whether a fresh "Verify" confirmation exists for the given admin and (id, password) pair, and
-	 * consumes it (deletes the transient) so it cannot be reused for a different save. Called by
-	 * ACGD_User_Access::save_fields() when an admin is setting their own mode to BASIC authentication.
-	 * 与えた管理者と (id, password) の組について、確認済みの結果があるかを返し、あれば消費する
-	 * （transient を消し、別の保存に使い回せないようにする）。管理者が自分自身のモードを BASIC 認証に
-	 * するとき、ACGD_User_Access::save_fields() から呼ぶ。
+	 * $password is what to require of the confirmation, not what to hash and store: pass the exact string just
+	 * retyped in the password field to require it match what was confirmed (password_verify() against the
+	 * hash from handle_verify()), or null when that field was left blank — the normal case right after a
+	 * successful Verify, since render_fields() never redisplays a password — to trust the confirmation as-is
+	 * and hand back its hash unchanged (MEDIUM-1 fix, PR #6 review: previously a blank password field here
+	 * always failed this check, silently leaving the old hash saved even though "Verify" had just succeeded).
+	 * 与えた管理者と ID について、確認済みの結果があるかを返し、あれば消費する（transient を消し、別の保存に
+	 * 使い回せないようにする）。管理者が自分自身のモードを BASIC 認証にするとき、
+	 * ACGD_User_Access::save_fields() から呼ぶ。
 	 *
-	 * @param int    $admin_id Admin who confirmed. / 確認した管理者。
-	 * @param string $id       ID being saved now. / 今保存しようとしている ID。
-	 * @param string $password Password being saved now (plain text). / 今保存しようとしているパスワード（平文）。
-	 * @return bool Whether a matching, unconsumed confirmation existed. / 一致する未消費の確認があったか。
+	 * $password は「確認済みのものに何を求めるか」であって、ハッシュ化して保存する対象ではない：パスワード欄に
+	 * たった今入力し直した文字列そのものを渡せば、確認済みのものと一致すること（handle_verify() が作った
+	 * ハッシュに対する password_verify()）を求める。その欄が空のまま（render_fields() はパスワードを一切
+	 * 出し直さないため、「確認」成功直後の通常のケース）なら null を渡し、確認済みの内容をそのまま信頼して
+	 * そのハッシュを変更せずに返す（MEDIUM-1 の修正。PR #6 レビュー：修正前はここでパスワード欄が空だと
+	 * 必ずこのチェックに失敗し、「確認」に成功した直後でも古いハッシュが無言で保存されたまま残っていた）。
+	 *
+	 * @param int         $admin_id Admin who confirmed. / 確認した管理者。
+	 * @param string      $id       ID being saved now. / 今保存しようとしている ID。
+	 * @param string|null $password Password just retyped, or null if that field was left blank. / たった今入力し直したパスワード。欄が空なら null。
+	 * @return string|null The confirmed password's password_hash(), ready to save as-is, or null when there is
+	 *                      no matching, unconsumed confirmation. / 確認済みパスワードの password_hash()（そのまま
+	 *                      保存できる）。一致する未消費の確認が無ければ null。
 	 */
 	public static function consume_verification( $admin_id, $id, $password ) {
 		$key   = self::VERIFIED_TRANSIENT_PREFIX . (int) $admin_id;
 		$value = get_transient( $key );
-		if ( false === $value ) {
-			return false;
+		if ( ! is_array( $value ) || ! isset( $value['id'], $value['hash'] ) ) {
+			return null;
 		}
 
-		$matches = hash_equals( (string) $value, self::verification_hash( $id, $password ) );
 		delete_transient( $key ); // Single use either way (matched or not). / 一致してもしなくても1回きりで消費する。
 
-		return $matches;
+		if ( ! hash_equals( (string) $value['id'], (string) $id ) ) {
+			return null; // Confirmed a different ID than the one being saved now. / 確認したのは今保存しようとしているのとは別の ID。
+		}
+		if ( null !== $password && ! password_verify( $password, $value['hash'] ) ) {
+			return null; // Retyped, but not what was actually confirmed. / 入力し直されたが、確認済みの内容とは一致しない。
+		}
+
+		return $value['hash'];
 	}
 
 	/*-------------------------------------------*/
