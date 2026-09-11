@@ -94,7 +94,7 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 |---|---|---|
 | 消さない | **消さない** | **消す** |
 
-- 1.0.0：**残す**＝ログイン名の保護の設定。**消す**＝該当なし（テーブル・cron・一時状態を持たない）。
+- 1.0.0：**残す**＝ログイン名の保護の設定。**消す**＝同梱の plugin-update-checker（v5p5）の更新確認の状態（サイトオプション `external_updates-etbs-account-guard`。ライブラリがプラグインに付ける既定の名前で、`update_site_option()` で保存される）と、手動の更新確認のエラー（サイトの一時データ `puc_manual_check_errors-etbs-account-guard`。60秒）。どちらも次の確認で作り直される一時状態に当たる。このプラグイン自身はテーブル・cron・一時状態を持たない（PUC の cron は無効化の時点でライブラリが消す）。
 - 1.1.0：**残す**＝アクセス制限の設定、ユーザーメタ（モード・追加の IP・BASIC 認証の資格情報のハッシュ）。**消す**＝拒否の記録、受信診断の結果。
 - 「消さない」ものは、`uninstall.php` の docblock に**なぜ消さないか**を書く（空にしない）。
 - ★★★ **検証は管理画面の「削除」でやらない**（シンボリックリンク越しにこのリポジトリの中身が全部消える）。
@@ -118,8 +118,8 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 | c | ユーザーのサイトマップ（`wp-sitemap-users-*.xml`） | 出さない | ON |
 | d | HTML のクラス名。登録ユーザーのコメントの `comment-author-<名前>`、投稿者ページの `<body>` の `author-<名前>` | 名前入りのクラスだけ外す | ON |
 | e | `?author=数字` の転送（`/author/<名前>/` へ飛ぶ） | 管理画面の外で、トップへ転送する | ON |
-| f | ログイン画面・パスワード再発行の文言（「そのユーザー名は登録されていません」と「パスワードが違います」が別々に出る） | 名前の有無が分かる文言だけを共通にする | ON |
-| g | 投稿者ページ `/author/<名前>/`（存在すれば 200、無ければ 404） | 404 にする | **OFF** |
+| f | ログイン画面・パスワード再発行・REST API のアプリケーションパスワード（Basic 認証）の文言（「そのユーザー名は登録されていません」と「パスワードが違います」が別々に出る） | 名前の有無が分かる文言・画面の違いだけを共通にする | ON |
+| g | 投稿者ページ `/author/<名前>/`（存在すれば 200、無ければ 404） | ログインしていない人には 404 にする（ログイン中は従来どおり） | **OFF** |
 | h | 表示名・ニックネームがログイン名と同じ（フィードの `dc:creator` などに出る） | 設定画面に一覧を出すだけ（**自動では変えない**） | 常に表示 |
 
 ### 実装の要点
@@ -133,15 +133,29 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
   **名前入りのクラスだけ**を外し、`author-<ID>` など ID 入りのクラスは残す。
 - **e**：本体の `redirect_canonical()`（`template_redirect` の優先度 10）より**前**に処理する。プレーンパーマリンクの `/?author=1`（転送されずに投稿者ページが出る）も対象。
   管理画面（`edit.php?author=` の絞り込みなど）・REST・admin-ajax には掛けない。
+  判定は `$_GET` ではなく**解析済みのクエリ変数**（`$wp->query_vars['author']`）で行う。`WP::parse_request()` は公開クエリ変数をクエリ文字列からも POST のデータからも取り込み、メインクエリはその結果に従うが、`redirect_canonical()` が見るのは `$_GET` だけ。
+  ただし転送するのは、**リクエスト自身が `author` を持ってきたとき**（`$_GET` か `$_POST` にキーがあるとき）だけ。`WP::parse_request()` は一致した書き換えルールからもクエリ変数を取り込むので、テーマやプラグインの書き換えルールが作った `author=` は、そのページ自身のアドレスとして転送しない。
 - **f**：
-  - ログイン：`authenticate` の結果が `invalid_username` / `invalid_email` / `incorrect_password` のときだけ、共通の1文言（例：*The username or password you entered is incorrect.*）の `WP_Error` に差し替える。
-    **それ以外のコード（空欄・画像認証・ログインロックなど他プラグインのエラー）は置き換えない**（職員の方が困る）。
+  - ログイン：`authenticate` の結果が `invalid_username` / `invalid_email` / `incorrect_password` / `application_passwords_disabled` / `application_passwords_disabled_for_user` のときだけ、共通のエラー（コード `acgd_invalid_credentials`・文言 *The username or password you entered is incorrect.*）に差し替える。
+    後ろの2つは、本体が `authenticate` の優先度 20 にも登録している `wp_authenticate_application_password()` が、REST API・XML-RPC のリクエスト（アプリケーションパスワードが作られたことのあるサイト）で、**存在するアカウントにだけ**返すもの（前段の `incorrect_password` を置き換える）。一覧は `ACGD_Login_Name::REVEALING_LOGIN_CODES` の1つだけにし、REST 側（下記）も同じものを使う。
+    ★ コードは本体の `incorrect_password` を流用せず、独自のコードにする。`wp-login.php` はユーザー名欄を先頭のエラーコードが `incorrect_password`（と `empty_password`）のときだけ入力済みで戻すので、どの場合も欄が同じ状態（空）で戻るようにするため。独自のコードは `shake_error_codes` に足す（フォームは従来どおり揺れる）。
+    共通のエラーは先頭に置く（ユーザー名欄・揺れ・REST の HTTP ステータスは先頭のコードで決まる）。置き場は `ACGD_Invalid_Credentials`（`inc/class-acgd-invalid-credentials.php`）で、1.1.0 のアクセス制限も同じものを使う。
+    **それ以外のコード（空欄・画像認証・ログインロックなど他プラグインのエラー）は置き換えない**（職員の方が困る）。共通のエラーの後ろに残す。
     「パスワードをお忘れですか」のリンクは残す。
-  - パスワード再発行：アカウントが無いとき（`invalidcombo` / `invalid_email`）は、**アカウントがあるときと同じ画面**（`wp-login.php?checkemail=confirm`）へ進める。メールは送らない。
+  - REST API（アプリケーションパスワードの Basic 認証）：アプリケーションパスワードは `authenticate` を通らず、`determine_current_user` で確かめられる。本体だけの構成なら失敗は `rest_not_logged_in` にまとまるが、`rest_authentication_errors` の優先度 90（`rest_application_password_check_errors`）より前に現在のユーザーを確定させるもの（他プラグインなど）があると、`invalid_username` と `incorrect_password` が別々の 401 で返る。
+    `rest_authentication_errors` の優先度 9999 で、ログインと同じ一覧（`invalid_username` / `invalid_email` / `incorrect_password` / `application_passwords_disabled` / `application_passwords_disabled_for_user`）のどれかを含むエラーを、共通のエラー（`acgd_invalid_credentials`・status 401・文言はログインと同じ msgid）に差し替える。
+  - パスワード再発行：名前の有無が分かるコード（アカウントが無いときの `invalidcombo` / `invalid_email`、再発行が許可されていない存在するアカウントにだけ返る `no_password_reset`）**だけ**のときは、存在するアカウントが通る関門 `apply_filters( 'allow_password_reset', true, 0 )` を先に通す。`WP_Error` が返ったら、名前の有無が分かるコードを消してそのエラーを出す（転送しない）。そうでなければ**アカウントがあるときと同じ画面**（`wp-login.php?checkemail=confirm`）へ進める。メールは送らない。
+    関門のコールバックが ID 0 で例外（`Throwable`）を投げたら、許可（true）とみなす。
+    名前の有無が分かるコードが**他のエラーと混ざっているとき**（空欄、`lostpassword_post` で足された画像認証など）は、名前の有無が分かるコードだけを `remove()` し、他のエラーは残す（転送しない）。
     ★ 文言を共通にするだけでは、アカウントがあるときは成功画面に進むので、名前の有無が分かってしまう。
+    `retrieve_password_email_failure`（メール送信の失敗）は運用上の合図なので残す。
   - 既知の限界：WooCommerce のマイアカウントの**パスワード再発行フォーム**は独自の文言を出すので、1.0.0 の対象外（README に書く）。ログインフォームは `authenticate` を通るので対象になる。
-- **g**：`is_author()` のとき 404（投稿者のフィード `/author/<名前>/feed/`・`?author_name=` を含む）。
-- **h**：`display_name === user_login` または `nickname === user_login` のユーザーを、設定画面のログイン名の保護タブに一覧する。各行からユーザー編集画面へリンク。
+  - 既知の限界：SiteGuard WP Plugin と併用するときは、SiteGuard の「ログイン詳細エラーメッセージの無効化」（Same Login Error Message）を ON のままにする。OFF だと画像認証エラーの文言が存在するアカウントにだけ出る（SiteGuard 自身の挙動）。README に書く。
+  - 既知の限界：パスワード再発行の `retrieve_password_email_failure` と、メールを送るかどうかによる応答時間の差は残る。README に書く。
+  - 既知の限界：ログインの応答時間の差。本体はアカウントがあるときだけ `wp_check_password()` を呼ぶので、アカウントの有無で応答時間に差が出る。空の照合を足すと、SiteGuard の画像認証の誤答（照合しない）と逆向きの差ができるため単純ではなく、**1.0.0 では塞がない**（README・readme.txt の既知の限界に、パスワード再発行の時間差と並べて書く）。
+- **g**：`is_author()` かつ**ログインしていない**とき 404（投稿者のフィード `/author/<名前>/feed/`・`?author_name=` を含む）。ログイン中は従来どおり表示する（設定画面の説明に「結果はブラウザーのプライベートウィンドウで確かめる」旨と、オンにする前にテーマが投稿者ページへリンクしているかを確かめる手順を書く）。
+- **h**：`display_name === user_login` または `nickname === user_login` のユーザーを、設定画面のログイン名の保護タブに一覧する（見出しの id は `acgd-public-names`）。列はログイン名 (ユーザー名)・表示名・ニックネームで、ログイン名と同じ値には「(ログイン名と同じ)」を文字で添える。各行のログイン名の下に、ユーザー一覧と同じ形の「編集」リンク（ユーザー編集画面の `#nickname`）を置く。
+  ダッシュボードのウィジェットの先頭に、該当する人数（件数だけの問い合わせ）と一覧へのリンクを出す（0人なら出さない）。
 
 ### 受け入れ条件（1.0.0）
 
@@ -150,13 +164,17 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 - [ ] `GET /wp-json/wp/v2/users`・`/?rest_route=/wp/v2/users`・`/wp-json/wp/v2/users/<存在するID>` がユーザーを返さない。`<存在しないID>` と応答が区別できない
 - [ ] `GET /wp-json/wp/v2/posts?_embed=author`（または pages）の埋め込みに `slug` / `link` のユーザー情報が無い
 - [ ] ログイン中（ブロックエディタ）は投稿者欄が従来どおり使える（REST をログイン状態で叩いて一覧が返る）
+- [ ] 優先度 90 より前で `is_user_logged_in()` を呼ぶ検証用の mu-plugin を置いた状態で、アプリケーションパスワードの Basic 認証（存在しない名前／存在する名前＋誤ったパスワード）の REST 応答が同じ
 - [ ] `GET /wp-json/oembed/1.0/embed?url=<トップ or 投稿>` の `author_url` がトップの URL、`author_name` がサイト名。`format=xml` も同じ
 - [ ] `GET /wp-sitemap.xml` に users が無く、`/wp-sitemap-users-1.xml` が 404
 - [ ] 登録ユーザーのコメントの HTML に `comment-author-<名前>` が無い
 - [ ] `GET /?author=1` の `Location` がトップで、`/author/` を含まない（パーマリンク設定が「基本」でも同じ）。管理画面の `edit.php?author=1` は従来どおり
+- [ ] `curl -X POST -d author=1 <トップ>` の `Location` がトップ
 - [ ] ログイン：存在しないユーザー名と、存在するユーザー名＋誤ったパスワードで、**画面の文言が同じ**
 - [ ] パスワード再発行：存在しないユーザー名と存在するユーザー名で、**進む画面が同じ**
+- [ ] SiteGuard WP Plugin 1.7.8（既定設定）を入れた状態で、ログインとパスワード再発行それぞれ「存在する名前／存在しない名前 × 画像認証なし相当／画像認証を空欄・誤答」で、**画面（文言・ユーザー名欄の `value`・転送先）が名前の有無で区別できない**
 - [ ] g を ON：`/author/<名前>/` が 404。OFF（既定）：従来どおり
+- [ ] g はログイン中の人には掛からない（g を ON でも、ログイン中は `/author/<名前>/` が従来どおり表示される）
 - [ ] h：表示名がログイン名と同じユーザーが一覧に出る
 - [ ] 各項目を OFF にすると、その経路が従来の挙動に戻る
 - [ ] サイトの言語が日本語のとき、画面が日本語で出る（`switch_to_locale( 'ja' )` で `.po` の msgid を全件 `__()` に通して突合）
@@ -185,9 +203,14 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 
 ### 5.2 IP 制限
 
-- **ログイン時**（wp-login.php・XML-RPC など `wp_authenticate()` を通るもの）：**パスワードを照合する前に**判定する
-  （`authenticate` のうち、本体のユーザー名・パスワード照合＝優先度 20 より前）。ユーザー名・メールアドレスからユーザーを引き、
-  対象かつ許可されていない接続元なら、**f と同じ共通の文言**で拒否する（場所が理由だと明かさない）。存在しないユーザー名との区別を付けない。
+- **ログイン時**（wp-login.php・XML-RPC など `wp_authenticate()` を通るもの）：**パスワードを照合する前に**判定する。
+  判定は **`wp_authenticate_user`** で行う（本体の `wp_authenticate_username_password()` / `wp_authenticate_email_password()` が、ユーザー名・メールアドレスからユーザーを引いた後・パスワードを照合する前に通すフィルタ）。
+  対象かつ許可されていない接続元なら、**f と同じ共通のエラー**（`ACGD_Invalid_Credentials` の `acgd_invalid_credentials`）を返して拒否する（場所が理由だと明かさない）。存在しないユーザー名との区別を付けない。
+  ★ `authenticate` の優先度 20 より前で拒否しても効かない。本体の `wp_authenticate_username_password()` は、ユーザー名とパスワードが両方あると前段の `WP_Error` を捨てて照合をやり直す（先回りを認めるのは `WP_User` だけ）。
+- ★ **REST の判定の優先度**：1.1.0 で `rest_authentication_errors` に掛ける判定は、**優先度 100（本体の cookie の確認）より後・9999（f の差し替え）より前**に置く。
+  優先度 90（`rest_application_password_check_errors`）より前に掛けたり、そこで `wp_get_current_user()` / `is_user_logged_in()` を呼んで現在のユーザーを早く確定させたりすると、
+  アプリケーションパスワードの失敗が 90 で `invalid_username` / `incorrect_password` などの別々の 401 として返り、**このプラグイン自身が名前の有無の区別を作る**（f が OFF なら、そのまま利用者に見える）。
+  失敗を返すのは 90 だけなので、それより後で現在のユーザーを確定させても失敗は返らない。100 より後なら、本体の cookie の確認が通常すでに現在のユーザーを確定させている。
 - **ログイン後の毎回のアクセス**（フロント・管理画面・admin-ajax・admin-post・REST）：許可されていなければ、
   **そのセッションだけ破棄して**（`WP_Session_Tokens::destroy( wp_get_session_token() )`＋auth cookie の削除＋`wp_set_current_user( 0 )`）、
   **未ログインとして処理を続ける**。403 で止めない（公開ページやログインなしの予約フォームは、訪問者と同じように使えること）。
