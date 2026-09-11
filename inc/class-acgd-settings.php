@@ -1177,6 +1177,13 @@ class ACGD_Settings {
 	 * @return void
 	 */
 	public static function render_access_roles_section() {
+		// Same destination as render_own_account_notice() further down this tab, and worded the same way
+		// (UX review, low priority): that block already links to it, this one previously named the same
+		// destination ("their own user edit screen") without a link, which read as asymmetric on one tab.
+		// render_own_account_notice() よりこのタブの下のほうにある同じ行き先へのリンクと、同じ言い回しに
+		// 揃える（UX レビュー・優先度低）。あちらは既にリンクしており、こちらは同じ行き先
+		// （「本人のユーザー編集画面」）をリンク無しで名指ししていたため、同じタブの中で非対称に見えていた。
+		$own_url = admin_url( 'user-edit.php?user_id=' . get_current_user_id() );
 		?>
 		<p>
 			<?php
@@ -1191,7 +1198,18 @@ class ACGD_Settings {
 			);
 			?>
 		</p>
-		<p><?php esc_html_e( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead.', 'etbs-account-guard' ); ?></p>
+		<p>
+			<?php
+			echo wp_kses(
+				sprintf(
+					/* translators: %s: direct link to the current admin's own user edit screen */
+					__( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead. To restrict your own account, use this direct link to your <a href="%s">user edit screen</a>.', 'etbs-account-guard' ),
+					esc_url( $own_url )
+				),
+				array( 'a' => array( 'href' => true ) )
+			);
+			?>
+		</p>
 		<p><?php esc_html_e( 'BASIC authentication requires every affected user to set up their own ID and password first, on their user edit screen; a role cannot be switched to it as a shortcut around that.', 'etbs-account-guard' ); ?></p>
 		<?php
 	}

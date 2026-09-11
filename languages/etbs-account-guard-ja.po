@@ -371,8 +371,9 @@ msgstr "権限ごとにモードを選んでください。その権限を持つ
 msgid "A user who holds more than one role, with different modes, is held to all of them."
 msgstr "複数の権限を持ち、モードが食い違うユーザーには、そのすべてを課します。"
 
-msgid "administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead."
-msgstr "administrator は権限単位では常に制限なしです。特定の管理者を制限したい場合は、そのユーザーの編集画面で設定してください。"
+#. translators: %s: direct link to the current admin's own user edit screen
+msgid "administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead. To restrict your own account, use this direct link to your <a href=\"%s\">user edit screen</a>."
+msgstr "administrator は権限単位では常に制限なしです。特定の管理者を制限したい場合は、そのユーザーの編集画面で設定してください。ご自身のアカウントを制限する場合は、こちらの<a href=\"%s\">ユーザー編集画面</a>への直接リンクをお使いください。"
 
 msgid "BASIC authentication will be added by a later update; only \"No restriction\" and \"IP restriction\" can be chosen here for now."
 msgstr "BASIC 認証は今後の更新で追加予定です。現時点ではここで選べるのは「制限なし」と「IP 制限」だけです。"
@@ -481,8 +482,8 @@ msgstr "BASIC 認証にするには、対象となる各ユーザーが先に自
 msgid "Back up your current .htaccess before editing it. Depending on your server and other plugins, this may not work or may affect how your site is displayed. If unsure, ask your hosting provider."
 msgstr "編集する前に、今の .htaccess を必ず控えてください。サーバーや他のプラグインとの組み合わせによっては、うまく動かない場合やサイトの表示に影響する場合があります。不安な場合はレンタルサーバーの管理会社にご相談ください。"
 
-msgid "Before saving BASIC authentication mode for yourself, set the ID and password above and click Verify. This opens a real sign-in prompt so you can confirm they work; you will be returned here afterward. Saving is refused for yourself without a fresh verification."
-msgstr "自分自身を BASIC 認証モードにして保存する前に、上の ID とパスワードを入力して「確認」をクリックしてください。実際のサインインダイアログが開き、正しく動くことを確認できます。確認が終わるとこの画面に戻ります。確認したばかりの内容でなければ、自分自身の保存は拒否されます。"
+msgid "Set the ID and password above, click Verify to confirm they work, and you will be returned here to save them."
+msgstr "上の ID とパスワードを入力し、「確認」をクリックして正しく動くことを確かめてください。確認が終わるとこの画面に戻り、保存できます。"
 
 msgid "Click \"Verify\" and confirm your new BASIC authentication ID and password before saving them for your own account. Not saved."
 msgstr "自分自身のアカウントに保存する前に、「確認」をクリックして新しい BASIC 認証の ID とパスワードを確かめてください。保存されませんでした。"

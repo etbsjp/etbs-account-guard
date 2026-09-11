@@ -100,6 +100,34 @@ class ACGD_Access_Restriction {
 	 */
 	const USER_BASIC_HASH_META = 'acgd_basic_password_hash';
 
+	/**
+	 * Option that caches how many users currently have a non-empty BASIC authentication ID saved (security
+	 * review, MEDIUM/performance, 2026-09-11: without this, maybe_strip_own_header() — a determine_current_user
+	 * filter at priority 1, so it runs on every request that carries an Authorization header, including
+	 * Application Passwords — ran a get_users( meta_key EXISTS ) query even on sites with nobody in BASIC
+	 * mode). Kept in sync at the single place that writes USER_BASIC_ID_META
+	 * (ACGD_User_Access::save_fields(), via update_basic_id_count()), so it always reflects the real count
+	 * without a query of its own. Autoloaded on purpose: it is read on that same hot path, so keeping it in
+	 * the autoloaded options cache (loaded once per request regardless) costs nothing extra, unlike a
+	 * dedicated get_option() call for a non-autoloaded value. This is a derived cache, not something a user
+	 * configured, so it belongs with the "temporary state" that uninstall.php deletes (docs/spec.md 3.6),
+	 * the same as the denial log and the diagnosis result.
+	 * BASIC 認証の ID を現在いくつのユーザーが持っているか（空文字でないもの）をキャッシュするオプション
+	 * （セキュリティレビュー・MEDIUM／性能、2026-09-11：これが無いと maybe_strip_own_header()——
+	 * determine_current_user フィルタの優先度1で、Authorization ヘッダーを持つリクエストすべて
+	 * （アプリケーションパスワードを含む）で動く——が、BASIC モードの利用者が1人もいないサイトでも
+	 * get_users( meta_key EXISTS ) を毎回実行していた）。USER_BASIC_ID_META を書き込む唯一の場所
+	 * （ACGD_User_Access::save_fields()。update_basic_id_count() 経由）でだけ更新するため、自前のクエリ無しで
+	 * 常に実際の件数と一致する。autoload するのは意図的：同じ高頻度の経路で読むため、どのみち1リクエストに
+	 * 1回読み込まれる autoload オプションのキャッシュに乗せれば追加コストが無い（autoload しない値の
+	 * 専用 get_option() はそのぶんの問い合わせが増える）。これは利用者が設定した値ではなく派生的な
+	 * キャッシュなので、uninstall.php が消す「一時状態」（docs/spec.md 3.6）に属する。拒否の記録・
+	 * 診断結果と同じ扱い。
+	 *
+	 * @var string
+	 */
+	const BASIC_ID_COUNT_OPTION = 'acgd_basic_id_count';
+
 	const MODE_FOLLOW = 'follow';
 	const MODE_NONE   = 'none';
 	const MODE_IP     = 'ip';
@@ -301,16 +329,55 @@ class ACGD_Access_Restriction {
 	 * 現在のサイトで BASIC 認証の ID を保存済みの全ユーザーを返す（basic_id_taken_by_other() と
 	 * find_basic_user_by_credentials() の候補）。
 	 *
+	 * Checks BASIC_ID_COUNT_OPTION first and returns an empty array without a query at all when it is zero
+	 * (security review, MEDIUM/performance, 2026-09-11) — the common case on a site where nobody uses BASIC
+	 * mode, including every request that reaches find_basic_user_by_credentials() through
+	 * ACGD_Basic_Auth::maybe_strip_own_header().
+	 * まず BASIC_ID_COUNT_OPTION を見て、0件ならクエリすら実行せず空配列を返す（セキュリティレビュー・
+	 * MEDIUM／性能、2026-09-11）。BASIC モードの利用者が1人もいないサイトでの通常の場合に当たり、
+	 * ACGD_Basic_Auth::maybe_strip_own_header() 経由で find_basic_user_by_credentials() に届くリクエスト
+	 * すべてがこれに該当する。
+	 *
 	 * @return WP_User[] Users with a BASIC ID saved. / BASIC ID を保存済みのユーザー。
 	 */
 	private static function get_users_with_basic_id() {
+		if ( (int) get_option( self::BASIC_ID_COUNT_OPTION, 0 ) < 1 ) {
+			return array();
+		}
+
 		return get_users(
 			array(
-				'meta_key'     => self::USER_BASIC_ID_META, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Settings/profile screens only; the number of users with a BASIC ID is small by nature (one credential per person, set up by hand).
+				'meta_key'     => self::USER_BASIC_ID_META, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Settings/profile screens only; the number of users with a BASIC ID is small by nature (one credential per person, set up by hand), and BASIC_ID_COUNT_OPTION above already skips this entirely when nobody has one.
 				'meta_compare' => 'EXISTS',
 				'fields'       => 'all',
 			)
 		);
+	}
+
+	/**
+	 * Keeps BASIC_ID_COUNT_OPTION in sync with whether one user's BASIC authentication ID is non-empty before
+	 * and after a save. Called from the single place that writes USER_BASIC_ID_META
+	 * (ACGD_User_Access::save_fields()), right after that write. A no-op unless presence actually flipped
+	 * (someone's ID field going from blank to set, or set to blank), so repeated saves that leave BASIC
+	 * credentials untouched — the overwhelming majority, since most saves are of the IP or "no restriction"
+	 * modes — never touch this option at all.
+	 * BASIC_ID_COUNT_OPTION を、1人のユーザーの BASIC 認証 ID が保存の前後で空文字かどうかに合わせて更新する。
+	 * USER_BASIC_ID_META を書き込む唯一の場所（ACGD_User_Access::save_fields()）から、その書き込み直後に
+	 * 呼ぶ。ID の有無が実際に変わったとき（空→設定、設定→空）以外は何もしない。BASIC の資格情報に触れない
+	 * 保存（大多数を占める IP や「制限なし」モードの保存）では、このオプションに一切触れない。
+	 *
+	 * @param bool $had_id Whether the user had a non-empty BASIC authentication ID before this save. / 保存前に BASIC 認証 ID を持っていたか。
+	 * @param bool $has_id Whether the user has a non-empty BASIC authentication ID after this save. / 保存後に BASIC 認証 ID を持っているか。
+	 * @return void
+	 */
+	public static function update_basic_id_count( $had_id, $has_id ) {
+		if ( (bool) $had_id === (bool) $has_id ) {
+			return;
+		}
+
+		$count = (int) get_option( self::BASIC_ID_COUNT_OPTION, 0 );
+		$count = $has_id ? ( $count + 1 ) : max( 0, $count - 1 );
+		update_option( self::BASIC_ID_COUNT_OPTION, $count, true ); // Autoloaded on purpose; see BASIC_ID_COUNT_OPTION. / 意図的に autoload する。理由は BASIC_ID_COUNT_OPTION を参照。
 	}
 
 	/**

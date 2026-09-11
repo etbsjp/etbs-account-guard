@@ -66,6 +66,16 @@
  *   （1.1.0・BASIC 認証・issue #4・オプション）保存済みの受信診断（docs/spec.md 5.3）の結果。
  *   サーバーが BASIC 認証のヘッダーを PHP まで通すかどうか。次に診断を実行すれば作り直され、
  *   利用者が設定したものではなくこのプラグイン自身が測った結果のため、入れ直す間に残す意味が無い。
+ * - `acgd_basic_id_count` (1.1.0, BASIC authentication, issue #4, option) … a cached count of how many users
+ *   currently have a non-empty BASIC authentication ID (ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION;
+ *   security review, 2026-09-11), kept only so the per-request BASIC authentication check can skip a
+ *   get_users() query on sites where nobody uses it. Rebuilt from the real per-user meta the next time anyone
+ *   is saved into or out of BASIC mode; documents nothing the user configured, only a derived tally.
+ *   （1.1.0・BASIC 認証・issue #4・オプション）BASIC 認証の ID を現在いくつのユーザーが持っているかの
+ *   キャッシュ（ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION。セキュリティレビュー、2026-09-11）。
+ *   リクエストごとの BASIC 認証判定が、誰も使っていないサイトで get_users() クエリを省けるようにする
+ *   ためだけに持つ。誰かが BASIC モードに/から保存されるたびに、実際のユーザーメタから作り直される
+ *   派生的な集計であり、利用者が設定したものではない。
  * - Several transients exist in 1.1.0 that are not deleted here, on purpose: the "resubmit" transients
  *   (ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' and
  *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'), which briefly hold a rejected
@@ -117,3 +127,4 @@ delete_option( 'acgd_access_restriction_fault' );
 // BASIC authentication's own temporary state (1.1.0, issue #4); see the docblock above.
 // BASIC 認証自身の一時状態（1.1.0・issue #4。上の docblock を参照）。
 delete_option( 'acgd_basic_diagnosis' );
+delete_option( 'acgd_basic_id_count' );

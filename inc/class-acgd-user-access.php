@@ -158,6 +158,40 @@ class ACGD_User_Access {
 		$ips      = ( $resubmit && isset( $resubmit['ips'] ) ) ? $resubmit['ips'] : ACGD_Access_Restriction::get_user_ip_text( $user->ID );
 		$basic_id = ( $resubmit && isset( $resubmit['basic_id'] ) ) ? $resubmit['basic_id'] : ACGD_Access_Restriction::get_basic_id( $user->ID );
 		?>
+		<?php if ( $is_self ) : ?>
+			<?php
+			/*
+			 * A disabled submit button, hidden but still part of the DOM, printed before anything else this
+			 * section adds (UX review, high priority). wp-admin/user-edit.php has no <button>/<input
+			 * type="submit"> of its own before this hook point (edit_user_profile fires after every text,
+			 * password and email field — name, nickname, email, website, biography, the "New Password" pair —
+			 * and only "Update User" below is a submit control), so without this, the "Verify" button further
+			 * down would become the form's *default button*: the one a browser activates when Enter is pressed
+			 * in an earlier field, which would silently send the admin to the "Verify" round trip (discarding
+			 * whatever else they had just typed) instead of saving. A form's default button is simply the
+			 * first submit-type control in tree order, disabled or not; putting a disabled one first makes
+			 * *it* the default button, and a disabled default button cannot be activated, so implicit
+			 * (Enter-key) submission of this form does nothing from here on — the "Update User" button still
+			 * works normally when clicked directly. This is a display/mis-click safeguard, not an
+			 * authentication decision, so it does not run into the "don't decide access with JavaScript" rule
+			 * (CLAUDE.md) — and in fact it needs no JavaScript at all.
+			 * 無効化した submit ボタンを、見た目には隠しつつ DOM には残したまま、この区画が何かを足すより
+			 * 前に出力する（UX レビュー・優先度高）。wp-admin/user-edit.php は、このフックが発火する時点
+			 * （edit_user_profile は氏名・ニックネーム・メール・ウェブサイト・自己紹介・「新しいパスワード」
+			 * の組など、あらゆるテキスト/パスワード/メール欄より後に発火し、以降で唯一の送信系コントロールは
+			 * 下の「更新」ボタンだけ）より前に <button>/<input type="submit"> を1つも持たない。そのため
+			 * これが無いと、下の「確認」ボタンがこのフォームの「既定ボタン」——早い段階の欄で Enter を
+			 * 押したときブラウザが起動する対象——になってしまい、直前まで入力していた他の変更を保存せず
+			 * 「確認」の往復へ静かに送ってしまう。フォームの既定ボタンは、無効・有効を問わず単に
+			 * DOM 順で最初の送信系コントロールなので、無効化したものを先に置けばそれ自身が既定ボタンになり、
+			 * 無効な既定ボタンは起動できないため、以降この フォームの Enter キーによる暗黙送信は何も
+			 * しなくなる（「更新」ボタンを直接クリックする通常の保存は今までどおり動く）。これは認証可否の
+			 * 判定ではなく表示・誤操作防止の用途なので、「JavaScript で判定しない」方針（CLAUDE.md）には
+			 * 抵触しない——そのうえ、これは JavaScript を一切使わない。
+			 */
+			?>
+			<button type="submit" disabled="disabled" aria-hidden="true" tabindex="-1" style="display:none;"></button>
+		<?php endif; ?>
 		<h2 id="<?php echo esc_attr( self::SECTION_ID ); ?>"><?php esc_html_e( 'Access Restriction', 'etbs-account-guard' ); ?></h2>
 		<?php if ( $is_self ) : ?>
 			<?php self::render_verify_notice(); ?>
@@ -239,7 +273,7 @@ class ACGD_User_Access {
 							<?php esc_html_e( 'Verify', 'etbs-account-guard' ); ?>
 						</button>
 						<p class="description">
-							<?php esc_html_e( 'Before saving BASIC authentication mode for yourself, set the ID and password above and click Verify. This opens a real sign-in prompt so you can confirm they work; you will be returned here afterward. Saving is refused for yourself without a fresh verification.', 'etbs-account-guard' ); ?>
+							<?php esc_html_e( 'Set the ID and password above, click Verify to confirm they work, and you will be returned here to save them.', 'etbs-account-guard' ); ?>
 						</p>
 					</td>
 				</tr>
@@ -438,6 +472,13 @@ class ACGD_User_Access {
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_MODE_META, $mode );
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_IPS_META, $ip_text );
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_BASIC_ID_META, $final_id );
+		// Keeps ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION accurate (security review, MEDIUM/performance):
+		// this is the only place USER_BASIC_ID_META is ever written, so this is also the only place its
+		// presence can change. $existing_id was read before any of the writes above.
+		// ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION を正しい値に保つ（セキュリティレビュー・
+		// MEDIUM／性能）：USER_BASIC_ID_META を書き込むのはここだけなので、その有無が変わりうるのもここだけ。
+		// $existing_id は上のどの書き込みよりも前に読んでいる。
+		ACGD_Access_Restriction::update_basic_id_count( '' !== $existing_id, '' !== $final_id );
 		if ( null !== $final_hash ) {
 			update_user_meta( $user_id, ACGD_Access_Restriction::USER_BASIC_HASH_META, $final_hash );
 		}
