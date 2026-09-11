@@ -55,8 +55,28 @@
  *   5.5), cleared automatically once the settings are saved successfully; nothing to keep across a reinstall.
  *   （1.1.0・オプション）アクセス制限の故障の記録（docs/spec.md 5.5）。設定の保存に成功すると自動で消える
  *   一時状態で、入れ直す間に残す意味が無い。
- * - 1.0.0 in isolation has no tables, transients or cron events of its own; 1.1.0 adds none of those either.
- *   1.0.0 のこのプラグイン自身は、独自のテーブル・transient・cron を持たない。1.1.0 でもそれらは増えない。
+ * - Two transients exist in 1.1.0 that are not deleted here, on purpose: the "resubmit" transients
+ *   (ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' and
+ *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'), which briefly hold a rejected
+ *   Access Restriction tab or user-edit-screen submission so the form can be redisplayed with what was
+ *   typed (see the classes for why). Each key ends with the submitting admin's user ID (the user-edit one
+ *   also the edited user's ID), so there is no single fixed key a delete_transient() call here could
+ *   remove; and each one is already deleted the moment it is read (at most one render), with a 60-second
+ *   TTL (RESUBMIT_TTL) as a backstop, so any left over from an interrupted request are gone within a
+ *   minute regardless of uninstalling. This is exactly the temporary state that policy A already covers
+ *   (3.6); it needs no explicit action here. 1.0.0 in isolation has no tables or cron events of its own,
+ *   and 1.1.0 adds neither of those either (transients only, as just described).
+ *   1.1.0 には、ここでは意図的に消していない transient が2つある。「再表示用」の transient
+ *   （ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' と
+ *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'）で、「アクセス制限」タブや
+ *   ユーザー編集画面の送信が拒否されたとき、入力した内容でフォームを出し直すために一時的に持つ
+ *   （理由は各クラスを参照）。キーの末尾は送信した管理者のユーザー ID（ユーザー編集画面版は編集対象の
+ *   ユーザー ID も含む）で、固定のキーが無いため、ここで delete_transient() を1回呼んで消せる形ではない。
+ *   また、それぞれ読まれた時点（最大でも1回の描画）で既に消えており、保険として TTL（RESUBMIT_TTL）を
+ *   60秒にしているため、途中で終わったリクエストの残りがあっても、アンインストールの有無にかかわらず
+ *   1分以内に消える。これはまさに案A（3.6）がすでに扱う一時状態であり、ここでの明示的な対応は不要。
+ *   1.0.0 のこのプラグイン自身は、独自のテーブル・cron を持たない。1.1.0 でもそれらは増えない
+ *   （増えるのは上記の transient だけ）。
  *
  * @package etbs-account-guard
  */
