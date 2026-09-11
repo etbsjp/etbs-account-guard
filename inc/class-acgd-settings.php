@@ -1118,29 +1118,35 @@ class ACGD_Settings {
 	}
 
 	/**
-	 * Prints a link straight to the current admin's own user edit screen (bypassing get_edit_profile_url(),
-	 * which always forces profile.php for one's own ID), so an admin has a way to set up their own BASIC
-	 * authentication credentials — the section is otherwise never reachable for one's own account through
-	 * ordinary navigation (docs/spec.md 5.6, and see the decision record on issue #4 and the class docblock
-	 * of ACGD_User_Access).
-	 * 現在の管理者自身のユーザー編集画面への生のリンクを出力する（自分の ID には常に profile.php を強制する
-	 * get_edit_profile_url() は経由しない）。管理者が自分自身の BASIC 認証資格情報を設定する手段を用意する
-	 * ため——この区画は通常の導線では自分自身の口座には決して届かない（docs/spec.md 5.6、issue #4 の
-	 * decision record と ACGD_User_Access のクラス docblock を参照）。
+	 * Prints a link to the current admin's own standard WordPress "Profile" screen (get_edit_profile_url(),
+	 * which always resolves to profile.php for one's own ID — the ordinary navigation path, via the toolbar or
+	 * the admin menu). ACGD_User_Access now registers the Access Restriction section on show_user_profile too,
+	 * gated by manage_options exactly like the other-user screen (decision record on issue #4, PR #6 second
+	 * round; see the class docblock of ACGD_User_Access), so this is a pointer to where that section already
+	 * lives rather than a bypass around core's own routing — the raw wp-admin/user-edit.php?user_id=<own ID>
+	 * link this method used to print never actually reached that section for one's own account (core's
+	 * IS_PROFILE_PAGE decides the hook purely by target user ID, not by URL; UI test finding, PR #6).
+	 * 現在の管理者自身の、WordPress 標準の「プロフィール」画面（get_edit_profile_url()。自分の ID には常に
+	 * profile.php に解決される——ツールバーや管理画面メニューを経由する通常の導線）へのリンクを出力する。
+	 * ACGD_User_Access は今、アクセス制限の区画を show_user_profile にも登録しており、条件は他人用の画面と
+	 * 全く同じ manage_options（issue #4 の decision record、PR #6 の2回目のラウンド。ACGD_User_Access の
+	 * クラス docblock を参照）。そのためこれは、本体の導線を迂回するリンクではなく、既にそこにある区画への
+	 * 案内にすぎない——このメソッドがかつて出力していた `wp-admin/user-edit.php?user_id=<自分のID>` への
+	 * 生のリンクは、自分自身の口座に対してはその区画に実際には届いていなかった（本体の IS_PROFILE_PAGE は
+	 * URL ではなく対象ユーザー ID だけで決まるため。UI テストでの判明、PR #6）。
 	 *
 	 * @return void
 	 */
 	private static function render_own_account_notice() {
-		$own_id  = get_current_user_id();
-		$own_url = admin_url( 'user-edit.php?user_id=' . $own_id );
+		$own_url = get_edit_profile_url( get_current_user_id() );
 		?>
 		<h2><?php esc_html_e( 'Your own account', 'etbs-account-guard' ); ?></h2>
 		<p>
 			<?php
 			echo wp_kses(
 				sprintf(
-					/* translators: %s: direct link to the current admin's own user edit screen */
-					__( 'The Access Restriction section does not appear on your own profile screen, by design (it would hint at where you are and are not allowed to connect from). To restrict your own account, or to set up your own BASIC authentication ID and password, use this direct link to your <a href="%s">user edit screen</a> instead.', 'etbs-account-guard' ),
+					/* translators: %s: link to the current admin's own standard WordPress "Profile" screen */
+					__( 'To restrict your own account, or to set up your own BASIC authentication ID and password, open your own <a href="%s">Profile</a> screen (also reachable from the toolbar or the admin menu). The same Access Restriction section shown here for other users appears there too, for anyone who can manage options.', 'etbs-account-guard' ),
 					esc_url( $own_url )
 				),
 				array( 'a' => array( 'href' => true ) )
@@ -1178,12 +1184,17 @@ class ACGD_Settings {
 	 */
 	public static function render_access_roles_section() {
 		// Same destination as render_own_account_notice() further down this tab, and worded the same way
-		// (UX review, low priority): that block already links to it, this one previously named the same
-		// destination ("their own user edit screen") without a link, which read as asymmetric on one tab.
+		// (UX review, low priority): that block already links to it. Points at the standard WordPress
+		// "Profile" screen (get_edit_profile_url(), always profile.php for one's own ID), not a raw
+		// wp-admin/user-edit.php?user_id=<own ID> link — see ACGD_User_Access's class docblock for why that
+		// link never actually reached the Access Restriction section for one's own account (PR #6 second round).
 		// render_own_account_notice() よりこのタブの下のほうにある同じ行き先へのリンクと、同じ言い回しに
-		// 揃える（UX レビュー・優先度低）。あちらは既にリンクしており、こちらは同じ行き先
-		// （「本人のユーザー編集画面」）をリンク無しで名指ししていたため、同じタブの中で非対称に見えていた。
-		$own_url = admin_url( 'user-edit.php?user_id=' . get_current_user_id() );
+		// 揃える（UX レビュー・優先度低）。あちらは既にリンクしている。行き先は WordPress 標準の「プロフィール」
+		// 画面（get_edit_profile_url()。自分の ID には常に profile.php になる）であり、
+		// `wp-admin/user-edit.php?user_id=<自分のID>` への生のリンクではない——そのリンクが自分自身の口座に
+		// 対してはアクセス制限の区画に実際には届いていなかった理由は ACGD_User_Access のクラス docblock を
+		// 参照（PR #6 の2回目のラウンド）。
+		$own_url = get_edit_profile_url( get_current_user_id() );
 		?>
 		<p>
 			<?php
@@ -1208,8 +1219,8 @@ class ACGD_Settings {
 					array(
 						esc_html__( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead.', 'etbs-account-guard' ),
 						sprintf(
-							/* translators: %s: direct link to the current admin's own user edit screen */
-							__( 'To restrict your own account, use this direct link to your <a href="%s">user edit screen</a>.', 'etbs-account-guard' ),
+							/* translators: %s: link to the current admin's own standard WordPress "Profile" screen */
+							__( 'To restrict your own account, use the Access Restriction section on your own <a href="%s">Profile</a> screen.', 'etbs-account-guard' ),
 							esc_url( $own_url )
 						),
 					)

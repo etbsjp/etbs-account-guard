@@ -72,26 +72,61 @@ class ACGD_Basic_Auth {
 
 	/**
 	 * Prefix of the transient that records a successful VERIFY_ACTION confirmation, keyed by the admin. Holds
-	 * the confirmed ID and the password_hash() of the confirmed password (computed once, at confirmation
-	 * time — see handle_verify()), so consume_verification() can hand that same hash straight to save_fields()
-	 * even when the password field comes back blank on the profile screen (MEDIUM-1 fix, PR #6 review):
-	 * render_fields() never redisplays a password, so requiring it to be retyped before the hash could be
-	 * looked up meant a blank field on the "Update User" click right after a successful Verify silently kept
-	 * the old password. A later save can still only use a confirmation of the same ID (not a stale one from a
-	 * different attempt), and a password retyped anyway must still be the one that was confirmed
-	 * (see consume_verification()).
-	 * VERIFY_ACTION の確認成功を記録する transient の接頭辞。管理者ごとに分ける。確認できた ID と、確認できた
-	 * パスワードの password_hash()（確認できた時点で一度だけ計算する。handle_verify() を参照）を持つ。
-	 * これにより、プロフィール画面でパスワード欄が空のまま出し直されても（MEDIUM-1 の修正。PR #6 レビュー：
-	 * render_fields() はパスワードを一切出し直さないため、ハッシュを引くのに再入力を必須にすると、「確認」
-	 * 成功直後に空欄のまま「ユーザーを更新」を押した場合に古いパスワードが無言で残ってしまっていた）、
-	 * consume_verification() が同じハッシュをそのまま save_fields() へ渡せる。それでも、後の保存で使えるのは
-	 * 同じ ID を確認した結果だけ（別の試行の古い確認は使えない）。パスワードを改めて入力した場合も、それが
-	 * 確認済みのものと一致することを求める（consume_verification() を参照）。
+	 * the confirmed ID, the password_hash() of the confirmed password (computed once, at confirmation time —
+	 * see handle_verify()), and a one-time token (MEDIUM fix, PR #6 second review round) so find_verified_hash()
+	 * can hand that same hash straight to save_fields() even when the password field comes back blank on the
+	 * profile screen (MEDIUM-1 fix, PR #6 first review round): render_fields() never redisplays a password, so
+	 * requiring it to be retyped before the hash could be looked up meant a blank field on the "Update User"
+	 * click right after a successful Verify silently kept the old password.
+	 * The token exists to bind the hash to one specific rendering of the profile screen — the one printed
+	 * immediately after this successful confirmation (see render_verify_token_field() in ACGD_User_Access) —
+	 * rather than to "any save within VERIFY_TTL". Without it, a save unrelated to BASIC credentials (changing
+	 * one's display name, say) submitted later within the TTL, from a profile screen loaded normally (no
+	 * confirmation just happened), would still silently pick up and apply the confirmed password: save_fields()
+	 * has no other way to tell "the form that is being submitted right now is the one Verify just sent the
+	 * admin back to" from "some unrelated later save that merely happens to fall inside the same five minutes"
+	 * (etbs-senior-wp audit, PR #6, non-blocking Medium; the user decided to close it before release since
+	 * BASIC authentication has not shipped yet). The transient is looked up (find_verified_hash()) without being
+	 * deleted, and is only actually invalidated (invalidate_verification()) once save_fields() is certain the
+	 * save is going through — not merely because some other, unrelated save-time check failed first (etbs-
+	 * senior-wp audit, same PR, non-blocking Low: forcing a fresh Verify after a save that failed only because,
+	 * say, the chosen BASIC ID collided with someone else's was needless UX friction, not a security fix).
+	 * VERIFY_ACTION の確認成功を記録する transient の接頭辞。管理者ごとに分ける。確認できた ID、確認できた
+	 * パスワードの password_hash()（確認できた時点で一度だけ計算する。handle_verify() を参照）、そして
+	 * ワンタイムトークン（MEDIUM の修正。PR #6 の2回目のレビュー）を持つ。これにより、プロフィール画面で
+	 * パスワード欄が空のまま出し直されても（MEDIUM-1 の修正。PR #6 の1回目のレビュー：render_fields() は
+	 * パスワードを一切出し直さないため、ハッシュを引くのに再入力を必須にすると、「確認」成功直後に空欄のまま
+	 * 「ユーザーを更新」を押した場合に古いパスワードが無言で残ってしまっていた）、find_verified_hash() が
+	 * 同じハッシュをそのまま save_fields() へ渡せる。
+	 * トークンの役割は、このハッシュを「確認の直後に出し直されたプロフィール画面（その1回の表示。
+	 * ACGD_User_Access の render_verify_token_field() を参照）」に結び付けることであり、「VERIFY_TTL の間の
+	 * どの保存でも使える」にしないためにある。トークンが無いと、BASIC の資格情報とは無関係な保存
+	 * （例えば表示名の変更）を、確認とは関係なく通常どおり読み込んだプロフィール画面から TTL 内に送信しても、
+	 * 確認済みのパスワードが無言で適用されてしまう：save_fields() には「今まさに送信されているフォームが、
+	 * 確認の直後に送り返されたものそのもの」なのか「たまたま同じ5分に収まっただけの無関係な後の保存」なのかを
+	 * 見分ける手段が他に無い（大の監査、PR #6、非ブロッカーの Medium。BASIC 認証はまだ公開前の機能のため、
+	 * ユーザーの判断でリリース前に閉じることにした）。この transient は消費せずに参照するだけ
+	 * （find_verified_hash()）にとどめ、save_fields() が実際に保存へ進むと確定した時点で初めて無効化する
+	 * （invalidate_verification()）——他の無関係な保存時チェック（例えば選んだ BASIC ID が他人と衝突していた
+	 * だけ）が先に失敗しただけでは消費しない（大の監査、同じ PR、非ブロッカーの Low：それだけの理由で
+	 * 「確認」からやり直させるのはセキュリティ上の修正ではなく、単なる UX の手戻りだった）。
 	 *
 	 * @var string
 	 */
 	const VERIFIED_TRANSIENT_PREFIX = 'acgd_basic_verified_';
+
+	/**
+	 * Query and POST field name of the one-time token described in VERIFIED_TRANSIENT_PREFIX. Carried in the
+	 * redirect_to query string from handle_verify() to the profile screen (render_verify_token_field() prints
+	 * it as a hidden field from there), and read back from $_POST by ACGD_User_Access::save_fields().
+	 * VERIFIED_TRANSIENT_PREFIX で説明したワンタイムトークンの、クエリおよび POST のフィールド名。
+	 * handle_verify() からプロフィール画面へのリダイレクトのクエリ文字列で運び
+	 * （そこで render_verify_token_field() が hidden フィールドとして出力する）、
+	 * ACGD_User_Access::save_fields() が $_POST から読み戻す。
+	 *
+	 * @var string
+	 */
+	const VERIFY_TOKEN_FIELD = 'acgd_basic_verify_token';
 
 	/**
 	 * How long the pending-verification and verified-confirmation transients live. Long enough for the
@@ -262,7 +297,7 @@ class ACGD_Basic_Auth {
 				continue;
 			}
 
-			$decoded = base64_decode( $encoded, true ); // Strict mode: malformed base64 becomes false. / 厳格モード：不正な base64 は false になる。
+			$decoded = base64_decode( $encoded, true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- Not obfuscation: this decodes the standard base64 payload of an incoming BASIC authentication header (RFC 7617), the same encoding every HTTP client and server uses for it. / 難読化ではない：受信した BASIC 認証ヘッダー（RFC 7617）の標準的な base64 部分を復号しているだけで、あらゆる HTTP クライアント・サーバーがこの符号化を使う。Strict mode: malformed base64 becomes false. / 厳格モード：不正な base64 は false になる。
 			if ( false === $decoded ) {
 				continue;
 			}
@@ -423,7 +458,7 @@ class ACGD_Basic_Auth {
 			exit;
 		}
 
-		if ( ACGD_Basic_Auth::request_satisfies( $user ) ) {
+		if ( self::request_satisfies( $user ) ) {
 			wp_safe_redirect( $redirect_to );
 			exit;
 		}
@@ -688,19 +723,41 @@ class ACGD_Basic_Auth {
 			// （docs/spec.md 5.3 ★★★ は、保存済みかどうかにかかわらずこのプラグインが認識した資格情報全般に掛かる）。
 			self::clear_submitted_credentials_from_server();
 			delete_transient( $pending_key );
+			// Random, unguessable, and unrelated to the credentials themselves: its only job is to let
+			// render_verify_token_field() mark the one profile-screen rendering this redirect leads to, so
+			// save_fields() can tell it apart from any other later save (see VERIFIED_TRANSIENT_PREFIX / MEDIUM
+			// fix, PR #6 second review round). wp_generate_password() with no special characters is convenient
+			// here only because it is already a core-provided random string generator; the value is never
+			// hashed or compared to anything a person types, so it is not "a password" in any real sense.
+			// ランダムで推測不能、資格情報そのものとは無関係：役割は、このリダイレクトの先にある1回きりの
+			// プロフィール画面の表示だけを render_verify_token_field() に印付けさせ、save_fields() がそれを
+			// 他のどの後続の保存とも区別できるようにすること（VERIFIED_TRANSIENT_PREFIX・MEDIUM の修正、
+			// PR #6 の2回目のレビューを参照）。wp_generate_password() を使うのは、本体が用意するランダム文字列
+			// 生成関数として手近だからにすぎない：この値をハッシュ化したり人の入力と比較したりすることは無いため、
+			// 実質的には「パスワード」ではない。
+			$token = wp_generate_password( 32, false, false );
 			set_transient(
 				self::VERIFIED_TRANSIENT_PREFIX . $admin_id,
 				array(
-					'id'   => $pending['id'],
+					'id'    => $pending['id'],
 					// Computed once, here, so a later resubmit with a blank password field (MEDIUM-1 fix) can
 					// still reuse this exact hash instead of needing the password retyped. / ここで一度だけ
 					// 計算しておく。パスワード欄が空のまま出し直されても（MEDIUM-1 の修正）、再入力なしに
 					// このハッシュをそのまま使い回せるようにするため。
-					'hash' => password_hash( $pending['password'], PASSWORD_DEFAULT ),
+					'hash'  => password_hash( $pending['password'], PASSWORD_DEFAULT ),
+					'token' => $token,
 				),
 				self::VERIFY_TTL
 			);
-			wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'ok', $redirect_to ) );
+			wp_safe_redirect(
+				add_query_arg(
+					array(
+						'acgd_basic_verify'      => 'ok',
+						self::VERIFY_TOKEN_FIELD => $token,
+					),
+					$redirect_to
+				)
+			);
 			exit;
 		}
 
@@ -724,43 +781,72 @@ class ACGD_Basic_Auth {
 	}
 
 	/**
-	 * Tells whether a fresh "Verify" confirmation exists for the given admin and ID, and consumes it (deletes
-	 * the transient) so it cannot be reused for a different save. Called by ACGD_User_Access::save_fields()
-	 * when an admin is setting their own mode to BASIC authentication.
+	 * Tells whether a fresh "Verify" confirmation exists for the given admin, ID and token, WITHOUT consuming
+	 * it — the transient is left in place either way. Called by ACGD_User_Access::save_fields() when an admin
+	 * is setting their own mode to BASIC authentication.
+	 *
+	 * Split from the actual consumption (invalidate_verification()) so a save that ends up rejected for an
+	 * unrelated reason (an IP list typo, a BASIC ID collision, and so on — checked by save_fields() after this
+	 * lookup) does not also burn the confirmation the admin correctly went through; only save_fields() itself
+	 * knows when the save is actually going to succeed, so only it decides when to call
+	 * invalidate_verification() (Low fix, etbs-senior-wp audit on PR #6: previously the single consume_
+	 * verification() method deleted the transient the moment it was looked up, before any of those unrelated
+	 * checks ran).
+	 *
+	 * $token must match VERIFIED_TRANSIENT_PREFIX's stored token exactly (hash_equals()), or this returns null
+	 * without even checking $id or $password: a missing or wrong token means the form being submitted right now
+	 * is not the one handle_verify() sent the admin back to, so nothing here should be trusted regardless of
+	 * what else matches (MEDIUM fix, PR #6 second review round — see VERIFIED_TRANSIENT_PREFIX and
+	 * ACGD_User_Access::render_verify_token_field()).
 	 *
 	 * $password is what to require of the confirmation, not what to hash and store: pass the exact string just
 	 * retyped in the password field to require it match what was confirmed (password_verify() against the
 	 * hash from handle_verify()), or null when that field was left blank — the normal case right after a
 	 * successful Verify, since render_fields() never redisplays a password — to trust the confirmation as-is
-	 * and hand back its hash unchanged (MEDIUM-1 fix, PR #6 review: previously a blank password field here
-	 * always failed this check, silently leaving the old hash saved even though "Verify" had just succeeded).
-	 * 与えた管理者と ID について、確認済みの結果があるかを返し、あれば消費する（transient を消し、別の保存に
-	 * 使い回せないようにする）。管理者が自分自身のモードを BASIC 認証にするとき、
+	 * and hand back its hash unchanged (MEDIUM-1 fix, PR #6 first review round: previously a blank password
+	 * field here always failed this check, silently leaving the old hash saved even though "Verify" had just
+	 * succeeded).
+	 * 与えた管理者・ID・トークンについて、確認済みの結果があるかを返す。**消費はしない**（どちらの結果でも
+	 * transient はそのまま残す）。管理者が自分自身のモードを BASIC 認証にするとき、
 	 * ACGD_User_Access::save_fields() から呼ぶ。
+	 *
+	 * 実際の消費（invalidate_verification()）とは分けている：この探索の後で save_fields() が確かめる、確認とは
+	 * 無関係な理由（IP 一覧の誤記、BASIC ID の衝突など）で結局保存が拒否されても、管理者が正しく通した確認まで
+	 * 一緒に消費しないようにするため。保存が実際に成功するかどうかを知っているのは save_fields() 自身だけなので、
+	 * invalidate_verification() を呼ぶかどうかもそちらだけが決める（大の監査（PR #6）の Low の修正：修正前は
+	 * 単一の consume_verification() が、探索した瞬間に――それらの無関係なチェックより前に――transient を
+	 * 消していた）。
+	 *
+	 * $token は VERIFIED_TRANSIENT_PREFIX が保持するトークンと厳密に一致（hash_equals()）しなければならず、
+	 * 一致しなければ $id・$password を見るまでもなく null を返す：トークンが無い・違うということは、今まさに
+	 * 送信されているフォームが handle_verify() が管理者を送り返した先そのものではないということであり、
+	 * 他の何が一致していても信頼してはならない（MEDIUM の修正。PR #6 の2回目のレビュー。
+	 * VERIFIED_TRANSIENT_PREFIX と ACGD_User_Access::render_verify_token_field() を参照）。
 	 *
 	 * $password は「確認済みのものに何を求めるか」であって、ハッシュ化して保存する対象ではない：パスワード欄に
 	 * たった今入力し直した文字列そのものを渡せば、確認済みのものと一致すること（handle_verify() が作った
 	 * ハッシュに対する password_verify()）を求める。その欄が空のまま（render_fields() はパスワードを一切
 	 * 出し直さないため、「確認」成功直後の通常のケース）なら null を渡し、確認済みの内容をそのまま信頼して
-	 * そのハッシュを変更せずに返す（MEDIUM-1 の修正。PR #6 レビュー：修正前はここでパスワード欄が空だと
-	 * 必ずこのチェックに失敗し、「確認」に成功した直後でも古いハッシュが無言で保存されたまま残っていた）。
+	 * そのハッシュを変更せずに返す（MEDIUM-1 の修正。PR #6 の1回目のレビュー：修正前はここでパスワード欄が
+	 * 空だと必ずこのチェックに失敗し、「確認」に成功した直後でも古いハッシュが無言で保存されたまま残っていた）。
 	 *
 	 * @param int         $admin_id Admin who confirmed. / 確認した管理者。
 	 * @param string      $id       ID being saved now. / 今保存しようとしている ID。
+	 * @param string      $token    Token submitted with this save (VERIFY_TOKEN_FIELD), or '' if absent. / この保存で送信されたトークン（VERIFY_TOKEN_FIELD）。無ければ ''。
 	 * @param string|null $password Password just retyped, or null if that field was left blank. / たった今入力し直したパスワード。欄が空なら null。
 	 * @return string|null The confirmed password's password_hash(), ready to save as-is, or null when there is
-	 *                      no matching, unconsumed confirmation. / 確認済みパスワードの password_hash()（そのまま
-	 *                      保存できる）。一致する未消費の確認が無ければ null。
+	 *                      no matching confirmation. / 確認済みパスワードの password_hash()（そのまま保存できる）。
+	 *                      一致する確認が無ければ null。
 	 */
-	public static function consume_verification( $admin_id, $id, $password ) {
-		$key   = self::VERIFIED_TRANSIENT_PREFIX . (int) $admin_id;
-		$value = get_transient( $key );
-		if ( ! is_array( $value ) || ! isset( $value['id'], $value['hash'] ) ) {
+	public static function find_verified_hash( $admin_id, $id, $token, $password ) {
+		$value = get_transient( self::VERIFIED_TRANSIENT_PREFIX . (int) $admin_id );
+		if ( ! is_array( $value ) || ! isset( $value['id'], $value['hash'], $value['token'] ) ) {
 			return null;
 		}
 
-		delete_transient( $key ); // Single use either way (matched or not). / 一致してもしなくても1回きりで消費する。
-
+		if ( '' === (string) $token || ! hash_equals( (string) $value['token'], (string) $token ) ) {
+			return null; // Not the form Verify just sent the admin back to. / 「確認」が送り返した先のフォームではない。
+		}
 		if ( ! hash_equals( (string) $value['id'], (string) $id ) ) {
 			return null; // Confirmed a different ID than the one being saved now. / 確認したのは今保存しようとしているのとは別の ID。
 		}
@@ -769,6 +855,21 @@ class ACGD_Basic_Auth {
 		}
 
 		return $value['hash'];
+	}
+
+	/**
+	 * Deletes the given admin's pending "Verify" confirmation, if any, so it cannot be looked up again by
+	 * find_verified_hash(). Called by ACGD_User_Access::save_fields() only once it is certain the confirmed
+	 * hash is actually about to be written — see find_verified_hash() for why this is a separate step.
+	 * 与えた管理者の確認済み（未消費）の transient があれば削除し、find_verified_hash() が二度と拾えないように
+	 * する。ACGD_User_Access::save_fields() が、確認済みハッシュを実際にこれから書き込むと確定した時点でだけ
+	 * 呼ぶ。なぜ別の手順に分けているかは find_verified_hash() を参照。
+	 *
+	 * @param int $admin_id Admin whose confirmation to invalidate. / 確認を無効化する対象の管理者。
+	 * @return void
+	 */
+	public static function invalidate_verification( $admin_id ) {
+		delete_transient( self::VERIFIED_TRANSIENT_PREFIX . (int) $admin_id );
 	}
 
 	/*-------------------------------------------*/
@@ -859,17 +960,21 @@ body { margin: 0; padding: 3em 1.5em; background: #f0f0f1; color: #1d2327; font-
 <body>
 <div class="acgd-box">
 <h1><?php echo esc_html( $title ); ?></h1>
-<?php foreach ( $lines as $line ) : ?>
-	<?php if ( '' === trim( (string) $line ) ) { continue; } ?>
+		<?php foreach ( $lines as $line ) : ?>
+			<?php
+			if ( '' === trim( (string) $line ) ) {
+				continue;
+			}
+			?>
 <p><?php echo esc_html( $line ); ?></p>
-<?php endforeach; ?>
-<?php if ( $actions ) : ?>
+		<?php endforeach; ?>
+		<?php if ( $actions ) : ?>
 <div class="acgd-actions">
-	<?php foreach ( $actions as $action ) : ?>
+			<?php foreach ( $actions as $action ) : ?>
 	<a href="<?php echo esc_url( $action['url'] ); ?>"<?php echo ! empty( $action['primary'] ) ? ' class="acgd-primary"' : ''; ?>><?php echo esc_html( $action['label'] ); ?></a>
 	<?php endforeach; ?>
 </div>
-<?php endif; ?>
+		<?php endif; ?>
 </div>
 </body>
 </html>
@@ -982,7 +1087,7 @@ body { margin: 0; padding: 3em 1.5em; background: #f0f0f1; color: #1d2327; font-
 				'redirection' => 3,
 				'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // Same reasoning as core's own loopback requests. / 本体自身のループバックリクエストと同じ考え方。
 				'headers'     => array(
-					'Authorization' => 'Basic ' . base64_encode( self::DIAG_TEST_USER . ':' . self::DIAG_TEST_PASS ),
+					'Authorization' => 'Basic ' . base64_encode( self::DIAG_TEST_USER . ':' . self::DIAG_TEST_PASS ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Not obfuscation: this builds the standard base64 payload of an outgoing BASIC authentication header (RFC 7617) for the diagnosis's own loopback request. / 難読化ではない：診断自身のループバックリクエスト用に、送信する BASIC 認証ヘッダー（RFC 7617）の標準的な base64 部分を組み立てているだけ。
 				),
 			)
 		);

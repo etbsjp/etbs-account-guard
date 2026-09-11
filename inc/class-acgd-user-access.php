@@ -5,35 +5,43 @@
  * アクセス制限のユーザーごとの画面（docs/spec.md 5.6）——ユーザー編集画面の区画と、
  * ユーザー一覧の「アクセス制限」列。
  *
- * Both are limited to manage_options. The section relies on WordPress core's own IS_PROFILE_PAGE split
- * (wp-admin/profile.php sets it true before loading wp-admin/user-edit.php; wp-admin/user-edit.php leaves it
- * false), which fires show_user_profile only for profile.php and edit_user_profile for every other route to
- * this screen, REGARDLESS of whether the target user happens to be the one currently logged in. Ordinary
- * navigation (the toolbar's "Edit My Profile", one's own row in the Users list) always goes through
- * profile.php, so hooking edit_user_profile keeps docs/spec.md 5.6 ("本人のプロフィール画面：何も出さない")
- * true in practice: this section shows nothing there, withholding the hint of where one is and is not
- * allowed to connect from. The one deliberate exception is a raw link straight to
- * wp-admin/user-edit.php?user_id=<own ID> (never through get_edit_profile_url(), which always forces
- * profile.php for one's own ID), placed on the Access Restriction settings tab so an admin has a way to set
- * up their own BASIC authentication credentials (docs/spec.md 5.3, "自分をBASICモードにするときは、先に
- * 自分の資格情報を設定し..."; see ACGD_Settings::render_own_account_notice() and the decision record on
- * issue #4). Reaching this screen that way still fires edit_user_profile as core intends for a non-profile.php
- * route, so save_fields() below now handles a target that is the current admin, instead of refusing to run
- * at all as it once did.
- * どちらも manage_options に限る。この区画は本体自身の IS_PROFILE_PAGE の分岐（wp-admin/profile.php が
- * true にしてから wp-admin/user-edit.php を読み込む。wp-admin/user-edit.php では false のまま）に乗っている。
- * これは profile.php のときだけ show_user_profile を、それ以外の経路では常に edit_user_profile を発火させる
- * ——対象ユーザーが現在ログイン中の本人かどうかとは無関係に。通常の導線（ツールバーの「プロフィールを編集」、
- * ユーザー一覧の自分の行）は必ず profile.php を経由するため、edit_user_profile にフックすることで
- * docs/spec.md 5.6「本人のプロフィール画面：何も出さない」は実質的に成り立つ：この区画はそこには何も出さず、
- * 自分がどこから接続できる・できないかの手がかりを与えない。唯一の意図的な例外が、
- * wp-admin/user-edit.php?user_id=<自分のID> への生のリンク（自分の ID には常に profile.php を強制する
- * get_edit_profile_url() は経由しない）で、「アクセス制限」設定タブに置く。管理者が自分自身の BASIC 認証
- * 資格情報を設定する手段を用意するため（docs/spec.md 5.3「自分をBASICモードにするときは、先に自分の
- * 資格情報を設定し...」。ACGD_Settings::render_own_account_notice() と issue #4 の decision record を参照）。
- * この経路で到達しても、コアの意図どおり非 profile.php の経路として edit_user_profile が発火するので、
- * 下の save_fields() は「対象が今の管理者自身」というケースを、かつては即座に拒否していたのをやめ、
- * 実際に扱うようにしている。
+ * The section is registered on BOTH of WordPress core's own profile-screen hooks: edit_user_profile (fires
+ * when the person being edited is someone other than whoever is looking, e.g. an admin editing another
+ * user's wp-admin/user-edit.php screen) and show_user_profile (fires on one's own wp-admin/profile.php —
+ * core's IS_PROFILE_PAGE split decides this purely by whether the target user ID equals the current user's
+ * own ID, never by which URL was used to get there; see the decision record on issue #4, PR #6). Originally
+ * this section hooked edit_user_profile only, on the theory that a raw link straight to
+ * wp-admin/user-edit.php?user_id=<own ID> (bypassing get_edit_profile_url(), which always forces profile.php
+ * for one's own ID) would still fire edit_user_profile even for one's own account — but core does not decide
+ * the hook that way (IS_PROFILE_PAGE = target ID === current user ID, full stop), so that link silently
+ * showed nothing (UI test finding, PR #6). Both hooks now render/save the exact same section, gated the exact
+ * same way — current_user_can( 'manage_options' ) — rather than by "whose account is this". A user who lacks
+ * manage_options (someone actually subject to a restriction) still sees nothing on wp-admin/profile.php,
+ * satisfying docs/spec.md 5.6's "本人のプロフィール画面：何も出さない" (withholding the hint of where one is
+ * and is not allowed to connect from); the only people who ever see this section on their own profile screen
+ * are manage_options holders, who already see the same information (the full IP list, everyone's mode) on the
+ * "設定 > ETBS Account Guard" Access Restriction tab, so showing it here again is not a new hint to anyone
+ * (decision record on issue #4, PR #6 second round). The section's content is identical either way — no
+ * filtering by $is_self beyond what already existed (the "Verify" button, which only ever made sense for
+ * one's own account regardless of which hook rendered it).
+ * この区画は本体自身の2つのプロフィール画面フック**両方**に登録している：edit_user_profile（編集対象が
+ * 閲覧者自身ではない場合に発火。例：管理者が他人の wp-admin/user-edit.php 画面を編集するとき）と
+ * show_user_profile（本人自身の wp-admin/profile.php で発火）——本体の IS_PROFILE_PAGE の分岐は、
+ * 対象ユーザー ID が現在のユーザー自身の ID と一致するかどうかだけで決まり、どの URL で到達したかは一切
+ * 関係ない（issue #4・PR #6 の decision record を参照）。当初この区画は edit_user_profile だけにフックして
+ * いた：`wp-admin/user-edit.php?user_id=<自分のID>` への生のリンク（自分の ID には常に profile.php を強制する
+ * get_edit_profile_url() を経由しない）を踏めば、自分自身の口座でも edit_user_profile が発火するはず、という
+ * 想定だったが、本体はそのようにフックを決めていない（IS_PROFILE_PAGE ＝「対象 ID が現在のユーザー自身の ID
+ * と一致するか」それだけ）ため、そのリンクは何も表示しないまま無言で終わっていた（UI テストでの判明。PR #6）。
+ * 今はどちらのフックも全く同じ区画を描画・保存し、条件も「誰の口座か」ではなく全く同じ
+ * current_user_can( 'manage_options' ) で揃えている。manage_options を持たない人（実際に制限を受ける側）は
+ * wp-admin/profile.php でも依然として何も見えず、docs/spec.md 5.6「本人のプロフィール画面：何も出さない」
+ * （自分がどこから接続できる・できないかの手がかりを与えない）を満たす。自分自身のプロフィール画面でこの
+ * 区画が見える唯一の相手は manage_options を持つ人であり、その人は「設定 > ETBS Account Guard」のアクセス
+ * 制限タブで既に同じ情報（IP の全一覧・全員のモード）を見られるため、ここにも出すことは誰にとっても
+ * 新しい手がかりにならない（issue #4 の decision record、PR #6 の2回目のラウンド）。区画の中身はどちらの
+ * フック経由でも同一——既にあった以上の $is_self による選別（「確認」ボタン。どちらのフックで描画されても
+ * 意味を持つのは自分自身の口座のときだけ、という点も変わらない）は増やしていない。
  *
  * @package etbs-account-guard
  */
@@ -118,12 +126,20 @@ class ACGD_User_Access {
 	 * @return void
 	 */
 	public static function init() {
-		// edit_user_profile only: fires for one's own account too when reached other than through
-		// profile.php. See the class docblock for why that keeps docs/spec.md 5.6 true in practice.
-		// edit_user_profile のみ：profile.php 以外の経路で来た場合は自分自身の口座でも発火する。
-		// それでも docs/spec.md 5.6 が実質的に成り立つ理由はクラスの docblock を参照。
+		// edit_user_profile: someone else's wp-admin/user-edit.php screen. show_user_profile: one's own
+		// wp-admin/profile.php screen (decision record on issue #4, PR #6 second round — see the class
+		// docblock for why both are needed and why manage_options, not $is_self, is the actual gate).
+		// edit_user_profile：他人の wp-admin/user-edit.php 画面。show_user_profile：自分自身の
+		// wp-admin/profile.php 画面（issue #4・PR #6 の2回目のラウンドの decision record。両方が要る理由と、
+		// 実際の条件が「本人か」ではなく manage_options である理由はクラスの docblock を参照）。
 		add_action( 'edit_user_profile', array( __CLASS__, 'render_fields' ) );
+		add_action( 'show_user_profile', array( __CLASS__, 'render_fields' ) );
 		add_action( 'edit_user_profile_update', array( __CLASS__, 'save_fields' ) );
+		add_action( 'personal_options_update', array( __CLASS__, 'save_fields' ) );
+		// user_profile_update_errors fires from wp-admin/user-edit.php for both the "someone else" and "one's
+		// own" cases alike, so one registration already covers save_fields() regardless of which of the two
+		// hooks above ran. / user_profile_update_errors は wp-admin/user-edit.php から「他人」「本人」どちらの
+		// ケースでも発火するため、この1回の登録だけで、上の2つのフックのどちらが動いた save_fields() もカバーする。
 		add_action( 'user_profile_update_errors', array( __CLASS__, 'append_pending_error' ) );
 
 		add_filter( 'manage_users_columns', array( __CLASS__, 'add_column' ) );
@@ -143,8 +159,10 @@ class ACGD_User_Access {
 	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
 	 * 保存時のチェックに落ちても、管理者が入力したばかりの内容まで失われないようにするため。
 	 *
-	 * @param WP_User $user User being edited. Usually someone else; can be the current admin themselves when
-	 *                       reached through the direct user-edit.php link (see the class docblock). / 編集対象のユーザー。通常は他人。クラスの docblock にある直接リンク経由なら現在の管理者自身にもなる。
+	 * @param WP_User $user User being edited: someone else on edit_user_profile, or the current admin
+	 *                       themselves on show_user_profile (see the class docblock). / 編集対象のユーザー。
+	 *                       edit_user_profile なら他人、show_user_profile なら現在の管理者自身
+	 *                       （クラスの docblock を参照）。
 	 * @return void
 	 */
 	public static function render_fields( $user ) {
@@ -258,6 +276,7 @@ class ACGD_User_Access {
 					<th scope="row"><?php esc_html_e( 'Verify your own BASIC authentication', 'etbs-account-guard' ); ?></th>
 					<td>
 						<input type="hidden" name="acgd_user_id" value="<?php echo esc_attr( $user->ID ); ?>" />
+						<?php self::render_verify_token_field(); ?>
 						<?php
 						/*
 						 * formaction/formmethod post this same form's fields to a different URL (the "Verify"
@@ -325,6 +344,41 @@ class ACGD_User_Access {
 	}
 
 	/**
+	 * Prints the one-time "Verify" confirmation token as a hidden field, but only on the one profile-screen
+	 * rendering that immediately follows a successful confirmation (the acgd_basic_verify=ok redirect from
+	 * ACGD_Basic_Auth::handle_verify() carries the token in its own query string; see
+	 * ACGD_Basic_Auth::VERIFIED_TRANSIENT_PREFIX for why this exists — MEDIUM fix, PR #6 second review round).
+	 * Any other rendering of this screen (a normal visit, a reload after navigating elsewhere, or one from a
+	 * stale/expired confirmation) has no token in the query string and prints nothing here, so a save from
+	 * that page cannot pick up a confirmed BASIC password it never actually confirmed just now.
+	 * 「確認」のワンタイムトークンを hidden フィールドとして出力する。ただし、確認成功の直後に出し直された
+	 * その1回のプロフィール画面の描画でだけ（ACGD_Basic_Auth::handle_verify() からの acgd_basic_verify=ok
+	 * リダイレクトが、自身のクエリ文字列にこのトークンを載せている。なぜこの仕組みがあるかは
+	 * ACGD_Basic_Auth::VERIFIED_TRANSIENT_PREFIX を参照——MEDIUM の修正、PR #6 の2回目のレビュー）。
+	 * この画面のそれ以外の描画（通常の訪問、他画面へ移動した後の再読み込み、期限切れ・無効な確認からの
+	 * 再表示）はクエリ文字列にトークンを持たず、ここでは何も出力しない。そのため、そちらのページからの保存が
+	 * ——今まさに確認してもいない——確認済みの BASIC パスワードを拾ってしまうことは無い。
+	 *
+	 * @return void
+	 */
+	private static function render_verify_token_field() {
+		// Read-only, and the value only ever gets echoed back into this same hidden field; the value that
+		// actually matters is checked server-side against the transient in
+		// ACGD_Basic_Auth::find_verified_hash(), so a forged or stale token submitted here simply fails to
+		// match there and is treated the same as no token at all.
+		// 読み取り専用で、この値はこの同じ hidden フィールドへそのまま出力するだけ。実際に効くのは
+		// サーバー側で ACGD_Basic_Auth::find_verified_hash() が transient と突き合わせる部分であり、
+		// ここで偽造・失効したトークンが送られても、そこで一致せず「トークンが無い」場合と同じに扱われる。
+		$token = isset( $_GET[ ACGD_Basic_Auth::VERIFY_TOKEN_FIELD ] ) ? sanitize_text_field( wp_unslash( $_GET[ ACGD_Basic_Auth::VERIFY_TOKEN_FIELD ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only; the value is re-validated server-side against the transient before it is ever trusted (see the method docblock).
+		if ( '' === $token ) {
+			return;
+		}
+		?>
+		<input type="hidden" name="<?php echo esc_attr( ACGD_Basic_Auth::VERIFY_TOKEN_FIELD ); ?>" value="<?php echo esc_attr( $token ); ?>" />
+		<?php
+	}
+
+	/**
 	 * Validates and saves the Access Restriction fields of the user edit screen.
 	 * ユーザー編集画面の「アクセス制限」の項目を検証し、保存する。
 	 *
@@ -362,9 +416,18 @@ class ACGD_User_Access {
 			$mode = 'follow'; // Unknown value: fall back to the safe default. / 未知の値は安全な既定値に倒す。
 		}
 
-		$ip_text      = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
-		$basic_id     = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
-		$basic_pass   = isset( $_POST['acgd_basic_password'] ) ? (string) wp_unslash( $_POST['acgd_basic_password'] ) : '';
+		$ip_text    = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
+		$basic_id   = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+		$basic_pass = isset( $_POST['acgd_basic_password'] ) ? (string) wp_unslash( $_POST['acgd_basic_password'] ) : '';
+		// Only ever meaningful when $is_self (see ACGD_Basic_Auth::find_verified_hash()); read unconditionally
+		// here anyway, since nothing is done with it until then. Present only on the one profile-screen
+		// rendering right after a successful "Verify" (ACGD_User_Access::render_verify_token_field()); absent
+		// on every other save, which is exactly the point (MEDIUM fix, PR #6 second review round).
+		// 意味を持つのは $is_self のときだけ（ACGD_Basic_Auth::find_verified_hash() を参照）。それでもここでは
+		// 無条件に読んでおく（使うのはそこから先だけなので害は無い）。「確認」成功直後に出し直された、その1回の
+		// プロフィール画面の描画にだけ存在し（ACGD_User_Access::render_verify_token_field()）、それ以外の保存
+		// では無い——それこそが狙い（MEDIUM の修正、PR #6 の2回目のレビュー）。
+		$verify_token = isset( $_POST[ ACGD_Basic_Auth::VERIFY_TOKEN_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ ACGD_Basic_Auth::VERIFY_TOKEN_FIELD ] ) ) : '';
 		$existing_id  = ACGD_Access_Restriction::get_basic_id( $user_id );
 		$had_hash     = ACGD_Access_Restriction::has_basic_credentials( $user_id );
 		// A blank BASIC ID field means "no BASIC identity at all" only when nothing was ever saved; once an
@@ -376,6 +439,17 @@ class ACGD_User_Access {
 		$final_id     = ( '' === $basic_id && '' !== $existing_id ) ? $existing_id : $basic_id;
 		$final_hash   = null; // null = leave the stored hash untouched. / null = 保存済みのハッシュを変えない。
 		$new_password = ( '' !== $basic_pass );
+		// Set true only where $final_hash is actually assigned from a confirmed "Verify" hash, further below.
+		// Read once, at the very end of this method, to decide whether that confirmation is now consumed
+		// (Low fix, etbs-senior-wp audit on PR #6: previously the confirmation was consumed the moment it was
+		// looked up, even if the save then failed for an unrelated reason such as a BASIC ID collision — see
+		// ACGD_Basic_Auth::find_verified_hash() for why that lookup no longer consumes by itself).
+		// $final_hash が実際に「確認」済みのハッシュから代入された場合にだけ true にする。このメソッドの
+		// 最後で一度だけ読み、その確認をここで消費したことにするかどうかを決める（大の監査（PR #6）の Low の
+		// 修正：修正前は、探索した時点で確認が消費されていたため、その後 BASIC ID の衝突など無関係な理由で
+		// 保存が失敗しても確認は失われていた。この探索がそれ自体では消費しなくなった理由は
+		// ACGD_Basic_Auth::find_verified_hash() を参照）。
+		$consume_verification_on_success = false;
 
 		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
 		if ( $validated['invalid'] ) {
@@ -427,32 +501,35 @@ class ACGD_User_Access {
 				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
 				return;
 			}
-			// Pick up a fresh "Verify" confirmation for the exact ID being saved *before* deciding whether a
-			// password was even supplied (HIGH fix, issue #4 / UX review, PR #6): consume_verification() is
-			// single-use (see its own docblock), so this call must stay the only one — the $is_self block
-			// further below reuses this same result instead of calling it again. Checking it here matters
-			// specifically for an admin who has never had BASIC credentials before ($had_hash === false): a
-			// successful "Verify" always leaves the password field blank on the very next redisplay, exactly
-			// like any other resubmit (render_fields() never redisplays a password), so the two cases —
-			// "just confirmed, field is blank" and "never confirmed anything" — were indistinguishable to the
-			// "ID and password both required" check below when that check ran first. That silently rejected an
-			// already-confirmed, first-time BASIC setup with "Not saved." even though "Verify" had reported
-			// success and told the admin to click "Update User". Only meaningful for $is_self:
-			// consume_verification() is keyed to the current admin's own confirmation (see its docblock), so
-			// nobody else's save can ever consume it.
-			// まさに保存しようとしている ID について、パスワードが入力されたかどうかを判定する（すぐ下の）
-			// チェックより前に、「確認」(Verify) 済みの結果を先に探しにいく（HIGH 修正、issue #4／UX レビュー、
-			// PR #6）。consume_verification() は1回きり（自身の docblock を参照）なので、この呼び出しが唯一の
-			// 呼び出し箇所であり続ける必要がある——さらに下の $is_self ブロックは呼び直さず、ここで得た結果を
-			// そのまま使い回す。この順序が特に効くのは、これまで BASIC 資格情報を一度も持ったことのない
-			// 管理者（$had_hash === false）の場合：render_fields() はパスワードを一切出し直さないため、
-			// 「確認」に成功していても、次に出し直されたパスワード欄は他のどの出し直しとも同じく必ず空欄になる。
-			// 「確認済みだが欄は空」と「一度も確認していない」の2つを、下の「ID とパスワードの両方が必須」
-			// チェックを先に評価すると区別できず、「確認」が成功を報告し「ユーザーを更新をクリック」と案内した
-			// 直後でも、確認済みの初回 BASIC 設定が「Not saved.」で無言で弾かれていた。$is_self のときだけ
-			// 意味を持つ（consume_verification() は今の管理者自身の確認に紐づくため。docblock を参照。
-			// 他人の保存がこれを消費することは無い）。
-			$confirmed_hash = $is_self ? ACGD_Basic_Auth::consume_verification( $user_id, $final_id, $new_password ? $basic_pass : null ) : null;
+			// Look up (without consuming — see ACGD_Basic_Auth::find_verified_hash()) a fresh "Verify"
+			// confirmation for the exact ID being saved *before* deciding whether a password was even supplied
+			// (HIGH fix, issue #4 / UX review, PR #6). Checking it here matters specifically for an admin who
+			// has never had BASIC credentials before ($had_hash === false): a successful "Verify" always leaves
+			// the password field blank on the very next redisplay, exactly like any other resubmit
+			// (render_fields() never redisplays a password), so the two cases — "just confirmed, field is
+			// blank" and "never confirmed anything" — were indistinguishable to the "ID and password both
+			// required" check below when that check ran first. That silently rejected an already-confirmed,
+			// first-time BASIC setup with "Not saved." even though "Verify" had reported success and told the
+			// admin to click "Update User". Only meaningful for $is_self: find_verified_hash() is keyed to the
+			// current admin's own confirmation (see its docblock), so nobody else's save can ever pick it up.
+			// $verify_token additionally has to match the token stashed at confirmation time (MEDIUM fix, PR #6
+			// second review round): without it, this lookup alone cannot tell a save from the page Verify just
+			// returned to apart from any other, unrelated save landing within the same five minutes.
+			// 「確認」(Verify) 済みの結果を、まさに保存しようとしている ID について（消費はせずに——
+			// ACGD_Basic_Auth::find_verified_hash() を参照）先に探しにいく。パスワードが入力されたかどうかを
+			// 判定する（すぐ下の）チェックより前に行う（HIGH 修正、issue #4／UX レビュー、PR #6）。この順序が
+			// 特に効くのは、これまで BASIC 資格情報を一度も持ったことのない管理者（$had_hash === false）の
+			// 場合：render_fields() はパスワードを一切出し直さないため、「確認」に成功していても、次に
+			// 出し直されたパスワード欄は他のどの出し直しとも同じく必ず空欄になる。「確認済みだが欄は空」と
+			// 「一度も確認していない」の2つを、下の「ID とパスワードの両方が必須」チェックを先に評価すると
+			// 区別できず、「確認」が成功を報告し「ユーザーを更新をクリック」と案内した直後でも、確認済みの
+			// 初回 BASIC 設定が「Not saved.」で無言で弾かれていた。$is_self のときだけ意味を持つ
+			// （find_verified_hash() は今の管理者自身の確認に紐づくため。docblock を参照。他人の保存がこれを
+			// 拾うことは無い）。$verify_token がさらに、確認したときに保存したトークンと一致しなければならない
+			// のは（MEDIUM の修正、PR #6 の2回目のレビュー）、それが無いとこの探索だけでは、「確認」が
+			// 送り返した先のページからの保存なのか、たまたま同じ5分に収まっただけの無関係な別の保存なのかを
+			// 見分けられないため。
+			$confirmed_hash = $is_self ? ACGD_Basic_Auth::find_verified_hash( $user_id, $final_id, $verify_token, $new_password ? $basic_pass : null ) : null;
 
 			if ( '' === $final_id || ( ! $had_hash && ! $new_password && null === $confirmed_hash ) ) {
 				self::$pending_error = esc_html__( 'Enter both a BASIC authentication ID and a password before choosing "BASIC authentication" mode. Not saved.', 'etbs-account-guard' );
@@ -478,7 +555,7 @@ class ACGD_User_Access {
 			// はず（ACGD_Access_Restriction::check_access_on_request() を参照）なので、改めて確認する
 			// ものが無い。
 			$credentials_changing = $new_password || ( $final_id !== $existing_id );
-			$prior_mode            = ACGD_Access_Restriction::get_user_mode( $user_id );
+			$prior_mode           = ACGD_Access_Restriction::get_user_mode( $user_id );
 			// Whether this save needs a fresh "Verify" confirmation at all: entering BASIC mode for the first
 			// time, or actually changing the ID or typing a new password just now. Used only to decide whether
 			// the *absence* of a confirmed hash (looked up once, above, before the "ID and password both
@@ -490,18 +567,19 @@ class ACGD_User_Access {
 			$requires_confirmation = $is_self && ( 'basic' !== $prior_mode || $credentials_changing );
 			if ( $is_self ) {
 				// $confirmed_hash was already looked up above (before the "ID and password both required"
-				// check), not re-looked-up here: consume_verification() is single-use, so calling it a second
-				// time here would always come back null and defeat the fix made at that first call site.
-				// A miss (no matching, unconsumed confirmation) is only an error when one was actually
-				// required; otherwise it just means there was nothing to pick up, which is the ordinary case
-				// for a save that has nothing to do with BASIC credentials at all.
+				// check), not re-looked-up here: find_verified_hash() does not consume anything by itself, but
+				// re-calling it would still be pointless (same transient, same arguments, same answer).
+				// A miss (no matching confirmation) is only an error when one was actually required; otherwise
+				// it just means there was nothing to pick up, which is the ordinary case for a save that has
+				// nothing to do with BASIC credentials at all.
 				// $confirmed_hash は（「ID とパスワードの両方が必須」チェックより前に）上で既に探索済みであり、
-				// ここでは探索し直さない：consume_verification() は1回きりなので、ここでもう一度呼ぶと
-				// 常に null が返り、最初の呼び出し箇所で入れた修正が無効になってしまう。
-				// 見つからない（一致する未消費の確認が無い）ことがエラーになるのは、確認が実際に必要なときだけ。
+				// ここでは探索し直さない：find_verified_hash() はそれ自体では何も消費しないが、同じ transient・
+				// 同じ引数で呼び直しても同じ答えにしかならず意味が無い。
+				// 見つからない（一致する確認が無い）ことがエラーになるのは、確認が実際に必要なときだけ。
 				// そうでなければ単に拾うものが無かっただけで、BASIC の資格情報とは無関係な保存では通常そうなる。
 				if ( null !== $confirmed_hash ) {
-					$final_hash = $confirmed_hash; // Reuses the hash computed at Verify time; never hash the (possibly blank) submitted password again. / 「確認」時に計算済みのハッシュをそのまま使う。（空かもしれない）送信されたパスワードを改めてハッシュ化することは無い。
+					$final_hash                      = $confirmed_hash; // Reuses the hash computed at Verify time; never hash the (possibly blank) submitted password again. / 「確認」時に計算済みのハッシュをそのまま使う。（空かもしれない）送信されたパスワードを改めてハッシュ化することは無い。
+					$consume_verification_on_success = true; // Only actually invalidated once this save reaches its final write; see the flag's own declaration above. / この保存が実際に最後の書き込みへ到達した時点で初めて無効化する。フラグ自体の宣言を参照。
 				} elseif ( $requires_confirmation ) {
 					self::$pending_error = esc_html__( 'Click "Verify" and confirm your new BASIC authentication ID and password before saving them for your own account. Not saved.', 'etbs-account-guard' );
 					self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
@@ -569,6 +647,20 @@ class ACGD_User_Access {
 			if ( $new_password ) {
 				$final_hash = password_hash( $basic_pass, PASSWORD_DEFAULT );
 			}
+		}
+
+		// Every early return above happens before this point, so reaching here means the save is actually going
+		// through: only now is it safe to invalidate the "Verify" confirmation that $final_hash borrowed from,
+		// so a save that instead failed further up (an invalid IP list, a BASIC ID collision, and so on) leaves
+		// it intact for the admin to retry without going through "Verify" again (Low fix, etbs-senior-wp audit
+		// on PR #6; see the flag's own declaration above and ACGD_Basic_Auth::find_verified_hash()).
+		// ここより上のすべての早期 return は、ここへ到達する前に起きる。つまりここへ来たということは、保存が
+		// 実際に行われるということ：$final_hash が借りた「確認」を無効化してよいのはここで初めてであり、
+		// これより上で保存が失敗していれば（IP 一覧が不正、BASIC ID の衝突など）、管理者が「確認」をやり直さず
+		// 再試行できるよう確認をそのまま残す（大の監査（PR #6）の Low の修正。フラグ自体の宣言と
+		// ACGD_Basic_Auth::find_verified_hash() を参照）。
+		if ( $consume_verification_on_success ) {
+			ACGD_Basic_Auth::invalidate_verification( $user_id );
 		}
 
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_MODE_META, $mode );
