@@ -92,6 +92,9 @@ msgstr "HTML のクラス名"
 msgid "Remove class names that contain the login name"
 msgstr "ログイン名を含むクラス名を外す"
 
+msgid "While this is off, the HTML of comments by registered users and of author pages contains class names with the login name."
+msgstr "オフの間は、登録ユーザーのコメントと投稿者ページの HTML に、ログイン名を含むクラス名が付きます。"
+
 #. translators: 1: class name added to comments by registered users, 2: class name added to author pages
 msgid "This removes %1$s from comments by registered users and %2$s from author pages."
 msgstr "登録ユーザーのコメントから %1$s を、投稿者ページから %2$s を外します。"
@@ -220,12 +223,6 @@ msgstr "「投稿者ページ」以外の保護は、有効化した時点で働
 
 msgid "You can turn each one on or off on the settings screen."
 msgstr "項目ごとに、設定画面でオン・オフを切り替えられます。"
-
-msgid "The settings screen also lists users whose display name or nickname is the same as their login name."
-msgstr "設定画面には、表示名またはニックネームがログイン名と同じユーザーの一覧も出ます。"
-
-msgid "Change them from the profile of each user."
-msgstr "各ユーザーのプロフィールから変更してください。"
 
 msgid "Notes"
 msgstr "注意事項"

@@ -264,6 +264,7 @@ class ACGD_Settings {
 				'title'       => __( 'HTML class names', 'etbs-account-guard' ),
 				'label'       => esc_html__( 'Remove class names that contain the login name', 'etbs-account-guard' ),
 				'description' => array(
+					esc_html__( 'While this is off, the HTML of comments by registered users and of author pages contains class names with the login name.', 'etbs-account-guard' ),
 					sprintf(
 						/* translators: 1: class name added to comments by registered users, 2: class name added to author pages */
 						esc_html__( 'This removes %1$s from comments by registered users and %2$s from author pages.', 'etbs-account-guard' ),
@@ -532,7 +533,7 @@ class ACGD_Settings {
 			<?php
 		}
 		?>
-		<table class="widefat striped">
+		<table class="widefat fixed striped">
 			<thead>
 				<tr>
 					<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>

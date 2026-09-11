@@ -131,7 +131,7 @@ function acgd_join_sentences( $sentences ) {
 	foreach ( $sentences as $sentence ) {
 		$joined = sprintf(
 			/* translators: Joins two sentences of the same paragraph. 1: first sentence, 2: next sentence. Remove the space in languages that do not put a space between sentences. */
-			esc_html_x( '%1$s %2$s', 'sentences in a row', 'etbs-account-guard' ), // phpcs:ignore WordPress.WP.I18n.NoEmptyStrings -- The separator itself is what is translated.
+			esc_html_x( '%1$s %2$s', 'sentences in a row', 'etbs-account-guard' ),
 			$joined,
 			$sentence
 		);

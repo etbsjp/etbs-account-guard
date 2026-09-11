@@ -82,19 +82,6 @@ function acgd_render_dashboard_widget() {
 		);
 		?>
 	</p>
-	<p>
-		<?php
-		echo wp_kses(
-			acgd_join_sentences(
-				array(
-					esc_html__( 'The settings screen also lists users whose display name or nickname is the same as their login name.', 'etbs-account-guard' ),
-					esc_html__( 'Change them from the profile of each user.', 'etbs-account-guard' ),
-				)
-			),
-			$allowed
-		);
-		?>
-	</p>
 
 	<h3><?php esc_html_e( 'Notes', 'etbs-account-guard' ); ?></h3>
 	<ul class="ul-disc">

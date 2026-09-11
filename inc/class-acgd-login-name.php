@@ -709,13 +709,29 @@ class ACGD_Login_Name {
 	 * Counts users whose display name or nickname is the same as their login name (item h). Read only.
 	 * 表示名またはニックネームがログイン名と同じユーザーを数える（h）。読み取りのみ。
 	 *
-	 * Only the count, for the dashboard widget, which shows it to users who can manage options.
+	 * Only the count, for the dashboard widget, which shows it to users who can manage options. It runs on
+	 * every view of the dashboard, so the query is shaped to stay light on sites with many users.
 	 * WP_User_Query cannot compare two columns, so this is one direct query. On multisite it keeps to the
-	 * users of the current site, as WP_User_Query does. The WHERE clause is the same as in
-	 * find_users_with_login_as_public_name().
+	 * users of the current site, as WP_User_Query does.
+	 * The display name part and the nickname part are separate queries joined with UNION:
+	 * - The display name part compares two columns of the users table, which needs one pass over that table.
+	 * - The nickname part starts from the nickname rows (the meta_key index of usermeta) and looks up each
+	 *   user by ID. A LEFT JOIN with OR in one WHERE clause instead makes MySQL walk every user and look up
+	 *   the nickname one user at a time, which grows with the number of users (seconds at 100,000 users).
+	 * - UNION (not UNION ALL) removes duplicate IDs, so a user whose display name and nickname both match
+	 *   is counted once.
+	 * find_users_with_login_as_public_name() picks its IDs with the same UNION and the same site condition.
 	 * ダッシュボードのウィジェット（manage_options のユーザーにだけ出す）のための、件数だけの問い合わせ。
+	 * ダッシュボードを開くたびに動くので、ユーザーの多いサイトでも軽く済む形にしている。
 	 * WP_User_Query は列どうしを比べられないので、1本の直接のクエリにする。マルチサイトでは
-	 * WP_User_Query と同じく現在のサイトのユーザーに絞る。WHERE 句は find_users_with_login_as_public_name() と同じ。
+	 * WP_User_Query と同じく現在のサイトのユーザーに絞る。
+	 * 表示名の部分とニックネームの部分を別々の問い合わせにし、UNION でつなぐ。
+	 * - 表示名の部分は users テーブルの2つの列を比べるので、そのテーブルを1回たどる。
+	 * - ニックネームの部分は nickname の行（usermeta の meta_key の索引）から始め、ユーザーを ID で引く。
+	 *   1つの WHERE 句で LEFT JOIN と OR を使うと、MySQL は全ユーザーをたどって1人ずつニックネームを引く形になり、
+	 *   ユーザー数に比例して重くなる（10万人で数秒）。
+	 * - UNION（UNION ALL ではない）は重複する ID を取り除くので、表示名とニックネームの両方が一致するユーザーも1人と数える。
+	 * find_users_with_login_as_public_name() は、同じ UNION・同じサイトの条件で ID を選ぶ。
 	 *
 	 * @return int Number of matching users. / 該当するユーザーの数。
 	 */
@@ -726,14 +742,19 @@ class ACGD_Login_Name {
 		$is_multisite = is_multisite() ? 1 : 0;
 		$caps_key     = $wpdb->get_blog_prefix() . 'capabilities';
 
+		// Only table names are put into the SQL text; both values go through placeholders.
+		// SQL の文字列に埋めるのはテーブル名だけで、値は2つともプレースホルダで渡す。
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A column-to-column comparison has no API. Admin screens of manage_options users only, so no cache.
 		$total = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT( DISTINCT u.ID )
-				FROM {$wpdb->users} AS u
-				LEFT JOIN {$wpdb->usermeta} AS n ON ( n.user_id = u.ID AND n.meta_key = 'nickname' )
-				WHERE ( u.display_name = u.user_login OR n.meta_value = u.user_login )
-				AND ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = u.ID AND c.meta_key = %s ) )",
+				"SELECT COUNT(*) FROM (
+					SELECT u.ID FROM {$wpdb->users} AS u WHERE u.display_name = u.user_login
+					UNION
+					SELECT n.user_id AS ID FROM {$wpdb->usermeta} AS n
+					INNER JOIN {$wpdb->users} AS u2 ON ( u2.ID = n.user_id )
+					WHERE n.meta_key = 'nickname' AND n.meta_value = u2.user_login
+				) AS t
+				WHERE ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = t.ID AND c.meta_key = %s ) )",
 				$is_multisite,
 				$caps_key
 			)
@@ -747,9 +768,17 @@ class ACGD_Login_Name {
 	 * Finds users whose display name or nickname is the same as their login name (item h). Read only.
 	 * 表示名またはニックネームがログイン名と同じユーザーを探す（h）。読み取りのみ。
 	 *
-	 * The count comes from count_users_with_login_as_public_name(); the rows come from one direct query
-	 * with the same WHERE clause. It runs only on the settings screen.
-	 * 件数は count_users_with_login_as_public_name() から取り、行は同じ WHERE 句の1本の直接のクエリで取る。
+	 * The count comes from count_users_with_login_as_public_name(). The rows come from one direct query in two
+	 * steps: the inner part picks up to $limit IDs, in ID order, with the same UNION and the same site condition
+	 * as the count (see there for why it is a UNION); the outer part reads the rows of those IDs only.
+	 * The outer WHERE clause repeats the match, so that a user with more than one nickname row (core keeps
+	 * one) gets only the rows that match, as a single WHERE clause over all rows would give.
+	 * It runs only on the settings screen.
+	 * 件数は count_users_with_login_as_public_name() から取る。行は2段の1本の直接のクエリで取る。
+	 * 内側で、件数と同じ UNION・同じサイトの条件で ID を ID 順に最大 $limit 件選び（UNION にする理由はそちらを参照）、
+	 * 外側でその ID の行だけを読む。
+	 * 外側の WHERE 句で一致の条件をもう一度掛けるので、nickname の行を複数持つユーザー（本体は1行しか作らない）でも、
+	 * 全行に1つの WHERE 句を掛けた場合と同じく、一致した行だけになる。
 	 * 設定画面でだけ動く。
 	 *
 	 * @param int $limit Maximum number of users to return. / 返すユーザーの上限。
@@ -757,11 +786,11 @@ class ACGD_Login_Name {
 	 *     @type int      $total Number of matching users. / 該当するユーザーの数。
 	 *     @type object[] $users Up to $limit rows with ID, user_login, display_name, nickname, and the flags
 	 *                           display_matches / nickname_matches ("1" or "0"), ordered by ID. The flags come
-	 *                           from the same SQL comparison as the WHERE clause, so letter case is ignored
-	 *                           there too, as in the login itself.
+	 *                           from the same SQL comparisons as the query that picks the users, so letter
+	 *                           case is ignored there too, as in the login itself.
 	 *                           ID・user_login・display_name・nickname と、判定 display_matches / nickname_matches
-	 *                           （"1" か "0"）を持つ行（最大 $limit 件、ID 順）。判定は WHERE 句と同じ SQL の比較から
-	 *                           取るので、ログインそのものと同じく大文字小文字を区別しない。
+	 *                           （"1" か "0"）を持つ行（最大 $limit 件、ID 順）。判定はユーザーを選ぶ問い合わせと同じ
+	 *                           SQL の比較から取るので、ログインそのものと同じく大文字小文字を区別しない。
 	 * }
 	 */
 	public static function find_users_with_login_as_public_name( $limit = 100 ) {
@@ -773,18 +802,30 @@ class ACGD_Login_Name {
 
 		$total = self::count_users_with_login_as_public_name();
 
+		// Only table names are put into the SQL text; all three values go through placeholders.
+		// SQL の文字列に埋めるのはテーブル名だけで、値は3つともプレースホルダで渡す。
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A column-to-column comparison has no API. Settings screen only, so no cache.
 		$users = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT DISTINCT u.ID, u.user_login, u.display_name, n.meta_value AS nickname,
-					( u.display_name = u.user_login ) AS display_matches,
-					( n.meta_value = u.user_login ) AS nickname_matches
-				FROM {$wpdb->users} AS u
-				LEFT JOIN {$wpdb->usermeta} AS n ON ( n.user_id = u.ID AND n.meta_key = 'nickname' )
-				WHERE ( u.display_name = u.user_login OR n.meta_value = u.user_login )
-				AND ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = u.ID AND c.meta_key = %s ) )
-				ORDER BY u.ID ASC
-				LIMIT %d",
+				"SELECT DISTINCT ru.ID, ru.user_login, ru.display_name, rn.meta_value AS nickname,
+					( ru.display_name = ru.user_login ) AS display_matches,
+					( rn.meta_value = ru.user_login ) AS nickname_matches
+				FROM (
+					SELECT t.ID FROM (
+						SELECT u.ID FROM {$wpdb->users} AS u WHERE u.display_name = u.user_login
+						UNION
+						SELECT n.user_id AS ID FROM {$wpdb->usermeta} AS n
+						INNER JOIN {$wpdb->users} AS u2 ON ( u2.ID = n.user_id )
+						WHERE n.meta_key = 'nickname' AND n.meta_value = u2.user_login
+					) AS t
+					WHERE ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = t.ID AND c.meta_key = %s ) )
+					ORDER BY t.ID ASC
+					LIMIT %d
+				) AS ids
+				INNER JOIN {$wpdb->users} AS ru ON ( ru.ID = ids.ID )
+				LEFT JOIN {$wpdb->usermeta} AS rn ON ( rn.user_id = ru.ID AND rn.meta_key = 'nickname' )
+				WHERE ( ru.display_name = ru.user_login OR rn.meta_value = ru.user_login )
+				ORDER BY ru.ID ASC",
 				$is_multisite,
 				$caps_key,
 				max( 1, (int) $limit )
