@@ -299,7 +299,17 @@ class ACGD_User_Access {
 		$flag = isset( $_GET['acgd_basic_verify'] ) ? sanitize_key( wp_unslash( $_GET['acgd_basic_verify'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
 
 		$messages = array(
-			'ok'         => array( 'success', __( 'Verified. Your BASIC authentication ID and password work. Click "Update User" below to save.', 'etbs-account-guard' ) ),
+			// The second sentence exists only because this notice and the password field's own description
+			// (render_fields()) sit next to each other right after a successful "Verify": the field is always
+			// blank here (render_fields() never redisplays a password), and without this line that blank field
+			// reads as "nothing to save" next to a generic "leave blank to keep the existing one" description —
+			// which is only true for someone else's account, not this just-confirmed one (UX review, issue #4).
+			// 2文目は、この通知とパスワード欄自体の説明文（render_fields()）が「確認」成功直後に隣り合って
+			// 出るために足した。この欄は常に空欄で出るが（render_fields() はパスワードを一切出し直さない）、
+			// この1文が無いと「空欄＝保存されない」に見えてしまう。パスワード欄の既存の説明文（「空欄なら
+			// 既存のものを保持」）は他人の編集時にも当てはまる一般文であり、確認直後のこの状況には正確ではない
+			// ため（UX レビュー、issue #4）。
+			'ok'         => array( 'success', __( 'Verified. Your BASIC authentication ID and password work. Click "Update User" below to save.', 'etbs-account-guard' ) . ' ' . __( 'The password field below will stay blank; the confirmed password is saved anyway.', 'etbs-account-guard' ) ),
 			'expired'    => array( 'warning', __( 'The verification has expired. Enter the ID and password again and click Verify.', 'etbs-account-guard' ) ),
 			'not_self'   => array( 'error', __( 'The "Verify" button only works for your own account.', 'etbs-account-guard' ) ),
 			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password, and set the mode to "BASIC authentication" before verifying.', 'etbs-account-guard' ) ),

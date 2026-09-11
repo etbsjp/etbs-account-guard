@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ETBS Account Guard 1.0.0\n"
 "Report-Msgid-Bugs-To: https://github.com/etbsjp/etbs-account-guard/issues\n"
-"PO-Revision-Date: 2026-09-11 15:00+0900\n"
+"PO-Revision-Date: 2026-09-12 04:30+0900\n"
 "Last-Translator: ETBS\n"
 "Language-Team: Japanese\n"
 "Language: ja\n"
@@ -590,6 +590,9 @@ msgstr "診断リクエストへの応答が想定外でした（ステータス
 
 msgid "Verified. Your BASIC authentication ID and password work. Click \"Update User\" below to save."
 msgstr "確認できました。BASIC 認証の ID とパスワードは正しく動作します。保存するには下の「ユーザーを更新」をクリックしてください。"
+
+msgid "The password field below will stay blank; the confirmed password is saved anyway."
+msgstr "下のパスワード欄は空欄のままになりますが、確認済みの内容がそのまま保存されます。"
 
 msgid "Verify"
 msgstr "確認"
