@@ -80,6 +80,13 @@ class ACGD_Access_Restriction {
 	const MODE_BASIC  = 'basic';
 
 	/**
+	 * Number of candidate users loaded at a time by find_restricted_users(). / find_restricted_users() が一度に読み込む候補の人数。
+	 *
+	 * @var int
+	 */
+	const RESTRICTED_USERS_BATCH = 200;
+
+	/**
 	 * Priority of the wp_authenticate_user filter that judges IP restriction at login.
 	 * ログイン時に IP 制限を判定する wp_authenticate_user フィルタの優先度。
 	 *
@@ -305,7 +312,11 @@ class ACGD_Access_Restriction {
 	public static function count_unrestricted_admins( $role_modes, $forced_user_modes = array() ) {
 		$count = 0;
 
-		foreach ( get_users() as $user ) {
+		// The candidates only narrow down whom to look at; whether each one counts is still decided by
+		// user_can() and compute_effective_modes(), exactly as when every user was looked at.
+		// 候補は「誰を見るか」を減らすだけ。数えるかどうかは、全ユーザーを見ていたときと同じく
+		// user_can() と compute_effective_modes() で決める。
+		foreach ( self::get_manage_options_candidates() as $user ) {
 			if ( ! user_can( $user, 'manage_options' ) ) {
 				continue;
 			}
@@ -316,6 +327,197 @@ class ACGD_Access_Restriction {
 		}
 
 		return $count;
+	}
+
+	/**
+	 * Returns the users of the current site who may be able to manage options: the candidates for
+	 * count_unrestricted_admins(). A superset is fine (the caller still checks user_can() on each one); what
+	 * matters is not dropping anyone that user_can() would accept, and not going beyond the users that
+	 * get_users() without arguments returns (on multisite, the members of the current site).
+	 * 現在のサイトで manage_options を持ちうるユーザー（count_unrestricted_admins() の候補）を返す。
+	 * 余分に含むのは構わない（呼び出し側が1人ずつ user_can() を見る）。大事なのは、user_can() が認める人を
+	 * 落とさないことと、引数なしの get_users() が返す範囲（マルチサイトでは現在のサイトのメンバー）を
+	 * 超えないこと。
+	 *
+	 * The 'capability' argument of WP_User_Query (WordPress 5.9 and later) matches users who hold the
+	 * capability through a role of this site or as a capability given to the user directly. On WordPress
+	 * before 5.9 the argument is ignored and every user is returned: slower, but the result of
+	 * count_unrestricted_admins() is the same (and nothing fatal happens; "Requires at least" is not declared).
+	 * WP_User_Query の 'capability' 引数（WordPress 5.9 以上）は、このサイトの権限経由で持っている人と、
+	 * ユーザー個別に付けた capability として持っている人の両方を拾う。5.9 未満ではこの引数が無視されて
+	 * 全ユーザーが返る。遅くなるだけで count_unrestricted_admins() の結果は変わらない
+	 * （Fatal にもならない。"Requires at least" は宣言していない）。
+	 *
+	 * What the 'capability' argument cannot see:
+	 * - Super admins on multisite: WP_User::has_cap() grants them everything without any stored role or
+	 *   capability. They are added here, limited to members of the current site as get_users() is.
+	 * - Capabilities granted only at run time by a user_has_cap / map_meta_cap filter of another plugin.
+	 *   Such users are not candidates, so they are not counted; this can only make save-time check 1 stricter
+	 *   (refuse a save that would otherwise pass), never let a save through that leaves nobody unrestricted.
+	 * 'capability' 引数では見えないもの：
+	 * - マルチサイトの特権管理者：WP_User::has_cap() が、保存された権限・capability と関係なく全部を認める。
+	 *   ここで get_users() と同じく現在のサイトのメンバーに限って足す。
+	 * - 他プラグインの user_has_cap / map_meta_cap フィルタが実行時にだけ与える capability。
+	 *   そのユーザーは候補にならず数えられない。これは保存時のチェック1を厳しくする（本来通る保存を拒む）
+	 *   方向にしか働かず、制限なしの人が残らない保存を通してしまうことは無い。
+	 *
+	 * @return WP_User[] Candidates, each at most once. / 候補（同じ人は1回だけ）。
+	 */
+	private static function get_manage_options_candidates() {
+		// fields 'all' (the default): user_can() and compute_effective_modes() need WP_User objects, and
+		// WP_User_Query then primes the user and user meta caches for these users only.
+		// fields は既定の 'all'。user_can() と compute_effective_modes() は WP_User を要し、WP_User_Query は
+		// このとき、ここで返すユーザーの分だけユーザーとユーザーメタのキャッシュを読み込む。
+		$candidates = array();
+		foreach ( get_users( array( 'capability' => 'manage_options' ) ) as $user ) {
+			$candidates[ $user->ID ] = $user;
+		}
+
+		if ( is_multisite() ) {
+			$super_admins = get_super_admins();
+			// Guard against an empty list: an empty login__in means "no condition" (every user).
+			// 空の一覧を渡さない：login__in が空だと「条件なし」（全ユーザー）になる。
+			if ( $super_admins ) {
+				// The default blog_id limits this to members of the current site, like get_users() without arguments.
+				// 既定の blog_id により、引数なしの get_users() と同じく現在のサイトのメンバーに限られる。
+				foreach ( get_users( array( 'login__in' => array_values( $super_admins ) ) ) as $user ) {
+					$candidates[ $user->ID ] = $user;
+				}
+			}
+		}
+
+		return array_values( $candidates );
+	}
+
+	/**
+	 * Returns up to $limit users of the current site who end up restricted under the given role modes, with
+	 * their effective modes, in the same order as get_users() without arguments (by login name). Used by the
+	 * "resulting restricted users" list of the Access Restriction tab (docs/spec.md 5.6).
+	 * 与えた権限のモードのもとで、結果として制限される現在のサイトのユーザーを、実際に効くモードと一緒に
+	 * 最大 $limit 人返す。順序は引数なしの get_users() と同じ（ログイン名順）。「アクセス制限」タブの
+	 * 「結果として制限されるユーザーの一覧」（docs/spec.md 5.6）に使う。
+	 *
+	 * Only users who can end up restricted are looked at (see restricted_candidates_meta_query()): their IDs
+	 * come from one query, and the users themselves are loaded RESTRICTED_USERS_BATCH at a time, stopping as
+	 * soon as $limit users are found. Whether each one is restricted is still decided by
+	 * compute_effective_modes(), so a candidate whose own setting is "No restriction" is dropped there.
+	 * 制限されうるユーザーだけを見る（restricted_candidates_meta_query() を参照）。ID は1本のクエリで取り、
+	 * ユーザー本体は RESTRICTED_USERS_BATCH 人ずつ読み込み、$limit 人見つかった時点で止める。
+	 * 制限されるかどうかは従来どおり compute_effective_modes() で決めるので、権限は制限でもユーザー単位で
+	 * 「制限なし」にしている候補はそこで落ちる。
+	 *
+	 * @param string[] $role_modes Role => mode, as get_role_modes() returns. / 権限 => モード（get_role_modes() と同じ形）。
+	 * @param int      $limit      Maximum number of users to return. / 返す最大人数。
+	 * @return array[] {
+	 *     Restricted users, in order. / 制限されるユーザー（順序どおり）。
+	 *
+	 *     @type WP_User  $user  User. / ユーザー。
+	 *     @type string[] $modes Effective modes, as compute_effective_modes() returns (never empty). / 実際に効くモード（compute_effective_modes() の戻り値。空にはならない）。
+	 * }
+	 */
+	public static function find_restricted_users( $role_modes, $limit ) {
+		$limit      = (int) $limit;
+		$restricted = array();
+		if ( $limit < 1 ) {
+			return $restricted;
+		}
+
+		// IDs only, ordered like get_users() without arguments ('login', ASC). The default blog_id keeps this to
+		// the members of the current site on multisite, the same range as get_users() without arguments.
+		// ID だけを、引数なしの get_users() と同じ順序（'login' の昇順）で取る。既定の blog_id により、
+		// マルチサイトでは引数なしの get_users() と同じく現在のサイトのメンバーに限られる。
+		$ids = get_users(
+			array(
+				'fields'     => 'ID',
+				'orderby'    => 'login',
+				'order'      => 'ASC',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
+				'meta_query' => self::restricted_candidates_meta_query( $role_modes ),
+			)
+		);
+
+		foreach ( array_chunk( array_map( 'intval', $ids ), self::RESTRICTED_USERS_BATCH ) as $batch ) {
+			// Loads this batch's users and their user meta in two queries, so get_userdata() below reads from the cache.
+			// この小分けのユーザーとユーザーメタを2本のクエリで読み込み、下の get_userdata() がキャッシュから読むようにする。
+			cache_users( $batch );
+
+			foreach ( $batch as $user_id ) {
+				$user = get_userdata( $user_id );
+				if ( ! $user ) {
+					continue;
+				}
+				$modes = self::compute_effective_modes( $user, $role_modes );
+				if ( $modes ) {
+					$restricted[] = array(
+						'user'  => $user,
+						'modes' => $modes,
+					);
+					if ( count( $restricted ) >= $limit ) {
+						return $restricted;
+					}
+				}
+			}
+		}
+
+		return $restricted;
+	}
+
+	/**
+	 * Builds the meta query that picks every user who can end up restricted under the given role modes:
+	 * (1) holding a role whose mode is not 'none', or (2) having their own mode set to 'ip' or 'basic'.
+	 * Anyone else is unrestricted by compute_effective_modes(): their own mode is 'follow' with no restricted
+	 * role, or 'none'. Extra users are fine (compute_effective_modes() drops them); missing ones are not.
+	 * 与えた権限のモードのもとで制限されうるユーザーを全員拾うメタクエリを作る。
+	 * (1) モードが 'none' でない権限を持つ、または (2) ユーザー自身のモードが 'ip' か 'basic'。
+	 * それ以外の人は compute_effective_modes() で必ず制限なしになる（自身のモードが 'follow' で制限する
+	 * 権限を持たないか、'none'）。余分に拾うのは構わない（compute_effective_modes() が落とす）が、取りこぼしは不可。
+	 *
+	 * (1) uses exactly the clause WP_User_Query builds for 'role__in' (the serialized role name in the
+	 * capabilities meta of this site, matched with LIKE). 'role__in' itself is not used because WP_User_Query
+	 * joins it to 'meta_query' with AND, while (1) and (2) must be joined with OR; one OR query also keeps the
+	 * login-name order of a single query, which merging two result sets in PHP could not reproduce (the order
+	 * follows the database collation). administrator is left out: it is always unrestricted at the role level.
+	 * (1) は、WP_User_Query が 'role__in' に対して作るのとまったく同じ句（このサイトの capabilities メタに
+	 * 入っているシリアライズ済みの権限名を LIKE で探す）を使う。'role__in' そのものを使わないのは、
+	 * WP_User_Query がそれを 'meta_query' と AND でつなぐため（(1) と (2) は OR でつなぐ必要がある）。
+	 * OR の1本にしておけば、1本のクエリのログイン名順もそのまま保てる（2つの結果を PHP で合わせると、
+	 * データベースの照合順序に従う並びを再現できない）。administrator は権限単位では常に制限なしなので入れない。
+	 *
+	 * With every role at 'none', only (2) remains: users restricted by their own setting are still found.
+	 * すべての権限が 'none' なら (2) だけが残る。ユーザー単位で制限している人はそれでも拾える。
+	 *
+	 * @param string[] $role_modes Role => mode, as get_role_modes() returns. / 権限 => モード（get_role_modes() と同じ形）。
+	 * @return array Meta query for WP_User_Query. / WP_User_Query に渡すメタクエリ。
+	 */
+	private static function restricted_candidates_meta_query( $role_modes ) {
+		global $wpdb;
+
+		$clauses = array(
+			'relation' => 'OR',
+			// (2) Own mode is 'ip' or 'basic'. The values go through WP_Meta_Query's own placeholders.
+			// (2) 自身のモードが 'ip' か 'basic'。値は WP_Meta_Query 自身のプレースホルダを通る。
+			array(
+				'key'     => self::USER_MODE_META,
+				'value'   => array( self::MODE_IP, self::MODE_BASIC ),
+				'compare' => 'IN',
+			),
+		);
+
+		// (1) Holds a role whose mode is not 'none'. Same key as WP_User_Query uses for the current site.
+		// (1) モードが 'none' でない権限を持つ。キーは WP_User_Query が現在のサイトに使うものと同じ。
+		$caps_key = $wpdb->get_blog_prefix( get_current_blog_id() ) . 'capabilities';
+		foreach ( (array) $role_modes as $role => $mode ) {
+			if ( 'administrator' === $role || self::MODE_NONE === $mode ) {
+				continue;
+			}
+			$clauses[] = array(
+				'key'     => $caps_key,
+				'value'   => '"' . $role . '"',
+				'compare' => 'LIKE',
+			);
+		}
+
+		return $clauses;
 	}
 
 	/**

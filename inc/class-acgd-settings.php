@@ -1122,23 +1122,17 @@ class ACGD_Settings {
 	 * 保存済みの設定のもとで、結果として制限されるユーザーの一覧を出力する（docs/spec.md 5.6
 	 * 「結果として制限されるユーザーの一覧」）。読み取りのみ。
 	 *
+	 * Only users who can end up restricted are loaded, a batch at a time, stopping at PUBLIC_NAME_LIST_LIMIT
+	 * (see ACGD_Access_Restriction::find_restricted_users()); the order and the content of the list are the
+	 * same as when every user was loaded and judged.
+	 * 制限されうるユーザーだけを小分けに読み込み、PUBLIC_NAME_LIST_LIMIT 人で止める
+	 * （ACGD_Access_Restriction::find_restricted_users() を参照）。一覧の順序と中身は、全ユーザーを読み込んで
+	 * 判定していたときと同じ。
+	 *
 	 * @return void
 	 */
 	private static function render_restricted_users_list() {
-		$role_modes = ACGD_Access_Restriction::get_role_modes();
-		$restricted = array();
-		foreach ( get_users() as $user ) {
-			$modes = ACGD_Access_Restriction::compute_effective_modes( $user, $role_modes );
-			if ( $modes ) {
-				$restricted[] = array(
-					'user'  => $user,
-					'modes' => $modes,
-				);
-			}
-			if ( count( $restricted ) >= self::PUBLIC_NAME_LIST_LIMIT ) {
-				break;
-			}
-		}
+		$restricted = ACGD_Access_Restriction::find_restricted_users( ACGD_Access_Restriction::get_role_modes(), self::PUBLIC_NAME_LIST_LIMIT );
 		?>
 		<h2><?php esc_html_e( 'Users who are currently restricted', 'etbs-account-guard' ); ?></h2>
 		<?php if ( ! $restricted ) : ?>
