@@ -667,7 +667,12 @@ class ACGD_Settings {
 			__( 'Allowed IP addresses', 'etbs-account-guard' ),
 			array( __CLASS__, 'render_access_ips_field' ),
 			self::ACCESS_SECTIONS,
-			'acgd_access_ips'
+			'acgd_access_ips',
+			// label_for makes the Settings API wrap the title in <label for="...">, matching the id the
+			// textarea uses (render_access_ips_field()). Without it the field has no accessible name.
+			// label_for を渡すと、Settings API が見出しを <label for="..."> で包む。テキストエリアの id
+			// （render_access_ips_field() を参照）と合わせている。無いと、この項目だけアクセシブルな名前を持たない。
+			array( 'label_for' => 'acgd-access-site-ips' )
 		);
 	}
 
@@ -706,9 +711,13 @@ class ACGD_Settings {
 				'acgd_invalid_ip',
 				sprintf(
 					/* translators: 1: line number, 2: the line's content */
-					__( 'Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s', 'etbs-account-guard' ),
+					esc_html__( 'Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s', 'etbs-account-guard' ),
 					(int) key( $validated['invalid'] ),
-					reset( $validated['invalid'] )
+					// settings_errors() prints this message unescaped, and this line is the admin's own raw
+					// submitted input; escape it here rather than trust it.
+					// settings_errors() はこのメッセージを未エスケープで出力するため、ここで自前でエスケープする。
+					// この行は管理者自身が送信した生の入力である。
+					esc_html( reset( $validated['invalid'] ) )
 				)
 			);
 			return $existing;
@@ -720,7 +729,15 @@ class ACGD_Settings {
 			add_settings_error(
 				ACGD_Access_Restriction::OPTION,
 				'acgd_no_unrestricted_admin',
-				__( 'This would leave no administrator (or other user who can manage options) without a restriction. Not saved.', 'etbs-account-guard' )
+				// Says where to go, not just what is wrong (UX review): switch someone who can manage
+				// options, on this tab or on their own user edit screen, back to no restriction.
+				// settings_errors() prints this unescaped; the string has no user input, but esc_html__()
+				// is used anyway for consistency with the messages below that do carry user input.
+				// 何が悪いかだけでなく、どこへ行けばよいかも書く（UX レビュー）。設定を管理できる誰かを、
+				// このタブかその人自身の編集画面で「制限なし」に戻す。settings_errors() はこれを未エスケープで
+				// 出力する。この文字列自体に利用者の入力は無いが、利用者の入力を含む下のメッセージと
+				// 揃えるため esc_html__() にしている。
+				esc_html__( 'This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to "No restriction" here or on their own user edit screen. Not saved.', 'etbs-account-guard' )
 			);
 			return $existing;
 		}
@@ -728,10 +745,25 @@ class ACGD_Settings {
 		// Save-time check 2 (docs/spec.md 5.1): the current access must satisfy the new settings.
 		// 保存時のチェック2（docs/spec.md 5.1）：いまのアクセスが新しい設定を満たしていること。
 		if ( ! ACGD_Access_Restriction::current_user_still_allowed( $new_roles, $validated['entries'] ) ) {
+			$remote = ACGD_Access_Restriction::get_remote_addr();
 			add_settings_error(
 				ACGD_Access_Restriction::OPTION,
 				'acgd_self_lockout',
-				__( 'Your own account, from where you are connecting right now, would not satisfy these new settings. Not saved.', 'etbs-account-guard' )
+				// Names the address to add, so recovering does not require first finding it elsewhere on
+				// the tab (UX review). null $remote (unreadable REMOTE_ADDR) falls back to a plain message.
+				// 直す手がかりとして、追加すべきアドレスをここに書く。タブの別の場所で先に探す必要が無いように
+				// する（UX レビュー）。$remote が null（REMOTE_ADDR を読めない）ときは、そのままの文言に倒す。
+				null === $remote
+					? esc_html__( 'Your own account, from where you are connecting right now, would not satisfy these new settings. Not saved.', 'etbs-account-guard' )
+					: sprintf(
+						/* translators: %s: the current user's own IP address, to add to the site-wide IP list */
+						esc_html__( 'Your own account would not satisfy these new settings: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved.', 'etbs-account-guard' ),
+						// $remote already passed inet_pton() validation in get_remote_addr(); esc_html() here
+						// is defense in depth, not a load-bearing escape.
+						// $remote は get_remote_addr() 内で inet_pton() の検証を通過済み。ここでの esc_html() は
+						// 保険であり、これが無いと危険という意味ではない。
+						esc_html( $remote )
+					)
 			);
 			return $existing;
 		}
@@ -801,7 +833,6 @@ class ACGD_Settings {
 			?>
 		</form>
 		<?php
-		self::render_current_connection();
 		self::render_restricted_users_list();
 		self::render_emergency_switch_notice();
 	}
@@ -895,18 +926,30 @@ class ACGD_Settings {
 	}
 
 	/**
-	 * Prints the introduction of the site-wide IP list section. / サイトの IP 一覧の前置きを出力する。
+	 * Prints the introduction of the site-wide IP list section, including the current connection (moved
+	 * here, ahead of the field and the Save button, per UX review: an admin filling in this field, or
+	 * recovering from the self-lockout error of check 2, needs their own address before typing, not after
+	 * scrolling past the submit button).
+	 * サイトの IP 一覧の前置きを出力する。いまの接続元もここに含める（UX レビューにより、項目・保存ボタンより
+	 * 前に移した。この項目に入力する管理者や、チェック2の締め出しエラーから復帰する管理者は、
+	 * 送信ボタンを過ぎてスクロールした後ではなく、入力する前に自分のアドレスを知る必要があるため）。
 	 *
 	 * @return void
 	 */
 	public static function render_access_ips_section() {
+		self::render_current_connection();
 		?>
 		<p>
 			<?php
 			echo wp_kses(
 				acgd_join_sentences(
 					array(
-						esc_html__( 'One IP address or range (CIDR) per line. Text after # is a note, and blank lines are ignored.', 'etbs-account-guard' ),
+						sprintf(
+							/* translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation */
+							esc_html__( 'One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note, and blank lines are ignored.', 'etbs-account-guard' ),
+							self::code( '192.0.2.10' ),
+							self::code( '192.0.2.0/24' )
+						),
 						esc_html__( 'A restricted user is let in from any address on this list, plus any address added just for them on their own user edit screen.', 'etbs-account-guard' ),
 						esc_html__( 'Judged from the address the server sees for this connection only; headers such as X-Forwarded-For are never used.', 'etbs-account-guard' ),
 					)
@@ -931,17 +974,20 @@ class ACGD_Settings {
 
 	/**
 	 * Prints the address the server currently sees for this connection (docs/spec.md 5.2,
-	 * "サーバから見えている、いまの接続元"). Read only; not part of the form.
+	 * "サーバから見えている、いまの接続元"). Read only, but printed inside the form (called from
+	 * render_access_ips_section(), ahead of the IP list field), so it is visible before typing an address
+	 * and while recovering from the self-lockout error of check 2.
 	 * サーバが今のこの接続について見ているアドレスを出力する（docs/spec.md 5.2
-	 * 「サーバから見えている、いまの接続元」）。読み取りのみで、フォームの一部ではない。
+	 * 「サーバから見えている、いまの接続元」）。読み取りのみだが、フォームの中（render_access_ips_section() から、
+	 * IP 一覧の項目より前に）呼ぶ。アドレスを入力する前や、チェック2の締め出しエラーから復帰するときに見えるようにするため。
 	 *
 	 * @return void
 	 */
 	private static function render_current_connection() {
 		$remote = ACGD_Access_Restriction::get_remote_addr();
 		?>
-		<h2><?php esc_html_e( 'Your current connection', 'etbs-account-guard' ); ?></h2>
 		<p>
+			<strong><?php esc_html_e( 'Your current connection:', 'etbs-account-guard' ); ?></strong>
 			<?php
 			if ( null === $remote ) {
 				esc_html_e( 'The server cannot tell what address you are connecting from right now.', 'etbs-account-guard' );

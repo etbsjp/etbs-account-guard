@@ -302,15 +302,16 @@ msgstr "BASIC 認証は今後の更新で追加予定で、まだ選べません
 msgid "IP addresses added for this user"
 msgstr "このユーザーに追加した IP アドレス"
 
-msgid "One IP address or range (CIDR) per line. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab."
-msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください。# の後ろはメモです。「アクセス制限」設定タブのサイトの一覧に加えて許可されます。"
+#. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation
+msgid "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab."
+msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。# の後ろはメモです。「アクセス制限」設定タブのサイトの一覧に加えて許可されます。"
 
 #. translators: 1: line number, 2: the line's content
 msgid "Line %1$d of the IP addresses added for this user is not a valid IP address or range: %2$s"
 msgstr "このユーザーに追加した IP アドレスの %1$d 行目が、有効な IP アドレスまたは範囲ではありません: %2$s"
 
-msgid "This would leave no administrator (or other user who can manage options) without a restriction. Not saved."
-msgstr "この内容で保存すると、制限されていない管理者 (または他に設定を管理できるユーザー) が1人もいなくなります。保存しませんでした。"
+msgid "This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to \"No restriction\" here or on the Access Restriction settings tab. Not saved."
+msgstr "この内容で保存すると、制限されていない管理者 (または他に設定を管理できるユーザー) が1人もいなくなります。どちらかを、ここか「アクセス制限」設定タブで「制限なし」に戻してください。保存しませんでした。"
 
 msgid "IP"
 msgstr "IP"
@@ -346,8 +347,15 @@ msgstr "許可する IP アドレス"
 msgid "Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s"
 msgstr "サイトの IP 一覧の %1$d 行目が、有効な IP アドレスまたは範囲ではありません: %2$s"
 
+msgid "This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to \"No restriction\" here or on their own user edit screen. Not saved."
+msgstr "この内容で保存すると、制限されていない管理者 (または他に設定を管理できるユーザー) が1人もいなくなります。どちらかを、ここかそのユーザー自身の編集画面で「制限なし」に戻してください。保存しませんでした。"
+
 msgid "Your own account, from where you are connecting right now, would not satisfy these new settings. Not saved."
 msgstr "今のあなたの接続元では、この新しい設定を満たせません。保存しませんでした。"
+
+#. translators: %s: the current user's own IP address, to add to the site-wide IP list
+msgid "Your own account would not satisfy these new settings: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved."
+msgstr "この新しい設定では、あなた自身のアクセスが満たせません。今の接続元 (%s) が一覧に入っていません。この住所を一覧に追加するか、この住所からでも許可される設定にしてください。保存しませんでした。"
 
 msgid "Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Saving this tab again, once the settings are valid, clears this warning."
 msgstr "アクセス制限は内部の問題により停止しており、直るまでは誰でも IP の確認なしにサインインできます。設定を正しい内容にしてこのタブを保存し直すと、この警告は消えます。"
@@ -377,8 +385,9 @@ msgstr "モード"
 msgid "No restriction (fixed)"
 msgstr "制限なし (固定)"
 
-msgid "One IP address or range (CIDR) per line. Text after # is a note, and blank lines are ignored."
-msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください。# の後ろはメモで、空行は無視します。"
+#. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation
+msgid "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note, and blank lines are ignored."
+msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。# の後ろはメモで、空行は無視します。"
 
 msgid "A restricted user is let in from any address on this list, plus any address added just for them on their own user edit screen."
 msgstr "制限対象のユーザーは、この一覧にあるアドレスと、そのユーザー自身の編集画面で個別に追加したアドレスのどちらからでも入れます。"
@@ -386,8 +395,8 @@ msgstr "制限対象のユーザーは、この一覧にあるアドレスと、
 msgid "Judged from the address the server sees for this connection only; headers such as X-Forwarded-For are never used."
 msgstr "判定は、この接続についてサーバーから見えているアドレスだけで行います。X-Forwarded-For などのヘッダーは一切使いません。"
 
-msgid "Your current connection"
-msgstr "今のあなたの接続"
+msgid "Your current connection:"
+msgstr "今のあなたの接続:"
 
 msgid "The server cannot tell what address you are connecting from right now."
 msgstr "サーバーは今のあなたの接続元のアドレスを判別できません。"

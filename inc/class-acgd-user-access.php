@@ -119,7 +119,16 @@ class ACGD_User_Access {
 				<th scope="row"><label for="acgd-user-ips"><?php esc_html_e( 'IP addresses added for this user', 'etbs-account-guard' ); ?></label></th>
 				<td>
 					<textarea name="acgd_user_ips" id="acgd-user-ips" rows="5" cols="40" class="large-text code"><?php echo esc_textarea( $ips ); ?></textarea>
-					<p class="description"><?php esc_html_e( 'One IP address or range (CIDR) per line. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab.', 'etbs-account-guard' ); ?></p>
+					<p class="description">
+						<?php
+						printf(
+							/* translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation */
+							esc_html__( 'One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab.', 'etbs-account-guard' ),
+							'<code>192.0.2.10</code>',
+							'<code>192.0.2.0/24</code>'
+						);
+						?>
+					</p>
 				</td>
 			</tr>
 		</table>
@@ -163,17 +172,24 @@ class ACGD_User_Access {
 		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
 
 		if ( $validated['invalid'] ) {
+			// The profile screen prints WP_Error messages unescaped, and this line is the admin's own raw
+			// submitted input; escape it here rather than trust it.
+			// プロフィール画面は WP_Error のメッセージを未エスケープで出力するため、ここで自前でエスケープする。
+			// この行は管理者自身が送信した生の入力である。
 			self::$pending_error = sprintf(
 				/* translators: 1: line number, 2: the line's content */
-				__( 'Line %1$d of the IP addresses added for this user is not a valid IP address or range: %2$s', 'etbs-account-guard' ),
+				esc_html__( 'Line %1$d of the IP addresses added for this user is not a valid IP address or range: %2$s', 'etbs-account-guard' ),
 				(int) key( $validated['invalid'] ),
-				reset( $validated['invalid'] )
+				esc_html( reset( $validated['invalid'] ) )
 			);
 			return;
 		}
 
 		if ( ACGD_Access_Restriction::count_unrestricted_admins( ACGD_Access_Restriction::get_role_modes(), array( (int) $user_id => $mode ) ) < 1 ) {
-			self::$pending_error = __( 'This would leave no administrator (or other user who can manage options) without a restriction. Not saved.', 'etbs-account-guard' );
+			// Says where to go, not just what is wrong (UX review, matching the same message on the Access
+			// Restriction settings tab). 何が悪いかだけでなく、どこへ行けばよいかも書く（UX レビュー。
+			// 「アクセス制限」設定タブの同じメッセージと揃えている）。
+			self::$pending_error = esc_html__( 'This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to "No restriction" here or on the Access Restriction settings tab. Not saved.', 'etbs-account-guard' );
 			return;
 		}
 
