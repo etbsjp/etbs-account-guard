@@ -492,7 +492,7 @@ class ACGD_User_Access {
 			) ) {
 				$remote              = ACGD_Access_Restriction::get_remote_addr();
 				self::$pending_error = null === $remote
-					? esc_html__( 'Your own account, from where you are connecting right now, would not satisfy this new setting. Not saved.', 'etbs-account-guard' )
+					? esc_html__( 'Your own account, from where you are connecting right now, would not satisfy this new setting. Choose a setting that does not depend on IP restriction, such as BASIC authentication or no restriction. Not saved.', 'etbs-account-guard' )
 					: sprintf(
 						/* translators: %s: the current user's own IP address, to add to the IP list */
 						esc_html__( 'Your own account would not satisfy this new setting: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved.', 'etbs-account-guard' ),
