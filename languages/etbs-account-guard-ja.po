@@ -447,3 +447,148 @@ msgstr "ログイン"
 
 msgid "After login"
 msgstr "ログイン後"
+
+msgid "%s Staff Access"
+msgstr "%s 関係者専用"
+
+msgid "A password is already saved and is never shown again. Leave this blank to keep it, or enter a new one to replace it."
+msgstr "パスワードは保存済みで、二度と表示されません。そのままにすると変更されません。変更する場合は新しいパスワードを入力してください。"
+
+msgid "A second sign-in is required"
+msgstr "2つ目のサインインが必要です"
+
+msgid "BASIC authentication"
+msgstr "BASIC 認証"
+
+msgid "BASIC authentication ID"
+msgstr "BASIC 認証の ID"
+
+msgid "BASIC authentication mode cannot be turned on because the receive diagnosis on the <a href=\"%s\">Access Restriction settings tab</a> has not succeeded. Run it there first. Not saved."
+msgstr "<a href=\"%s\">アクセス制限の設定タブ</a>の受信診断が成功していないため、BASIC 認証モードを有効にできません。先にそちらで診断を実行してください。保存されませんでした。"
+
+msgid "BASIC authentication mode cannot be turned on for a role because the receive diagnosis below has not succeeded. Run it first. Not saved."
+msgstr "受信診断が成功していないため、権限を BASIC 認証モードにできません。先に下の診断を実行してください。保存されませんでした。"
+
+msgid "BASIC authentication password"
+msgstr "BASIC 認証のパスワード"
+
+msgid "BASIC authentication receive diagnosis"
+msgstr "BASIC 認証の受信診断"
+
+msgid "BASIC authentication requires every affected user to set up their own ID and password first, on their user edit screen; a role cannot be switched to it as a shortcut around that."
+msgstr "BASIC 認証にするには、対象となる各ユーザーが先に自分のユーザー編集画面で ID とパスワードを設定している必要があります。権限をこのモードに変えても、その手順を省略することはできません。"
+
+msgid "Back up your current .htaccess before editing it. Depending on your server and other plugins, this may not work or may affect how your site is displayed. If unsure, ask your hosting provider."
+msgstr "編集する前に、今の .htaccess を必ず控えてください。サーバーや他のプラグインとの組み合わせによっては、うまく動かない場合やサイトの表示に影響する場合があります。不安な場合はレンタルサーバーの管理会社にご相談ください。"
+
+msgid "Before saving BASIC authentication mode for yourself, set the ID and password above and click Verify. This opens a real sign-in prompt so you can confirm they work; you will be returned here afterward. Saving is refused for yourself without a fresh verification."
+msgstr "自分自身を BASIC 認証モードにして保存する前に、上の ID とパスワードを入力して「確認」をクリックしてください。実際のサインインダイアログが開き、正しく動くことを確認できます。確認が終わるとこの画面に戻ります。確認したばかりの内容でなければ、自分自身の保存は拒否されます。"
+
+msgid "Click \"Verify\" and confirm your new BASIC authentication ID and password before saving them for your own account. Not saved."
+msgstr "自分自身のアカウントに保存する前に、「確認」をクリックして新しい BASIC 認証の ID とパスワードを確かめてください。保存されませんでした。"
+
+msgid "Could not determine whether the username and password reach WordPress. BASIC authentication cannot be turned on until the diagnosis succeeds."
+msgstr "ユーザー名とパスワードが WordPress まで届くかどうかを判定できませんでした。診断が成功するまで BASIC 認証を有効にできません。"
+
+msgid "Depending on your server, one of the snippets below may fix this."
+msgstr "サーバーによっては、以下のいずれかの記述で解決できる場合があります。"
+
+msgid "Enter a BASIC authentication ID and password, and set the mode to \"BASIC authentication\" before verifying."
+msgstr "確認する前に、BASIC 認証の ID とパスワードを入力し、モードを「BASIC 認証」にしてください。"
+
+msgid "Enter both a BASIC authentication ID and a password before choosing \"BASIC authentication\" mode. Not saved."
+msgstr "「BASIC 認証」モードを選ぶ前に、BASIC 認証の ID とパスワードの両方を入力してください。保存されませんでした。"
+
+msgid "If a username/password prompt did not appear, use the link below to try again."
+msgstr "ユーザー名とパスワードの入力欄が表示されなかった場合は、下のリンクからもう一度お試しください。"
+
+msgid "If you no longer have the second username and password, contact your site administrator."
+msgstr "2つ目のユーザー名とパスワードが分からなくなった場合は、サイトの管理者にお問い合わせください。"
+
+msgid "Last run: %s"
+msgstr "前回の実行日時: %s"
+
+msgid "Log out"
+msgstr "ログアウト"
+
+msgid "Not received. The username and password do not reach WordPress, so BASIC authentication cannot be turned on until this is fixed."
+msgstr "受信できていません。ユーザー名とパスワードが WordPress まで届いていないため、直すまで BASIC 認証を有効にできません。"
+
+msgid "Not the WordPress login name. Must be different from every other user's BASIC authentication ID on this site."
+msgstr "WordPress のログイン名とは別のものです。このサイトの他のどのユーザーの BASIC 認証 ID とも重複できません。"
+
+msgid "Received. BASIC authentication can be turned on for this site."
+msgstr "受信できています。このサイトで BASIC 認証を有効にできます。"
+
+msgid "Required before this user can be put in BASIC authentication mode."
+msgstr "このユーザーを BASIC 認証モードにする前に必須です。"
+
+msgid "Run diagnosis"
+msgstr "診断を実行"
+
+msgid "Show technical detail"
+msgstr "技術的な詳細を表示"
+
+msgid "Some server setups do not pass the username and password of BASIC authentication through to WordPress, or already use BASIC authentication for the whole site at the server level (only one such credential can be sent per request). Run the diagnosis below to check this site before turning BASIC authentication mode on for any role or user."
+msgstr "サーバーの構成によっては、BASIC 認証のユーザー名とパスワードが WordPress まで届かないことや、既にサーバー側でサイト全体に BASIC 認証がかかっていることがあります（1回のリクエストに載せられる資格情報は1つだけです）。権限やユーザーを BASIC 認証モードにする前に、下の診断でこのサイトを確認してください。"
+
+msgid "The \"Verify\" button only works for your own account."
+msgstr "「確認」ボタンは自分自身のアカウントでしか使えません。"
+
+msgid "The Access Restriction section does not appear on your own profile screen, by design (it would hint at where you are and are not allowed to connect from). To restrict your own account, or to set up your own BASIC authentication ID and password, use this direct link to your <a href=\"%s\">user edit screen</a> instead."
+msgstr "「アクセス制限」の区画は、意図的に本人のプロフィール画面には表示されません（どこから接続できる・できないかの手がかりになるため）。自分自身のアカウントを制限する、または自分の BASIC 認証の ID とパスワードを設定するには、代わりにこの<a href=\"%s\">ユーザー編集画面への直接リンク</a>をお使いください。"
+
+msgid "The diagnosis has not been run yet. BASIC authentication mode cannot be turned on until it succeeds."
+msgstr "診断はまだ実行されていません。成功するまで BASIC 認証モードを有効にできません。"
+
+msgid "The username or password was not accepted"
+msgstr "ユーザー名またはパスワードが受け付けられませんでした"
+
+msgid "The verification has expired. Enter the ID and password again and click Verify."
+msgstr "確認が期限切れになりました。ID とパスワードをもう一度入力し、「確認」をクリックしてください。"
+
+msgid "This BASIC authentication ID is already used by another user on this site. Choose a different one. Not saved."
+msgstr "この BASIC 認証の ID は、このサイトの別のユーザーが既に使っています。別の ID を選んでください。保存されませんでした。"
+
+msgid "This connection is not HTTPS. BASIC authentication sends the username and password with every request; using HTTPS is strongly recommended (this does not block saving)."
+msgstr "この接続は HTTPS ではありません。BASIC 認証は毎回のリクエストでユーザー名とパスワードを送るため、HTTPS の利用を強く推奨します（保存は止めません）。"
+
+msgid "This link has expired. Please try again."
+msgstr "このリンクは期限切れです。もう一度お試しください。"
+
+msgid "This plugin never edits .htaccess automatically. Review it and add it yourself."
+msgstr "このプラグインが .htaccess を自動で書き換えることはありません。内容を確認のうえ、ご自身で追記してください。"
+
+msgid "This screen protects your account with a second username and password (BASIC authentication), separate from your WordPress login."
+msgstr "この画面は、WordPress のログインとは別の2つ目のユーザー名とパスワード（BASIC 認証）でアカウントを守っています。"
+
+msgid "This server already requires a BASIC authentication sign-in of its own for this address. Only one such credential can be sent per request, so this plugin's BASIC authentication cannot be turned on at the same time."
+msgstr "このサーバーは、このアドレスに対して既に自身の BASIC 認証のサインインを求めています。1回のリクエストに送れる資格情報は1つだけのため、このプラグインの BASIC 認証を同時に有効にはできません。"
+
+msgid "This would put %1$s in BASIC authentication mode without their own ID and password set. Set them on their <a href=\"%2$s\">user edit screen</a> first, or choose a different mode. Not saved."
+msgstr "この保存を行うと、%1$s が自分の ID とパスワードを設定しないまま BASIC 認証モードになります。先に<a href=\"%2$s\">ユーザー編集画面</a>で設定するか、別のモードを選んでください。保存されませんでした。"
+
+msgid "This would put %s in BASIC authentication mode without their own ID and password set. Set them on their user edit screen first, or choose a different mode. Not saved."
+msgstr "この保存を行うと、%s が自分の ID とパスワードを設定しないまま BASIC 認証モードになります。先にそのユーザーの編集画面で設定するか、別のモードを選んでください。保存されませんでした。"
+
+msgid "Try again"
+msgstr "もう一度試す"
+
+msgid "Unexpected response to the diagnosis request (status: %d)."
+msgstr "診断リクエストへの応答が想定外でした（ステータス: %d）。"
+
+msgid "Verified. Your BASIC authentication ID and password work. Click \"Update User\" below to save."
+msgstr "確認できました。BASIC 認証の ID とパスワードは正しく動作します。保存するには下の「ユーザーを更新」をクリックしてください。"
+
+msgid "Verify"
+msgstr "確認"
+
+msgid "Verify your own BASIC authentication"
+msgstr "自分の BASIC 認証を確認"
+
+msgid "You do not have permission to do this."
+msgstr "この操作を行う権限がありません。"
+
+msgid "Your own account"
+msgstr "自分自身のアカウント"
+

@@ -4,11 +4,13 @@
  * 実装本体の入口。モジュールの読み込み・翻訳の登録・支援リンクを扱う。
  *
  * Login Name Protection (1.0.0) lives in class-acgd-login-name.php. Access Restriction (1.1.0) lives in
- * class-acgd-access-restriction.php (IP restriction and the shared foundation) and class-acgd-user-access.php
- * (the per-user screens). The settings screen is in class-acgd-settings.php. The dashboard widget and the
- * update checker are loaded from the main file.
+ * class-acgd-access-restriction.php (IP restriction, the shared foundation and BASIC credential storage),
+ * class-acgd-basic-auth.php (BASIC authentication itself: matching, the confirmation screen and the receive
+ * diagnosis) and class-acgd-user-access.php (the per-user screens). The settings screen is in
+ * class-acgd-settings.php. The dashboard widget and the update checker are loaded from the main file.
  * 「ログイン名の保護」（1.0.0）は class-acgd-login-name.php にある。「アクセス制限」（1.1.0）は
- * class-acgd-access-restriction.php（IP 制限と共通の土台）と class-acgd-user-access.php
+ * class-acgd-access-restriction.php（IP 制限・共通の土台・BASIC 資格情報の保存）、
+ * class-acgd-basic-auth.php（BASIC 認証そのもの：照合・確認画面・受信の診断）、class-acgd-user-access.php
  * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。
  * ダッシュボードのウィジェットと更新チェッカーは本体ファイルから読み込む。
  *
@@ -22,6 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once __DIR__ . '/class-acgd-invalid-credentials.php';
 require_once __DIR__ . '/class-acgd-login-name.php';
 require_once __DIR__ . '/class-acgd-access-restriction.php';
+require_once __DIR__ . '/class-acgd-basic-auth.php';
 require_once __DIR__ . '/class-acgd-user-access.php';
 require_once __DIR__ . '/class-acgd-settings.php';
 
@@ -65,6 +68,7 @@ add_action( 'init', 'acgd_load_textdomain' );
 ACGD_Invalid_Credentials::init();
 ACGD_Login_Name::init();
 ACGD_Access_Restriction::init();
+ACGD_Basic_Auth::init();
 ACGD_User_Access::init();
 ACGD_Settings::init();
 

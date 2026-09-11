@@ -715,15 +715,14 @@ class ACGD_Settings {
 	}
 
 	/**
-	 * Sanitizes and validates the Access Restriction tab, and applies save-time checks 1 and 2 (docs/spec.md 5.1).
-	 * 「アクセス制限」タブを検証し、保存時のチェック1・2（docs/spec.md 5.1）を適用する。
-	 *
-	 * Check 3 (every BASIC-mode user has credentials set) is not implemented here: BASIC mode is not offered
-	 * by this screen yet (see sanitize_role_modes()), so it cannot be reached from here (issue #4).
+	 * Sanitizes and validates the Access Restriction tab, and applies save-time checks 1, 2 and 3
+	 * (docs/spec.md 5.1). Also refuses to turn BASIC mode on for any role while the receive diagnosis has not
+	 * succeeded (docs/spec.md 5.3, "そのときBASICモードを保存させない").
+	 * 「アクセス制限」タブを検証し、保存時のチェック1・2・3（docs/spec.md 5.1）を適用する。あわせて、
+	 * 受信の診断が成功していない間は、どの権限も BASIC モードにする保存を拒む
+	 * （docs/spec.md 5.3「そのときBASICモードを保存させない」）。
 	 * On any failure, the previously saved value is returned unchanged and an error is queued with
 	 * add_settings_error(), which the Settings API prints back on this same tab.
-	 * チェック3（BASIC モードのユーザー全員が資格情報を設定済み）はここでは実装しない。この画面では
-	 * まだ BASIC モードを選べない（sanitize_role_modes() を参照）ため、ここには到達しない（issue #4）。
 	 * どの判定に失敗しても、保存済みの値をそのまま返し、add_settings_error() でエラーを積む。
 	 * Settings API が同じタブにそれを出し直す。
 	 *
@@ -809,6 +808,53 @@ class ACGD_Settings {
 			return $existing;
 		}
 
+		if ( in_array( ACGD_Access_Restriction::MODE_BASIC, $new_roles, true ) ) {
+			// Gate before check 3: an unrun/failed diagnosis makes the "who is missing credentials" question
+			// moot (docs/spec.md 5.3). Only bother checking when a role is actually being set to 'basic'.
+			// チェック3より前のゲート：診断が未実行・失敗のときは「誰の資格情報が無いか」を問う意味が無い
+			// （docs/spec.md 5.3）。実際にどれかの権限を 'basic' にしようとしているときだけ確かめる。
+			if ( ! ACGD_Basic_Auth::diagnosis_allows_basic_mode() ) {
+				add_settings_error(
+					ACGD_Access_Restriction::OPTION,
+					'acgd_basic_diagnosis_not_ok',
+					esc_html__( 'BASIC authentication mode cannot be turned on for a role because the receive diagnosis below has not succeeded. Run it first. Not saved.', 'etbs-account-guard' )
+				);
+				self::stash_resubmit( $new_roles, $ip_text );
+				return $existing;
+			}
+
+			// Save-time check 3 (docs/spec.md 5.1): every user who would end up in BASIC mode must already
+			// have their own BASIC credentials set (on their user edit screen; this tab does not collect them).
+			// 保存時のチェック3（docs/spec.md 5.1）：BASIC モードになる全ユーザーが、自分の BASIC 資格情報を
+			// 既に設定済みであること（ユーザー編集画面で。このタブでは資格情報自体は集めない）。
+			$missing = ACGD_Access_Restriction::find_basic_users_without_credentials( $new_roles );
+			if ( $missing ) {
+				$first     = reset( $missing );
+				$edit_link = get_edit_user_link( $first->ID );
+				add_settings_error(
+					ACGD_Access_Restriction::OPTION,
+					'acgd_basic_missing_credentials',
+					wp_kses(
+						$edit_link
+							? sprintf(
+								/* translators: 1: login name of a user who would end up in BASIC mode without credentials, 2: URL of that user's edit screen */
+								__( 'This would put %1$s in BASIC authentication mode without their own ID and password set. Set them on their <a href="%2$s">user edit screen</a> first, or choose a different mode. Not saved.', 'etbs-account-guard' ),
+								esc_html( $first->user_login ),
+								esc_url( $edit_link )
+							)
+							: sprintf(
+								/* translators: %s: login name of a user who would end up in BASIC mode without credentials */
+								__( 'This would put %s in BASIC authentication mode without their own ID and password set. Set them on their user edit screen first, or choose a different mode. Not saved.', 'etbs-account-guard' ),
+								esc_html( $first->user_login )
+							),
+						array( 'a' => array( 'href' => true ) )
+					)
+				);
+				self::stash_resubmit( $new_roles, $ip_text );
+				return $existing;
+			}
+		}
+
 		ACGD_Access_Restriction::clear_fault();
 		// A save can only succeed here after a fresh page load without a pending resubmit (the resubmit
 		// path always redisplays the form and stops before another sanitize call happens), so this is only
@@ -876,23 +922,19 @@ class ACGD_Settings {
 	 * 送信された権限ごとの表から、既知の権限・既知のモードだけを残す。
 	 *
 	 * administrator never appears in the result, whatever was submitted for it: it is always unrestricted at
-	 * the role level (docs/spec.md 5.1). 'basic' is a valid stored mode (see ACGD_Access_Restriction), but
-	 * this screen does not offer it yet (BASIC authentication itself is issue #4), so it is not in the list
-	 * of modes accepted here; an unknown or missing value falls back to 'none'.
+	 * the role level (docs/spec.md 5.1). An unknown or missing value falls back to 'none'.
 	 * administrator は、送信内容にかかわらず結果に現れない。権限単位では常に制限なしのため
-	 * （docs/spec.md 5.1）。'basic' は保存できるモードの1つだが（ACGD_Access_Restriction を参照）、
-	 * この画面ではまだ選べない（BASIC 認証そのものは issue #4）ため、ここで受け付けるモードの一覧には無く、
-	 * 未知の値・未送信は 'none' に倒す。
+	 * （docs/spec.md 5.1）。未知の値・未送信は 'none' に倒す。
 	 *
 	 * @param mixed $input Submitted value: role => mode. / 送信された値（権限 => モード）。
-	 * @return string[] Role => mode ('none' or 'ip' only). / 権限 => モード（'none' か 'ip' のみ）。
+	 * @return string[] Role => mode ('none', 'ip' or 'basic'). / 権限 => モード（'none'・'ip'・'basic'）。
 	 */
 	private static function sanitize_role_modes( $input ) {
 		if ( ! is_array( $input ) ) {
 			$input = array();
 		}
 
-		$allowed_modes = array( ACGD_Access_Restriction::MODE_NONE, ACGD_Access_Restriction::MODE_IP );
+		$allowed_modes = array( ACGD_Access_Restriction::MODE_NONE, ACGD_Access_Restriction::MODE_IP, ACGD_Access_Restriction::MODE_BASIC );
 		$output        = array();
 
 		foreach ( array_keys( wp_roles()->get_names() ) as $role ) {
@@ -919,6 +961,13 @@ class ACGD_Settings {
 	 * @return void
 	 */
 	private static function render_access_tab() {
+		// Printed ahead of the options.php form, on purpose: it has its own "Run diagnosis" <form>, and a
+		// <form> cannot be nested inside another one (the outer form below is the Settings API's). See the
+		// method's own docblock for the UX placement reasoning (before any mode is chosen).
+		// options.php 用のフォームより前に出す。これは自前の「診断を実行」<form> を持ち、<form> の入れ子は
+		// できないため（下の外側のフォームは Settings API のもの）。配置の UX 上の理由（モードを選ぶ前）は
+		// メソッド自身の docblock を参照。
+		self::render_basic_diagnosis_section();
 		?>
 		<form method="post" action="options.php">
 			<?php
@@ -929,7 +978,176 @@ class ACGD_Settings {
 		</form>
 		<?php
 		self::render_restricted_users_list();
+		self::render_own_account_notice();
 		self::render_emergency_switch_notice();
+	}
+
+	/**
+	 * Prints the receive diagnosis section (docs/spec.md 5.3) and the HTTPS recommendation. Called directly
+	 * from render_access_tab(), ahead of the Settings API form (see that method for why), so it is visible
+	 * before any mode is chosen.
+	 * 受信の診断（docs/spec.md 5.3）と HTTPS の推奨を出力する。render_access_tab() から Settings API の
+	 * フォームより前に直接呼ぶ（理由はそちらを参照）。モードを選ぶ前に見えるようにするため。
+	 *
+	 * The diagnosis result and the HTTPS check are kept in separate notices with different tones (UX review):
+	 * a failed/unrun diagnosis actively blocks saving BASIC mode ("cannot"), while a missing HTTPS connection
+	 * is only a recommendation (saving is still allowed) — conflating the two would make the HTTPS note read
+	 * as more urgent, or the diagnosis note as merely advisory, than each actually is.
+	 * 診断結果と HTTPS の確認は、トーンの違う別々の notice にする（UX レビュー）：診断の失敗・未実行は
+	 * BASIC モードの保存を実際に止める（「できない」）のに対し、HTTPS でない接続は推奨に留まる
+	 * （保存はできる）。一緒にすると、HTTPS の注意が実際より緊急に見えたり、診断の注意が単なる
+	 * 助言に見えたりしてしまう。
+	 *
+	 * @return void
+	 */
+	public static function render_basic_diagnosis_section() {
+		?>
+		<h2><?php esc_html_e( 'BASIC authentication receive diagnosis', 'etbs-account-guard' ); ?></h2>
+		<p><?php esc_html_e( 'Some server setups do not pass the username and password of BASIC authentication through to WordPress, or already use BASIC authentication for the whole site at the server level (only one such credential can be sent per request). Run the diagnosis below to check this site before turning BASIC authentication mode on for any role or user.', 'etbs-account-guard' ); ?></p>
+		<?php
+		self::render_basic_diagnosis_result();
+
+		if ( ! is_ssl() ) {
+			?>
+			<div class="notice notice-warning inline"><p><?php esc_html_e( 'This connection is not HTTPS. BASIC authentication sends the username and password with every request; using HTTPS is strongly recommended (this does not block saving).', 'etbs-account-guard' ); ?></p></div>
+			<?php
+		}
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="acgd_run_basic_diagnosis" />
+			<?php wp_nonce_field( 'acgd_run_basic_diagnosis', 'acgd_basic_diag_nonce' ); ?>
+			<?php submit_button( __( 'Run diagnosis', 'etbs-account-guard' ), 'secondary', 'submit', false ); ?>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Prints the result of the last receive diagnosis run (docs/spec.md 5.3), or a not-yet-run notice. The
+	 * .htaccess snippet is shown, display only, whenever the result is anything but a success — including
+	 * never having run — so an admin who forgot to run it still sees what a failure would need (PageGuard's
+	 * design; ~/.claude/etbs-plugin-rules.md and CLAUDE.md: never rewritten automatically).
+	 * 直近の受信診断の結果（docs/spec.md 5.3）、または未実行の通知を出力する。.htaccess のスニペットは、
+	 * 成功以外のすべての結果——未実行を含む——で表示のみ出す。実行し忘れた管理者にも、失敗時に要る情報が
+	 * 見えるようにするため（PageGuard の設計。~/.claude/etbs-plugin-rules.md と CLAUDE.md：自動で書き換えない）。
+	 *
+	 * @return void
+	 */
+	private static function render_basic_diagnosis_result() {
+		$result = ACGD_Basic_Auth::get_diagnosis_result();
+
+		if ( null === $result ) {
+			?>
+			<div class="notice notice-info inline"><p><?php esc_html_e( 'The diagnosis has not been run yet. BASIC authentication mode cannot be turned on until it succeeds.', 'etbs-account-guard' ); ?></p></div>
+			<?php
+			self::render_htaccess_snippet();
+			return;
+		}
+
+		$labels = array(
+			'success'           => array(
+				'class' => 'notice-success',
+				'text'  => __( 'Received. BASIC authentication can be turned on for this site.', 'etbs-account-guard' ),
+			),
+			'not_received'      => array(
+				'class' => 'notice-error',
+				'text'  => __( 'Not received. The username and password do not reach WordPress, so BASIC authentication cannot be turned on until this is fixed.', 'etbs-account-guard' ),
+			),
+			'server_basic_auth' => array(
+				'class' => 'notice-error',
+				'text'  => __( 'This server already requires a BASIC authentication sign-in of its own for this address. Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be turned on at the same time.', 'etbs-account-guard' ),
+			),
+			'unknown'           => array(
+				'class' => 'notice-warning',
+				'text'  => __( 'Could not determine whether the username and password reach WordPress. BASIC authentication cannot be turned on until the diagnosis succeeds.', 'etbs-account-guard' ),
+			),
+		);
+		$label = isset( $labels[ $result['status'] ] ) ? $labels[ $result['status'] ] : $labels['unknown'];
+		?>
+		<div class="notice inline <?php echo esc_attr( $label['class'] ); ?>">
+			<p><strong><?php echo esc_html( $label['text'] ); ?></strong></p>
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: date and time the diagnosis was last run */
+					esc_html__( 'Last run: %s', 'etbs-account-guard' ),
+					esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $result['checked_at'] ) )
+				);
+				?>
+			</p>
+			<?php if ( '' !== $result['detail'] ) : ?>
+				<?php // Technical, often not-translated detail; kept out of the main message so it does not read as an instruction (UX review). / 技術的で訳されていないことも多い詳細。主文と分けて置き、指示のように読めないようにする（UX レビュー）。 ?>
+				<details>
+					<summary><?php esc_html_e( 'Show technical detail', 'etbs-account-guard' ); ?></summary>
+					<p><code><?php echo esc_html( $result['detail'] ); ?></code></p>
+				</details>
+			<?php endif; ?>
+		</div>
+		<?php
+		if ( 'success' !== $result['status'] ) {
+			self::render_htaccess_snippet();
+		}
+	}
+
+	/**
+	 * Prints the .htaccess snippet for display only (docs/spec.md 5.3, "自動で書き換えない"; CLAUDE.md).
+	 * .htaccess のスニペットを表示のみで出力する（docs/spec.md 5.3「自動で書き換えない」・CLAUDE.md）。
+	 *
+	 * @return void
+	 */
+	private static function render_htaccess_snippet() {
+		$snippet = "# ETBS Account Guard: pass the Authorization header through to PHP.\n"
+			. "# Uncomment whichever one applies to your server and add it to your site's .htaccess.\n\n"
+			. "# Apache 2.4.13 or later\n"
+			. "#<IfModule mod_authz_core.c>\n"
+			. "#    CGIPassAuth On\n"
+			. "#</IfModule>\n\n"
+			. "# Where the above is not available\n"
+			. "#<IfModule mod_rewrite.c>\n"
+			. "#    RewriteEngine On\n"
+			. "#    RewriteCond %{HTTP:Authorization} ^(.+)$\n"
+			. "#    RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]\n"
+			. "#</IfModule>\n";
+		?>
+		<p>
+			<?php esc_html_e( 'Depending on your server, one of the snippets below may fix this.', 'etbs-account-guard' ); ?>
+			<strong><?php esc_html_e( 'This plugin never edits .htaccess automatically. Review it and add it yourself.', 'etbs-account-guard' ); ?></strong>
+		</p>
+		<p><?php esc_html_e( 'Back up your current .htaccess before editing it. Depending on your server and other plugins, this may not work or may affect how your site is displayed. If unsure, ask your hosting provider.', 'etbs-account-guard' ); ?></p>
+		<pre><code><?php echo esc_html( $snippet ); ?></code></pre>
+		<?php
+	}
+
+	/**
+	 * Prints a link straight to the current admin's own user edit screen (bypassing get_edit_profile_url(),
+	 * which always forces profile.php for one's own ID), so an admin has a way to set up their own BASIC
+	 * authentication credentials — the section is otherwise never reachable for one's own account through
+	 * ordinary navigation (docs/spec.md 5.6, and see the decision record on issue #4 and the class docblock
+	 * of ACGD_User_Access).
+	 * 現在の管理者自身のユーザー編集画面への生のリンクを出力する（自分の ID には常に profile.php を強制する
+	 * get_edit_profile_url() は経由しない）。管理者が自分自身の BASIC 認証資格情報を設定する手段を用意する
+	 * ため——この区画は通常の導線では自分自身の口座には決して届かない（docs/spec.md 5.6、issue #4 の
+	 * decision record と ACGD_User_Access のクラス docblock を参照）。
+	 *
+	 * @return void
+	 */
+	private static function render_own_account_notice() {
+		$own_id  = get_current_user_id();
+		$own_url = admin_url( 'user-edit.php?user_id=' . $own_id );
+		?>
+		<h2><?php esc_html_e( 'Your own account', 'etbs-account-guard' ); ?></h2>
+		<p>
+			<?php
+			echo wp_kses(
+				sprintf(
+					/* translators: %s: direct link to the current admin's own user edit screen */
+					__( 'The Access Restriction section does not appear on your own profile screen, by design (it would hint at where you are and are not allowed to connect from). To restrict your own account, or to set up your own BASIC authentication ID and password, use this direct link to your <a href="%s">user edit screen</a> instead.', 'etbs-account-guard' ),
+					esc_url( $own_url )
+				),
+				array( 'a' => array( 'href' => true ) )
+			);
+			?>
+		</p>
+		<?php
 	}
 
 	/**
@@ -974,7 +1192,7 @@ class ACGD_Settings {
 			?>
 		</p>
 		<p><?php esc_html_e( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead.', 'etbs-account-guard' ); ?></p>
-		<p><?php esc_html_e( 'BASIC authentication will be added by a later update; only "No restriction" and "IP restriction" can be chosen here for now.', 'etbs-account-guard' ); ?></p>
+		<p><?php esc_html_e( 'BASIC authentication requires every affected user to set up their own ID and password first, on their user edit screen; a role cannot be switched to it as a shortcut around that.', 'etbs-account-guard' ); ?></p>
 		<?php
 	}
 
@@ -1018,6 +1236,7 @@ class ACGD_Settings {
 								<select id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name, such as Editor */ __( 'Mode for %s', 'etbs-account-guard' ), $role_label ) ); ?>">
 									<option value="none" <?php selected( 'none', $mode ); ?>><?php esc_html_e( 'No restriction', 'etbs-account-guard' ); ?></option>
 									<option value="ip" <?php selected( 'ip', $mode ); ?>><?php esc_html_e( 'IP restriction', 'etbs-account-guard' ); ?></option>
+									<option value="basic" <?php selected( 'basic', $mode ); ?>><?php esc_html_e( 'BASIC authentication', 'etbs-account-guard' ); ?></option>
 								</select>
 							<?php endif; ?>
 						</td>
@@ -1257,7 +1476,7 @@ class ACGD_Settings {
 	/**
 	 * Describes one denial log context in words. / 拒否の記録の場面を文字で表す。
 	 *
-	 * @param string $context One of 'login', 'session' or 'rest'. / 'login'・'session'・'rest' のいずれか。
+	 * @param string $context One of 'login', 'session', 'rest' or 'basic'. / 'login'・'session'・'rest'・'basic' のいずれか。
 	 * @return string Description, not escaped. / 説明（未エスケープ）。
 	 */
 	private static function describe_denial_context( $context ) {
@@ -1268,6 +1487,8 @@ class ACGD_Settings {
 				return __( 'After login', 'etbs-account-guard' );
 			case 'rest':
 				return __( 'REST API', 'etbs-account-guard' );
+			case 'basic':
+				return __( 'BASIC authentication', 'etbs-account-guard' );
 			default:
 				return $context;
 		}

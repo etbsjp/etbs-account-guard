@@ -33,9 +33,20 @@ On the Access Restriction tab of Settings > ETBS Account Guard, you can require 
 * **On every later request** (the admin screens, admin-ajax.php, admin-post.php, the front end and the REST API) – a restricted account connecting from a disallowed address has only that one session discarded; the request continues as if signed out. Nothing is blocked with an error page, so public pages and forms that do not require sign-in keep working normally.
 * **Application passwords** are turned off for a restricted user, checked again on every REST API request.
 * The IP list combines one site-wide list with any addresses added just for one user. Each line is a single IPv4 or IPv6 address or a range in CIDR notation; text after `#` is a note. Only the address the server itself sees for the connection (`REMOTE_ADDR`) is used; headers such as `X-Forwarded-For` are never read, since a visitor can set those themselves.
-* Saving the Access Restriction tab, or a user's own restriction on their user edit screen, is refused (with an explanation) if it would leave no unrestricted administrator (or other user who can manage options), or if it would lock out the very access you are saving from.
+* Saving the Access Restriction tab, or a user's own restriction on their user edit screen, is refused (with an explanation) if it would leave no unrestricted administrator (or other user who can manage options), if it would lock out the very access you are saving from, or (for BASIC authentication, see below) if a user who would end up in that mode has not set their own credentials yet.
 * The last 100 denials are listed on the Denial Log tab.
 * If Access Restriction ever malfunctions, it turns itself off and shows a warning on the Access Restriction tab and the dashboard widget, rather than locking anyone out by mistake.
+
+= Access Restriction (BASIC authentication) =
+
+BASIC authentication is a third mode, alongside "no restriction" and "IP restriction", for a role or a specific user. It asks for a separate username and password (not the WordPress login) with a native browser sign-in prompt, on top of your normal WordPress login.
+
+* **Credentials** – Each user has their own BASIC authentication ID and password, set on their user edit screen. The ID must be unique on the site; the password is never shown again once saved.
+* **Confirmation screen** – Once signed in, a BASIC-mode user who has not yet supplied the BASIC credentials for this browser session is sent to a screen that triggers the browser's own username/password prompt (not a custom login form). Answering it correctly returns them to the admin page they were trying to reach.
+* **The WordPress session is kept** – Unlike IP restriction, a missing or wrong BASIC credential only makes that one request anonymous; it does not sign the user out.
+* **Setting up your own account** – The Access Restriction section does not appear on your own profile screen (by design; see "Known limitations" of the Login Name Protection section above for the general principle). The Access Restriction tab has a direct link to your own user edit screen for this. Before saving BASIC authentication mode for yourself, click "Verify" to confirm your new ID and password through a real sign-in prompt.
+* **Receive diagnosis** – Some server setups do not pass the BASIC authentication header through to WordPress, or already use BASIC authentication for the whole site at the server level. The Access Restriction tab has a diagnosis to check this; BASIC authentication mode cannot be turned on until it succeeds. A `.htaccess` snippet is shown for servers that need it, for you to review and add yourself — this plugin never edits `.htaccess` automatically.
+* **HTTPS is recommended** – BASIC authentication sends the username and password with every request. A warning is shown when the site is not using HTTPS, but saving is still allowed.
 
 = Emergency switch =
 
@@ -45,8 +56,6 @@ If Access Restriction ever locks everyone out, add `define( 'ACGD_DISABLE_RESTRI
 
 Two-factor authentication, login attempt limits, CAPTCHA and firewalls are not included. Use a dedicated security plugin for them. The `?author=` redirect and the login messages overlap with some of those plugins; having both does no harm.
 
-BASIC authentication as a third restriction mode (alongside "no restriction" and "IP restriction") is planned for a later update; it cannot be chosen yet.
-
 = Known limitations =
 
 * The lost password form of WooCommerce My Account shows its own messages and is not covered. The WooCommerce login form is covered.
@@ -54,7 +63,7 @@ BASIC authentication as a third restriction mode (alongside "no restriction" and
 * If you also use SiteGuard WP Plugin, keep its "Same Login Error Message" setting turned on (it is on by default on a single site). When it is off, the CAPTCHA error message of SiteGuard appears only for existing accounts, and separately, only for a restricted account's own IP restriction. This is how SiteGuard itself behaves, and this plugin cannot change it.
 * On the lost password screen, when the email to an existing account cannot be sent, that error is shown as it is, so that problems with sending email on your site are noticed. This error, and the difference in response time between sending an email and not sending one, remain.
 * On the login screen, WordPress checks the password only when the account exists, so the response time can differ between an existing account and an unknown one. Like the difference in response time on the lost password screen, this is not addressed yet.
-* BASIC authentication is not available yet; only "No restriction" and "IP restriction" can be chosen.
+* Whether the BASIC authentication confirmation screen (the browser's native sign-in prompt) can be shown on a device that goes through a corporate remote browser isolation service is untested; check this yourself before relying on it at such a site.
 
 == Installation ==
 
@@ -74,11 +83,12 @@ No. Each item returns to the behavior of WordPress itself when it is turned off.
 
 = What is removed when I delete the plugin? =
 
-The update check state saved by the bundled update checker (rebuilt by the next check) and the denial log of Access Restriction. All settings, including the per-role and per-user Access Restriction modes and IP lists, are kept so that they come back if you install the plugin again.
+The update check state saved by the bundled update checker (rebuilt by the next check), the denial log of Access Restriction, and the saved result of the BASIC authentication receive diagnosis (rebuilt the next time it is run). All settings, including the per-role and per-user Access Restriction modes, IP lists, and BASIC authentication IDs and password hashes, are kept so that they come back if you install the plugin again.
 
 == Changelog ==
 
 * [ New Feature ] Added Access Restriction, letting a role or a specific user be required to connect from an allowed IP address, with a denial log and an emergency switch to turn it off.
+* [ New Feature ] Added BASIC authentication as a third Access Restriction mode, letting a role or a specific user be required to answer a browser sign-in prompt with a separate username and password, with its own receive diagnosis, a confirmation screen for setting up one's own credentials, and a denial log entry for it.
 
 = 1.0.0 =
 * Initial release.

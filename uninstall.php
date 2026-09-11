@@ -23,11 +23,15 @@
  *   設定した値。上と同じ理由（利用者が選んだ値）で残す。
  * - `acgd_access_mode` and `acgd_user_ips` user meta (1.1.0) … one user's own mode and the IP addresses added
  *   for them, set by the user on that user's edit screen. Values the user set, per user; kept for the same
- *   reason. If BASIC authentication credentials are added in a later update (issue #4), they belong in this
- *   same "values the user set" category.
+ *   reason.
  *   （1.1.0）ユーザーメタ `acgd_access_mode`・`acgd_user_ips`。ユーザー自身のモードと、そのユーザーに
  *   追加した IP アドレス。利用者がそのユーザーの編集画面で設定した、ユーザーごとの値。同じ理由で残す。
- *   将来の更新（issue #4）で BASIC 認証の資格情報を足しても、同じ「利用者が設定した値」に属する。
+ * - `acgd_basic_id` and `acgd_basic_password_hash` user meta (1.1.0, BASIC authentication, issue #4) … one
+ *   user's own BASIC authentication ID and password_hash(), set the same way and for the same reason as the
+ *   two above: values the user set, per user.
+ *   （1.1.0・BASIC 認証・issue #4）ユーザーメタ `acgd_basic_id`・`acgd_basic_password_hash`。
+ *   ユーザー自身の BASIC 認証の ID と password_hash()。上の2つと同じ場所・同じ理由で設定される、
+ *   利用者が設定した値。
  *
  * Deleted / 消すもの（一時状態）:
  * - `external_updates-etbs-account-guard` (site option) … update check state of the bundled
@@ -55,28 +59,43 @@
  *   5.5), cleared automatically once the settings are saved successfully; nothing to keep across a reinstall.
  *   （1.1.0・オプション）アクセス制限の故障の記録（docs/spec.md 5.5）。設定の保存に成功すると自動で消える
  *   一時状態で、入れ直す間に残す意味が無い。
- * - Two transients exist in 1.1.0 that are not deleted here, on purpose: the "resubmit" transients
+ * - `acgd_basic_diagnosis` (1.1.0, BASIC authentication, issue #4, option) … the saved result of the receive
+ *   diagnosis (docs/spec.md 5.3): whether the server passes the BASIC authentication header through to PHP.
+ *   Rebuilt the next time the diagnosis is run, and documents nothing the user configured, only what this
+ *   plugin itself measured; nothing to keep across a reinstall.
+ *   （1.1.0・BASIC 認証・issue #4・オプション）保存済みの受信診断（docs/spec.md 5.3）の結果。
+ *   サーバーが BASIC 認証のヘッダーを PHP まで通すかどうか。次に診断を実行すれば作り直され、
+ *   利用者が設定したものではなくこのプラグイン自身が測った結果のため、入れ直す間に残す意味が無い。
+ * - Several transients exist in 1.1.0 that are not deleted here, on purpose: the "resubmit" transients
  *   (ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' and
  *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'), which briefly hold a rejected
  *   Access Restriction tab or user-edit-screen submission so the form can be redisplayed with what was
- *   typed (see the classes for why). Each key ends with the submitting admin's user ID (the user-edit one
- *   also the edited user's ID), so there is no single fixed key a delete_transient() call here could
- *   remove; and each one is already deleted the moment it is read (at most one render), with a 60-second
- *   TTL (RESUBMIT_TTL) as a backstop, so any left over from an interrupted request are gone within a
- *   minute regardless of uninstalling. This is exactly the temporary state that policy A already covers
- *   (3.6); it needs no explicit action here. 1.0.0 in isolation has no tables or cron events of its own,
- *   and 1.1.0 adds neither of those either (transients only, as just described).
- *   1.1.0 には、ここでは意図的に消していない transient が2つある。「再表示用」の transient
+ *   typed (see the classes for why); and, for BASIC authentication (issue #4), the "Verify" round trip's own
+ *   transients (ACGD_Basic_Auth::PENDING_TRANSIENT_PREFIX 'acgd_basic_pending_' and
+ *   ::VERIFIED_TRANSIENT_PREFIX 'acgd_basic_verified_', both keyed by the confirming admin's user ID) and
+ *   the receive diagnosis's one-time probe token (ACGD_Basic_Auth::DIAG_TOKEN_PREFIX 'acgd_basic_diag_token_',
+ *   keyed by a random value generated for that one loopback request). None of these has a single fixed key a
+ *   delete_transient() call here could remove; each is already deleted the moment it is used (at most once),
+ *   with a short TTL as a backstop (RESUBMIT_TTL / ACGD_Basic_Auth::VERIFY_TTL: 5 minutes; the diagnosis
+ *   token: 60 seconds), so any left over from an interrupted request are gone on their own regardless of
+ *   uninstalling. This is exactly the temporary state that policy A already covers (3.6); it needs no
+ *   explicit action here. 1.0.0 in isolation has no tables or cron events of its own, and 1.1.0 adds neither
+ *   of those either (transients and the two options above only, as just described).
+ *   1.1.0 には、ここでは意図的に消していない transient が複数ある。「再表示用」の transient
  *   （ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' と
  *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'）で、「アクセス制限」タブや
  *   ユーザー編集画面の送信が拒否されたとき、入力した内容でフォームを出し直すために一時的に持つ
- *   （理由は各クラスを参照）。キーの末尾は送信した管理者のユーザー ID（ユーザー編集画面版は編集対象の
- *   ユーザー ID も含む）で、固定のキーが無いため、ここで delete_transient() を1回呼んで消せる形ではない。
- *   また、それぞれ読まれた時点（最大でも1回の描画）で既に消えており、保険として TTL（RESUBMIT_TTL）を
- *   60秒にしているため、途中で終わったリクエストの残りがあっても、アンインストールの有無にかかわらず
- *   1分以内に消える。これはまさに案A（3.6）がすでに扱う一時状態であり、ここでの明示的な対応は不要。
+ *   （理由は各クラスを参照）。加えて、BASIC 認証（issue #4）の「確認」の往復自身が持つ transient
+ *   （ACGD_Basic_Auth::PENDING_TRANSIENT_PREFIX 'acgd_basic_pending_' と
+ *   ::VERIFIED_TRANSIENT_PREFIX 'acgd_basic_verified_'。どちらも確認した管理者のユーザー ID で分ける）と、
+ *   受信の診断の使い捨てトークン（ACGD_Basic_Auth::DIAG_TOKEN_PREFIX 'acgd_basic_diag_token_'。
+ *   その1回のループバックリクエストのために生成した乱数で分ける）。どれも固定のキーが無いため、
+ *   ここで delete_transient() を1回呼んで消せる形ではない。また、それぞれ使われた時点（最大でも1回）で
+ *   既に消えており、保険として短い TTL（RESUBMIT_TTL・ACGD_Basic_Auth::VERIFY_TTL は5分、診断トークンは
+ *   60秒）を持つため、途中で終わったリクエストの残りがあっても、アンインストールの有無にかかわらず
+ *   自然に消える。これはまさに案A（3.6）がすでに扱う一時状態であり、ここでの明示的な対応は不要。
  *   1.0.0 のこのプラグイン自身は、独自のテーブル・cron を持たない。1.1.0 でもそれらは増えない
- *   （増えるのは上記の transient だけ）。
+ *   （増えるのは上記の transient と2つのオプションだけ）。
  *
  * @package etbs-account-guard
  */
@@ -94,3 +113,7 @@ delete_site_transient( 'puc_manual_check_errors-etbs-account-guard' );
 // アクセス制限自身の一時状態（1.1.0。上の docblock を参照）。
 delete_option( 'acgd_access_denial_log' );
 delete_option( 'acgd_access_restriction_fault' );
+
+// BASIC authentication's own temporary state (1.1.0, issue #4); see the docblock above.
+// BASIC 認証自身の一時状態（1.1.0・issue #4。上の docblock を参照）。
+delete_option( 'acgd_basic_diagnosis' );

@@ -5,16 +5,35 @@
  * アクセス制限のユーザーごとの画面（docs/spec.md 5.6）——ユーザー編集画面の区画と、
  * ユーザー一覧の「アクセス制限」列。
  *
- * Both are limited to manage_options, and the section is never shown on one's own profile: showing it there
- * would tell a user where they are and are not allowed to connect from, which is exactly the hint
- * docs/spec.md 5.6 says to withhold ("許可されている場所の手がかりを与えない"). Hooking edit_user_profile
- * (fired only when viewing someone else's profile) rather than show_user_profile (one's own) enforces this
- * structurally, not just with a capability check.
- * どちらも manage_options に限る。区画は本人のプロフィールには出さない。出してしまうと、
- * 自分がどこから接続できる・できないかの手がかりを本人に与えてしまう（docs/spec.md 5.6
- * 「許可されている場所の手がかりを与えない」）。show_user_profile（本人用）ではなく
- * edit_user_profile（他人のプロフィールを開いたときだけ発火）に掛けることで、権限チェックだけでなく
- * 構造的にもこれを守る。
+ * Both are limited to manage_options. The section relies on WordPress core's own IS_PROFILE_PAGE split
+ * (wp-admin/profile.php sets it true before loading wp-admin/user-edit.php; wp-admin/user-edit.php leaves it
+ * false), which fires show_user_profile only for profile.php and edit_user_profile for every other route to
+ * this screen, REGARDLESS of whether the target user happens to be the one currently logged in. Ordinary
+ * navigation (the toolbar's "Edit My Profile", one's own row in the Users list) always goes through
+ * profile.php, so hooking edit_user_profile keeps docs/spec.md 5.6 ("本人のプロフィール画面：何も出さない")
+ * true in practice: this section shows nothing there, withholding the hint of where one is and is not
+ * allowed to connect from. The one deliberate exception is a raw link straight to
+ * wp-admin/user-edit.php?user_id=<own ID> (never through get_edit_profile_url(), which always forces
+ * profile.php for one's own ID), placed on the Access Restriction settings tab so an admin has a way to set
+ * up their own BASIC authentication credentials (docs/spec.md 5.3, "自分をBASICモードにするときは、先に
+ * 自分の資格情報を設定し..."; see ACGD_Settings::render_own_account_notice() and the decision record on
+ * issue #4). Reaching this screen that way still fires edit_user_profile as core intends for a non-profile.php
+ * route, so save_fields() below now handles a target that is the current admin, instead of refusing to run
+ * at all as it once did.
+ * どちらも manage_options に限る。この区画は本体自身の IS_PROFILE_PAGE の分岐（wp-admin/profile.php が
+ * true にしてから wp-admin/user-edit.php を読み込む。wp-admin/user-edit.php では false のまま）に乗っている。
+ * これは profile.php のときだけ show_user_profile を、それ以外の経路では常に edit_user_profile を発火させる
+ * ——対象ユーザーが現在ログイン中の本人かどうかとは無関係に。通常の導線（ツールバーの「プロフィールを編集」、
+ * ユーザー一覧の自分の行）は必ず profile.php を経由するため、edit_user_profile にフックすることで
+ * docs/spec.md 5.6「本人のプロフィール画面：何も出さない」は実質的に成り立つ：この区画はそこには何も出さず、
+ * 自分がどこから接続できる・できないかの手がかりを与えない。唯一の意図的な例外が、
+ * wp-admin/user-edit.php?user_id=<自分のID> への生のリンク（自分の ID には常に profile.php を強制する
+ * get_edit_profile_url() は経由しない）で、「アクセス制限」設定タブに置く。管理者が自分自身の BASIC 認証
+ * 資格情報を設定する手段を用意するため（docs/spec.md 5.3「自分をBASICモードにするときは、先に自分の
+ * 資格情報を設定し...」。ACGD_Settings::render_own_account_notice() と issue #4 の decision record を参照）。
+ * この経路で到達しても、コアの意図どおり非 profile.php の経路として edit_user_profile が発火するので、
+ * 下の save_fields() は「対象が今の管理者自身」というケースを、かつては即座に拒否していたのをやめ、
+ * 実際に扱うようにしている。
  *
  * @package etbs-account-guard
  */
@@ -99,8 +118,10 @@ class ACGD_User_Access {
 	 * @return void
 	 */
 	public static function init() {
-		// edit_user_profile only: never fires for one's own profile. See the class docblock.
-		// edit_user_profile のみ：本人のプロフィールでは発火しない（クラスの docblock を参照）。
+		// edit_user_profile only: fires for one's own account too when reached other than through
+		// profile.php. See the class docblock for why that keeps docs/spec.md 5.6 true in practice.
+		// edit_user_profile のみ：profile.php 以外の経路で来た場合は自分自身の口座でも発火する。
+		// それでも docs/spec.md 5.6 が実質的に成り立つ理由はクラスの docblock を参照。
 		add_action( 'edit_user_profile', array( __CLASS__, 'render_fields' ) );
 		add_action( 'edit_user_profile_update', array( __CLASS__, 'save_fields' ) );
 		add_action( 'user_profile_update_errors', array( __CLASS__, 'append_pending_error' ) );
@@ -122,7 +143,8 @@ class ACGD_User_Access {
 	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
 	 * 保存時のチェックに落ちても、管理者が入力したばかりの内容まで失われないようにするため。
 	 *
-	 * @param WP_User $user User being edited (never the current user; see the class docblock). / 編集対象のユーザー（現在のユーザー自身にはならない。クラスの docblock を参照）。
+	 * @param WP_User $user User being edited. Usually someone else; can be the current admin themselves when
+	 *                       reached through the direct user-edit.php link (see the class docblock). / 編集対象のユーザー。通常は他人。クラスの docblock にある直接リンク経由なら現在の管理者自身にもなる。
 	 * @return void
 	 */
 	public static function render_fields( $user ) {
@@ -130,11 +152,16 @@ class ACGD_User_Access {
 			return;
 		}
 
+		$is_self  = ( get_current_user_id() === (int) $user->ID );
 		$resubmit = self::get_resubmit_data( $user->ID );
 		$mode     = ( $resubmit && isset( $resubmit['mode'] ) ) ? $resubmit['mode'] : ACGD_Access_Restriction::get_user_mode( $user->ID );
 		$ips      = ( $resubmit && isset( $resubmit['ips'] ) ) ? $resubmit['ips'] : ACGD_Access_Restriction::get_user_ip_text( $user->ID );
+		$basic_id = ( $resubmit && isset( $resubmit['basic_id'] ) ) ? $resubmit['basic_id'] : ACGD_Access_Restriction::get_basic_id( $user->ID );
 		?>
 		<h2 id="<?php echo esc_attr( self::SECTION_ID ); ?>"><?php esc_html_e( 'Access Restriction', 'etbs-account-guard' ); ?></h2>
+		<?php if ( $is_self ) : ?>
+			<?php self::render_verify_notice(); ?>
+		<?php endif; ?>
 		<table class="form-table" role="presentation">
 			<tr>
 				<th scope="row"><label for="acgd-user-mode"><?php esc_html_e( 'Mode for this user', 'etbs-account-guard' ); ?></label></th>
@@ -143,8 +170,8 @@ class ACGD_User_Access {
 						<option value="follow" <?php selected( 'follow', $mode ); ?>><?php esc_html_e( 'Follow the role setting', 'etbs-account-guard' ); ?></option>
 						<option value="none" <?php selected( 'none', $mode ); ?>><?php esc_html_e( 'No restriction', 'etbs-account-guard' ); ?></option>
 						<option value="ip" <?php selected( 'ip', $mode ); ?>><?php esc_html_e( 'IP restriction', 'etbs-account-guard' ); ?></option>
+						<option value="basic" <?php selected( 'basic', $mode ); ?>><?php esc_html_e( 'BASIC authentication', 'etbs-account-guard' ); ?></option>
 					</select>
-					<p class="description"><?php esc_html_e( 'BASIC authentication will be added by a later update and cannot be chosen yet.', 'etbs-account-guard' ); ?></p>
 				</td>
 			</tr>
 			<tr>
@@ -170,19 +197,105 @@ class ACGD_User_Access {
 					</p>
 				</td>
 			</tr>
+			<tr>
+				<th scope="row"><label for="acgd-basic-id"><?php esc_html_e( 'BASIC authentication ID', 'etbs-account-guard' ); ?></label></th>
+				<td>
+					<input type="text" name="acgd_basic_id" id="acgd-basic-id" class="regular-text" autocomplete="off" value="<?php echo esc_attr( $basic_id ); ?>" />
+					<p class="description"><?php esc_html_e( 'Not the WordPress login name. Must be different from every other user\'s BASIC authentication ID on this site.', 'etbs-account-guard' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="acgd-basic-password"><?php esc_html_e( 'BASIC authentication password', 'etbs-account-guard' ); ?></label></th>
+				<td>
+					<input type="password" name="acgd_basic_password" id="acgd-basic-password" class="regular-text" autocomplete="new-password" value="" />
+					<p class="description">
+						<?php
+						if ( ACGD_Access_Restriction::has_basic_credentials( $user->ID ) ) {
+							esc_html_e( 'A password is already saved and is never shown again. Leave this blank to keep it, or enter a new one to replace it.', 'etbs-account-guard' );
+						} else {
+							esc_html_e( 'Required before this user can be put in BASIC authentication mode.', 'etbs-account-guard' );
+						}
+						?>
+					</p>
+				</td>
+			</tr>
+			<?php if ( $is_self ) : ?>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Verify your own BASIC authentication', 'etbs-account-guard' ); ?></th>
+					<td>
+						<input type="hidden" name="acgd_user_id" value="<?php echo esc_attr( $user->ID ); ?>" />
+						<?php
+						/*
+						 * formaction/formmethod post this same form's fields to a different URL (the "Verify"
+						 * admin-post handler) instead of user-edit.php, without duplicating every field into a
+						 * second <form> (decision record on issue #4). The nonce printed at the end of this
+						 * section is shared with that handler.
+						 * formaction/formmethod で、この同じフォームの内容を user-edit.php ではなく別の URL
+						 * （「確認」の admin-post ハンドラ）へ送る。フィールドを2つ目の <form> に複製せずに済む
+						 * （issue #4 の decision record）。この区画の末尾で出す nonce をそのハンドラと共有する。
+						 */
+						?>
+						<button type="submit" class="button" formaction="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" formmethod="post" name="action" value="<?php echo esc_attr( ACGD_Basic_Auth::VERIFY_REQUEST_ACTION ); ?>">
+							<?php esc_html_e( 'Verify', 'etbs-account-guard' ); ?>
+						</button>
+						<p class="description">
+							<?php esc_html_e( 'Before saving BASIC authentication mode for yourself, set the ID and password above and click Verify. This opens a real sign-in prompt so you can confirm they work; you will be returned here afterward. Saving is refused for yourself without a fresh verification.', 'etbs-account-guard' ); ?>
+						</p>
+					</td>
+				</tr>
+			<?php endif; ?>
 		</table>
 		<?php
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 	}
 
 	/**
+	 * Prints a notice reflecting the outcome of the "Verify" round trip (docs/spec.md 5.3), read from the
+	 * acgd_basic_verify query flag that ACGD_Basic_Auth's redirects attach. Shown only on one's own screen
+	 * (render_fields() only calls this when $is_self), since that flag is only ever meaningful there.
+	 * 「確認」の往復（docs/spec.md 5.3）の結果を、ACGD_Basic_Auth のリダイレクトが付ける acgd_basic_verify
+	 * クエリの目印から読んで出す。自分自身の画面のときだけ表示する（render_fields() が $is_self のときにしか
+	 * 呼ばないため）。この目印が意味を持つのはそこだけであるため。
+	 *
+	 * @return void
+	 */
+	private static function render_verify_notice() {
+		// Display only; nothing is read from a form here, and the value only selects which fixed sentence to
+		// print. 表示のみ。ここでフォームの内容は読まず、値は固定文言の出し分けにしか使わない。
+		$flag = isset( $_GET['acgd_basic_verify'] ) ? sanitize_key( wp_unslash( $_GET['acgd_basic_verify'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
+
+		$messages = array(
+			'ok'         => array( 'success', __( 'Verified. Your BASIC authentication ID and password work. Click "Update User" below to save.', 'etbs-account-guard' ) ),
+			'expired'    => array( 'warning', __( 'The verification has expired. Enter the ID and password again and click Verify.', 'etbs-account-guard' ) ),
+			'not_self'   => array( 'error', __( 'The "Verify" button only works for your own account.', 'etbs-account-guard' ) ),
+			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password, and set the mode to "BASIC authentication" before verifying.', 'etbs-account-guard' ) ),
+		);
+		if ( ! isset( $messages[ $flag ] ) ) {
+			return;
+		}
+
+		list( $type, $text ) = $messages[ $flag ];
+		?>
+		<div class="notice inline notice-<?php echo esc_attr( $type ); ?>"><p><?php echo esc_html( $text ); ?></p></div>
+		<?php
+	}
+
+	/**
 	 * Validates and saves the Access Restriction fields of the user edit screen.
 	 * ユーザー編集画面の「アクセス制限」の項目を検証し、保存する。
 	 *
-	 * On an invalid IP list, or a save that would leave no unrestricted manage_options user (save-time check
-	 * 1, docs/spec.md 5.1), nothing is written and an error is queued for append_pending_error() to attach.
-	 * IP 一覧が不正なとき、または保存後に制限なしの manage_options ユーザーが1人もいなくなるとき
-	 * （保存時のチェック1、docs/spec.md 5.1）は、何も書き込まず append_pending_error() が使うエラーを積む。
+	 * On an invalid IP list, a save that would leave no unrestricted manage_options user (save-time check 1,
+	 * docs/spec.md 5.1), a BASIC ID already used by someone else, a BASIC mode with no credentials, BASIC
+	 * mode blocked by the receive diagnosis (docs/spec.md 5.3), or — when the target is the current admin's
+	 * own account — a BASIC setup that has not just been confirmed through the "Verify" round trip (save-time
+	 * check 2, docs/spec.md 5.1 and 5.3), nothing is written and an error is queued for append_pending_error()
+	 * to attach.
+	 * IP 一覧が不正なとき、保存後に制限なしの manage_options ユーザーが1人もいなくなるとき（保存時の
+	 * チェック1、docs/spec.md 5.1）、BASIC の ID が既に他の人に使われているとき、BASIC モードなのに
+	 * 資格情報が無いとき、受信の診断により BASIC モードが止められているとき（docs/spec.md 5.3）、
+	 * または対象が今の管理者自身のときに「確認」の往復をたった今通していない BASIC 設定
+	 * （保存時のチェック2、docs/spec.md 5.1・5.3）のいずれかに当たれば、何も書き込まず
+	 * append_pending_error() が使うエラーを積む。
 	 *
 	 * @param int $user_id User being saved. / 保存対象のユーザー。
 	 * @return void
@@ -191,25 +304,34 @@ class ACGD_User_Access {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		// Defense in depth: the fields are never shown for one's own profile either (see the class docblock).
-		// 念のための二重の防御：この区画は本人のプロフィールにはそもそも出さない（クラスの docblock を参照）。
-		if ( get_current_user_id() === (int) $user_id ) {
-			return;
-		}
 		if ( ! isset( $_POST[ self::NONCE_NAME ] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_NAME ] ) ), self::NONCE_ACTION ) ) {
 			return;
 		}
 
+		$user_id = (int) $user_id;
+		$is_self = ( get_current_user_id() === $user_id );
+
 		$mode = isset( $_POST['acgd_user_mode'] ) ? sanitize_key( wp_unslash( $_POST['acgd_user_mode'] ) ) : 'follow';
-		if ( ! in_array( $mode, array( 'follow', 'none', 'ip' ), true ) ) {
-			// 'basic' is not offered by this screen yet (see render_fields()); anything else falls back to
-			// the safe default. 'basic' はこの画面ではまだ選べない（render_fields() を参照）。それ以外は安全な既定値に倒す。
-			$mode = 'follow';
+		if ( ! in_array( $mode, array( 'follow', 'none', 'ip', 'basic' ), true ) ) {
+			$mode = 'follow'; // Unknown value: fall back to the safe default. / 未知の値は安全な既定値に倒す。
 		}
 
-		$ip_text   = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
-		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
+		$ip_text      = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
+		$basic_id     = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+		$basic_pass   = isset( $_POST['acgd_basic_password'] ) ? (string) wp_unslash( $_POST['acgd_basic_password'] ) : '';
+		$existing_id  = ACGD_Access_Restriction::get_basic_id( $user_id );
+		$had_hash     = ACGD_Access_Restriction::has_basic_credentials( $user_id );
+		// A blank BASIC ID field means "no BASIC identity at all" only when nothing was ever saved; once an
+		// ID exists, the field is always redisplayed filled in (it is not a secret; see render_fields()), so
+		// leaving it blank on a resubmit can only mean the admin actually cleared it.
+		// BASIC ID 欄が空なのは「BASIC の身元自体が無い」ことを意味するのは、一度も保存していないときだけ。
+		// 一度 ID が存在すれば、この欄は常に埋めて出し直す（秘密ではないため。render_fields() を参照）ので、
+		// 出し直し後に空なのは、管理者が実際に消した場合しかありえない。
+		$final_id     = ( '' === $basic_id && '' !== $existing_id ) ? $existing_id : $basic_id;
+		$final_hash   = null; // null = leave the stored hash untouched. / null = 保存済みのハッシュを変えない。
+		$new_password = ( '' !== $basic_pass );
 
+		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
 		if ( $validated['invalid'] ) {
 			// The profile screen prints WP_Error messages unescaped, and this line is the admin's own raw
 			// submitted input; escape it here rather than trust it.
@@ -221,11 +343,11 @@ class ACGD_User_Access {
 				(int) key( $validated['invalid'] ),
 				esc_html( reset( $validated['invalid'] ) )
 			);
-			self::stash_resubmit( $user_id, $mode, $ip_text );
+			self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
 			return;
 		}
 
-		if ( ACGD_Access_Restriction::count_unrestricted_admins( ACGD_Access_Restriction::get_role_modes(), array( (int) $user_id => $mode ) ) < 1 ) {
+		if ( ACGD_Access_Restriction::count_unrestricted_admins( ACGD_Access_Restriction::get_role_modes(), array( $user_id => $mode ) ) < 1 ) {
 			// Says where to go, not just what is wrong (UX review, matching the same message on the Access
 			// Restriction settings tab), and links to it (UX review: a place that is named should be reachable).
 			// wp_kses() (not esc_html__()) is used because the message now carries a real <a> link; the profile
@@ -242,12 +364,83 @@ class ACGD_User_Access {
 				),
 				array( 'a' => array( 'href' => true ) )
 			);
-			self::stash_resubmit( $user_id, $mode, $ip_text );
+			self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
 			return;
+		}
+
+		if ( 'basic' === $mode ) {
+			if ( ! ACGD_Basic_Auth::diagnosis_allows_basic_mode() ) {
+				self::$pending_error = wp_kses(
+					sprintf(
+						/* translators: %s: URL of the Access Restriction tab of the settings screen */
+						__( 'BASIC authentication mode cannot be turned on because the receive diagnosis on the <a href="%s">Access Restriction settings tab</a> has not succeeded. Run it there first. Not saved.', 'etbs-account-guard' ),
+						esc_url( ACGD_Settings::get_page_url( 'access' ) )
+					),
+					array( 'a' => array( 'href' => true ) )
+				);
+				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
+				return;
+			}
+			if ( '' === $final_id || ( ! $had_hash && ! $new_password ) ) {
+				self::$pending_error = esc_html__( 'Enter both a BASIC authentication ID and a password before choosing "BASIC authentication" mode. Not saved.', 'etbs-account-guard' );
+				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
+				return;
+			}
+			if ( ACGD_Access_Restriction::basic_id_taken_by_other( $final_id, $user_id ) ) {
+				self::$pending_error = esc_html__( 'This BASIC authentication ID is already used by another user on this site. Choose a different one. Not saved.', 'etbs-account-guard' );
+				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
+				return;
+			}
+
+			// Save-time check 2 for BASIC (docs/spec.md 5.1, 5.3): only the current admin's own access is
+			// ever at stake here (nobody else's save can change the current request's own identity), and only
+			// when the ID or password is actually changing, or BASIC mode was not already active for them —
+			// if it already was and nothing about the credentials changed, the admin necessarily reached this
+			// screen carrying valid BASIC credentials already (see ACGD_Access_Restriction::
+			// check_access_on_request()), so there is nothing new to re-confirm.
+			// BASIC の保存時チェック2（docs/spec.md 5.1・5.3）：ここで問題になり得るのは今の管理者自身の
+			// アクセスだけ（他人の保存が今のリクエストの本人性を変えることは無い）。しかも ID・パスワードが
+			// 実際に変わる、またはこれまで BASIC モードでなかったときだけ必要——既に BASIC モードで
+			// 資格情報も変えないなら、この画面に来られている時点で既に正しい BASIC 資格情報を伴っている
+			// はず（ACGD_Access_Restriction::check_access_on_request() を参照）なので、改めて確認する
+			// ものが無い。
+			$credentials_changing = $new_password || ( $final_id !== $existing_id );
+			$prior_mode            = ACGD_Access_Restriction::get_user_mode( $user_id );
+			if ( $is_self && ( 'basic' !== $prior_mode || $credentials_changing ) ) {
+				$to_confirm = $new_password ? $basic_pass : ''; // A confirmation can only ever cover a password actually typed just now. / 確認できるのは、たった今実際に入力したパスワードだけ。
+				if ( ! $new_password || ! ACGD_Basic_Auth::consume_verification( $user_id, $final_id, $to_confirm ) ) {
+					self::$pending_error = esc_html__( 'Click "Verify" and confirm your new BASIC authentication ID and password before saving them for your own account. Not saved.', 'etbs-account-guard' );
+					self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
+					return;
+				}
+			}
+
+			if ( $new_password ) {
+				$final_hash = password_hash( $basic_pass, PASSWORD_DEFAULT ); // docs/spec.md 5.3: password_hash(), verified with password_verify(). / docs/spec.md 5.3：password_hash() で保存し、password_verify() で照合する。
+			}
+		} else {
+			// Not saving in BASIC mode this time: check3 (docs/spec.md 5.1) is about who ends up in BASIC
+			// mode, so an ID typed here without choosing BASIC mode is not yet a commitment. Still validate it
+			// for uniqueness if given, so a value the admin is preparing does not silently collide later.
+			// 今回は BASIC モードで保存しない：チェック3（docs/spec.md 5.1）が問われるのは実際に BASIC
+			// モードになる人だけなので、BASIC を選ばずに ID だけ入力してもまだ確定ではない。それでも、
+			// 入力された ID は一意性だけ検証しておき、後で静かに衝突しないようにする。
+			if ( '' !== $basic_id && ACGD_Access_Restriction::basic_id_taken_by_other( $basic_id, $user_id ) ) {
+				self::$pending_error = esc_html__( 'This BASIC authentication ID is already used by another user on this site. Choose a different one. Not saved.', 'etbs-account-guard' );
+				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
+				return;
+			}
+			if ( $new_password ) {
+				$final_hash = password_hash( $basic_pass, PASSWORD_DEFAULT );
+			}
 		}
 
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_MODE_META, $mode );
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_IPS_META, $ip_text );
+		update_user_meta( $user_id, ACGD_Access_Restriction::USER_BASIC_ID_META, $final_id );
+		if ( null !== $final_hash ) {
+			update_user_meta( $user_id, ACGD_Access_Restriction::USER_BASIC_HASH_META, $final_hash );
+		}
 		ACGD_Access_Restriction::clear_fault();
 		// See ACGD_Settings::sanitize_access_restriction_settings() for why this is only ever a defensive
 		// no-op in practice, and why it is kept anyway.
@@ -269,22 +462,29 @@ class ACGD_User_Access {
 	}
 
 	/**
-	 * Stashes a rejected submission of this screen's fields, so the profile page can be redisplayed with it.
-	 * See RESUBMIT_TRANSIENT_PREFIX for why a transient, rather than writing straight to user meta, is used.
-	 * この画面で拒否された送信内容を、プロフィール画面の出し直しに使えるよう保存する。
-	 * なぜユーザーメタへ直接書くのではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
+	 * Stashes a rejected (or not-yet-verified) submission of this screen's fields, so the profile page can be
+	 * redisplayed with it. See RESUBMIT_TRANSIENT_PREFIX for why a transient, rather than writing straight to
+	 * user meta, is used. Public: ACGD_Basic_Auth::handle_verify_request() also stashes this screen's fields
+	 * before sending the admin off to confirm their own BASIC credentials, so they come back after the
+	 * confirmation round trip instead of an empty form.
+	 * この画面で拒否された（またはまだ確認していない）送信内容を、プロフィール画面の出し直しに使えるよう
+	 * 保存する。なぜユーザーメタへ直接書くのではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
+	 * public にしているのは、ACGD_Basic_Auth::handle_verify_request() も、管理者を自分の BASIC 資格情報の
+	 * 確認へ送り出す前にこの画面の内容を保存し、確認の往復の後に空のフォームではなく元の内容へ戻すため。
 	 *
 	 * @param int    $target_id Target user being edited. / 編集対象のユーザー。
-	 * @param string $mode      Submitted mode ('follow', 'none' or 'ip'; already validated by save_fields()). / 送信されたモード（'follow'・'none'・'ip'。save_fields() で検証済み）。
+	 * @param string $mode      Submitted mode ('follow', 'none', 'ip' or 'basic'; already validated by the caller). / 送信されたモード（'follow'・'none'・'ip'・'basic'。呼び出し側で検証済み）。
 	 * @param string $ip_text   Raw added-IP text, exactly as submitted (may contain invalid lines). / 送信された生の追加 IP（不正な行を含みうる）。
+	 * @param string $basic_id  Submitted BASIC authentication ID (never the password; see the class docblock notes on render_fields()). / 送信された BASIC 認証の ID（パスワードは含めない。render_fields() の説明を参照）。
 	 * @return void
 	 */
-	private static function stash_resubmit( $target_id, $mode, $ip_text ) {
+	public static function stash_resubmit( $target_id, $mode, $ip_text, $basic_id = '' ) {
 		set_transient(
 			self::resubmit_key( get_current_user_id(), $target_id ),
 			array(
-				'mode' => $mode,
-				'ips'  => $ip_text,
+				'mode'     => $mode,
+				'ips'      => $ip_text,
+				'basic_id' => $basic_id,
 			),
 			self::RESUBMIT_TTL
 		);
@@ -298,8 +498,9 @@ class ACGD_User_Access {
 	 *
 	 * @param int $target_id Target user being edited. / 編集対象のユーザー。
 	 * @return array|null {
-	 *     @type string $mode Mode, as submitted. / 送信されたモード。
-	 *     @type string $ips  Raw added-IP text, as submitted. / 送信された生の追加 IP。
+	 *     @type string $mode     Mode, as submitted. / 送信されたモード。
+	 *     @type string $ips      Raw added-IP text, as submitted. / 送信された生の追加 IP。
+	 *     @type string $basic_id BASIC authentication ID, as submitted. / 送信された BASIC 認証の ID。
 	 * }
 	 */
 	private static function get_resubmit_data( $target_id ) {
