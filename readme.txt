@@ -21,8 +21,8 @@ ETBS Account Guard closes these places. Each one can be turned on or off from Se
 * **Sitemap** – The user sitemap (`wp-sitemap-users-1.xml`) is removed.
 * **Class names** – `comment-author-{name}` on comments by registered users and `author-{name}` on author pages are removed. Class names that contain the user ID are kept.
 * **Author ID links** – `/?author=1` goes to the home page instead of the author page. The admin screens are not affected.
-* **Login errors** – An unknown username and a wrong password show the same message. On the lost password screen, an unknown account leads to the same screen as a registered one, and no email is sent. Errors from other plugins, such as CAPTCHA or login lockout, are shown as they are.
-* **Author pages** (off by default) – Author pages (`/author/{name}/`) return 404. Turn this on only if your theme does not link to them.
+* **Login errors** – An unknown username and a wrong password show the same message. Failed application password (Basic authentication) requests to the REST API get the same error. On the lost password screen, an unknown account leads to the same screen as a registered one, and no email is sent. Errors from other plugins, such as CAPTCHA or login lockout, are shown as they are.
+* **Author pages** (off by default) – Author pages (`/author/{name}/`) return 404 for visitors who are not logged in. Turn this on only if your theme does not link to them. Logged-in users still see author pages, so log out to check this setting.
 * **Public names** – The settings screen lists users whose display name or nickname is the same as their login name, so that you can change them. Nothing is changed automatically.
 
 = What it does not do =
@@ -33,6 +33,8 @@ Two-factor authentication, login attempt limits, CAPTCHA and firewalls are not i
 
 * The lost password form of WooCommerce My Account shows its own messages and is not covered. The WooCommerce login form is covered.
 * Links to author pages that your theme prints still contain the name used in the author page URL.
+* If you also use SiteGuard WP Plugin, keep its "Same Login Error Message" setting turned on (it is on by default on a single site). When it is off, the CAPTCHA error message of SiteGuard appears only for existing accounts. This is how SiteGuard itself behaves, and this plugin cannot change it.
+* On the lost password screen, when the email to an existing account cannot be sent, that error is shown as it is, so that problems with sending email on your site are noticed. This error, and the difference in response time between sending an email and not sending one, remain.
 
 == Installation ==
 
@@ -52,7 +54,7 @@ No. Each item returns to the behavior of WordPress itself when it is turned off.
 
 = What is removed when I delete the plugin? =
 
-Nothing. The settings are kept so that they come back if you install the plugin again.
+Only the update check state saved by the bundled update checker, which is rebuilt by the next check. The settings are kept so that they come back if you install the plugin again.
 
 == Changelog ==
 

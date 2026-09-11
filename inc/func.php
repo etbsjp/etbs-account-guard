@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once __DIR__ . '/class-acgd-invalid-credentials.php';
 require_once __DIR__ . '/class-acgd-login-name.php';
 require_once __DIR__ . '/class-acgd-settings.php';
 
@@ -55,6 +56,7 @@ add_action( 'init', 'acgd_load_textdomain' );
 /* Modules / モジュール
 /*-------------------------------------------*/
 
+ACGD_Invalid_Credentials::init();
 ACGD_Login_Name::init();
 ACGD_Settings::init();
 

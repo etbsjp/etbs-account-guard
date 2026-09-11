@@ -288,6 +288,7 @@ class ACGD_Settings {
 				),
 				'description' => array(
 					esc_html__( 'Turn this on if your theme does not show links to author pages, because those links will lead to a Page not found screen.', 'etbs-account-guard' ),
+					esc_html__( 'While you are logged in, author pages are shown as before, so log out to check this setting.', 'etbs-account-guard' ),
 				),
 			),
 		);

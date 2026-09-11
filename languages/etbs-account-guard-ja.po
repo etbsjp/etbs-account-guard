@@ -128,6 +128,9 @@ msgstr "投稿者ページ (%s) を404 (ページが見つかりません) に�
 msgid "Turn this on if your theme does not show links to author pages, because those links will lead to a Page not found screen."
 msgstr "オンにすると投稿者ページへのリンクが「ページが見つかりません」の画面になるため、テーマが投稿者ページへのリンクを出していない場合にオンにしてください。"
 
+msgid "While you are logged in, author pages are shown as before, so log out to check this setting."
+msgstr "ログイン中は投稿者ページが従来どおり表示されるため、この設定の確認はログアウトして行ってください。"
+
 msgid "Settings tabs"
 msgstr "設定のタブ"
 
