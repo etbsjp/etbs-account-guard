@@ -276,6 +276,30 @@ class ACGD_User_Access {
 					<th scope="row"><?php esc_html_e( 'Verify your own BASIC authentication', 'etbs-account-guard' ); ?></th>
 					<td>
 						<input type="hidden" name="acgd_user_id" value="<?php echo esc_attr( $user->ID ); ?>" />
+						<?php
+						/*
+						 * Core's own "your-profile" form (wp-admin/user-edit.php / profile.php) does not print a
+						 * wp_referer_field() itself, so without one, ACGD_Basic_Auth::handle_verify_request() has
+						 * no reliable way to tell which of the two screens this form was actually submitted from.
+						 * Printing it here means it rides along with this same <form> to the "Verify" admin-post
+						 * handler, which reads it back with wp_get_referer() to return to the exact screen the
+						 * admin started from — "Profile" (profile.php) when verifying one's own account, or
+						 * "Edit User" (user-edit.php?user_id=...) when a manage_options admin is verifying someone
+						 * else's (UX review HIGH fix, issue #4: this previously always hardcoded user-edit.php,
+						 * so confirming from one's own "Profile" screen landed back on "Edit User" instead).
+						 * 本体自身の「your-profile」フォーム（wp-admin/user-edit.php・profile.php）は
+						 * wp_referer_field() を自分では出さない。そのため、これが無いと
+						 * ACGD_Basic_Auth::handle_verify_request() には、このフォームが実際にどちらの画面から
+						 * 送信されたかを知る確実な手段が無い。ここで出しておけば、この同じ <form> に乗って
+						 * 「確認」の admin-post ハンドラへ届き、そちらが wp_get_referer() で読み戻すことで、
+						 * 管理者が出発した画面そのもの——自分自身を確認するときは「プロフィール」
+						 * （profile.php）、manage_options を持つ管理者が他人を確認するときは「ユーザーを編集」
+						 * （user-edit.php?user_id=...）——へ正しく戻せる（UX レビューの HIGH 修正、issue #4：
+						 * 以前は常に user-edit.php を固定で使っていたため、自分自身の「プロフィール」画面から
+						 * 確認しても「ユーザーを編集」に着地していた）。
+						 */
+						?>
+						<?php wp_referer_field(); ?>
 						<?php self::render_verify_token_field(); ?>
 						<?php
 						/*

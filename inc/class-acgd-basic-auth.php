@@ -630,7 +630,42 @@ class ACGD_Basic_Auth {
 
 		$admin_id  = get_current_user_id();
 		$target_id = isset( $_POST['acgd_user_id'] ) ? (int) $_POST['acgd_user_id'] : 0;
-		$edit_url  = admin_url( 'user-edit.php?user_id=' . $target_id );
+
+		// Land back on whichever screen this form was actually submitted from — "Profile" (profile.php)
+		// when an admin verifies their own account, "Edit User" (user-edit.php?user_id=...) when a
+		// manage_options admin verifies someone else's — instead of hardcoding user-edit.php (UX review
+		// HIGH fix, issue #4). wp_get_referer() reads the _wp_http_referer hidden field ACGD_User_Access::
+		// render_fields() prints for this purpose (core's own "your-profile" form does not print one), and
+		// validates it stays on this site. Falls back to get_edit_user_link(), which is the core function
+		// that actually branches on this: profile.php for one's own account, user-edit.php?user_id=... for
+		// anyone else's (get_edit_profile_url() does NOT do this — it always points at the CURRENT user's
+		// own profile.php no matter what ID is passed to it; verified against wp-includes/link-template.php,
+		// caught only by CLI simulation of both the self and the other-user round trip, not by php -l).
+		// get_edit_user_link() can itself return '' if the current user lacks the edit_user capability for
+		// $target_id; wp_safe_redirect( '' ) then silently emits a 200 with no body instead of redirecting
+		// (the same core quirk documented on validated_redirect_to() below), so fall back once more to
+		// admin_url() rather than ever handing '' to wp_safe_redirect().
+		// このフォームが実際に送信された画面へ戻す——管理者が自分自身を確認するときは「プロフィール」
+		// （profile.php）、manage_options を持つ管理者が他人を確認するときは「ユーザーを編集」
+		// （user-edit.php?user_id=...）——user-edit.php に固定していた従来の書き方をやめる
+		// （UX レビューの HIGH 修正、issue #4）。wp_get_referer() は、この目的で
+		// ACGD_User_Access::render_fields() が出す _wp_http_referer の隠しフィールドを読み（本体自身の
+		// 「your-profile」フォームはこれを出さない）、サイト内に留まっているか検証する。無い稀なケースでは
+		// get_edit_user_link() にフォールバックする：本人なら profile.php、他人なら
+		// user-edit.php?user_id=... を実際に出し分けるのはこちらの本体関数（get_edit_profile_url() では
+		// ない——引数に何を渡しても常に「今の」ユーザー自身の profile.php を返す。
+		// wp-includes/link-template.php で確認済み。php -l では検出できず、本人・他人それぞれの往復を
+		// CLI で模擬してはじめて判明した）。get_edit_user_link() 自体も、$target_id に対する edit_user
+		// 権限が今の管理者に無ければ '' を返しうる。wp_safe_redirect( '' ) はリダイレクトせず本文0バイトの
+		// 200 を黙って返す（下の validated_redirect_to() に書いた本体の同じ癖）ため、'' を
+		// wp_safe_redirect() へ渡さないよう最後に admin_url() へさらにフォールバックする。
+		$edit_url = wp_get_referer();
+		if ( ! $edit_url ) {
+			$edit_url = get_edit_user_link( $target_id );
+		}
+		if ( ! $edit_url ) {
+			$edit_url = admin_url();
+		}
 
 		$mode     = isset( $_POST['acgd_user_mode'] ) ? sanitize_key( wp_unslash( $_POST['acgd_user_mode'] ) ) : 'follow';
 		$ip_text  = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
@@ -700,8 +735,23 @@ class ACGD_Basic_Auth {
 			wp_die( esc_html__( 'You do not have permission to do this.', 'etbs-account-guard' ), '', array( 'response' => 403 ) );
 		}
 
-		$admin_id     = get_current_user_id();
-		$default_back = admin_url( 'user-edit.php?user_id=' . $admin_id );
+		$admin_id = get_current_user_id();
+
+		// This entire method is about the current admin verifying their own account (docs/spec.md 5.3):
+		// there is no "verify someone else's credentials" version of this challenge, since the BASIC
+		// credentials have to be typed by the person they belong to. So unlike handle_verify_request()'s
+		// $edit_url (which really can point at someone else's "Edit User" screen), this fallback — only
+		// used if $_REQUEST['redirect_to'] is itself missing or invalid, which normally never happens since
+		// handle_verify_request() always supplies it — is always "Profile" (profile.php), never
+		// "Edit User" (UX review HIGH fix, issue #4, applied here too for the same reason).
+		// このメソッドはすべて、今の管理者が自分自身を確認する話でしかない（docs/spec.md 5.3）：BASIC の
+		// 資格情報は本人が入力する必要があるため、「他人の資格情報を確認する」版は存在しない。そのため
+		// handle_verify_request() の $edit_url（他人の「ユーザーを編集」画面を指しうる）とは違い、この
+		// フォールバック——$_REQUEST['redirect_to'] 自体が無い・不正なときだけ使われ、
+		// handle_verify_request() が常にこれを渡すため通常は起きない——は常に「プロフィール」
+		// （profile.php）であって「ユーザーを編集」ではない（UX レビューの HIGH 修正、issue #4。
+		// 同じ理由でここにも適用する）。
+		$default_back = get_edit_profile_url( $admin_id );
 		$redirect_to  = self::validated_redirect_to( $default_back );
 
 		$pending_key = self::PENDING_TRANSIENT_PREFIX . $admin_id;
