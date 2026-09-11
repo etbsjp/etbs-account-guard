@@ -544,8 +544,8 @@ class ACGD_Settings {
 			<tbody>
 				<?php foreach ( $result['users'] as $user ) : ?>
 					<?php
-					// The flags come from the same SQL comparison that found the row, so they follow the same collation (letter case is ignored).
-					// 判定はこの行を見つけたのと同じ SQL の比較から取るので、照合順序（大文字小文字を区別しない）も同じになる。
+					// The flags compare the values shown in this row with the same SQL comparison that finds the users, so they follow the same collation (letter case is ignored).
+					// 判定はこの行に出す値を、ユーザーを探すのと同じ SQL の比較で比べたものなので、照合順序（大文字小文字を区別しない）も同じになる。
 					$edit_link = get_edit_user_link( (int) $user->ID );
 					?>
 					<tr>

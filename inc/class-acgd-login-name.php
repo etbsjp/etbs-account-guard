@@ -770,27 +770,38 @@ class ACGD_Login_Name {
 	 *
 	 * The count comes from count_users_with_login_as_public_name(). The rows come from one direct query in two
 	 * steps: the inner part picks up to $limit IDs, in ID order, with the same UNION and the same site condition
-	 * as the count (see there for why it is a UNION); the outer part reads the rows of those IDs only.
-	 * The outer WHERE clause repeats the match, so that a user with more than one nickname row (core keeps
-	 * one) gets only the rows that match, as a single WHERE clause over all rows would give.
+	 * as the count (see there for why it is a UNION); the outer part reads one row for each of those IDs.
+	 * The limit is a number of users, not of rows, and each user gets exactly one row. The nickname of the row
+	 * is the user's nickname row with the smallest umeta_id, which is the value that
+	 * get_user_meta( $id, 'nickname', true ) returns and that core shows. Core makes one nickname row per
+	 * user; if another plugin has added more, the user is still one row.
+	 * A user who matches only through a nickname row that is not the first one (never made by core) is counted
+	 * and listed, but neither flag of the row is "1", because the nickname shown is the first row.
 	 * It runs only on the settings screen.
 	 * 件数は count_users_with_login_as_public_name() から取る。行は2段の1本の直接のクエリで取る。
 	 * 内側で、件数と同じ UNION・同じサイトの条件で ID を ID 順に最大 $limit 件選び（UNION にする理由はそちらを参照）、
-	 * 外側でその ID の行だけを読む。
-	 * 外側の WHERE 句で一致の条件をもう一度掛けるので、nickname の行を複数持つユーザー（本体は1行しか作らない）でも、
-	 * 全行に1つの WHERE 句を掛けた場合と同じく、一致した行だけになる。
+	 * 外側でその ID ごとに1行を読む。
+	 * 上限は行の数ではなくユーザーの数で、1人につき必ず1行になる。行のニックネームは、そのユーザーの nickname の行のうち
+	 * umeta_id が最小のもので、get_user_meta( $id, 'nickname', true ) が返し、本体が表示する値と同じ。
+	 * 本体は nickname の行を1人1行しか作らない。ほかのプラグインが行を足していても、そのユーザーは1行になる。
+	 * 先頭でない nickname の行（本体は作らない）だけで一致したユーザーは、数えられ一覧にも出るが、
+	 * 表示するニックネームは先頭の行なので、その行の判定はどちらも "1" にならない。
 	 * 設定画面でだけ動く。
 	 *
 	 * @param int $limit Maximum number of users to return. / 返すユーザーの上限。
 	 * @return array {
 	 *     @type int      $total Number of matching users. / 該当するユーザーの数。
-	 *     @type object[] $users Up to $limit rows with ID, user_login, display_name, nickname, and the flags
-	 *                           display_matches / nickname_matches ("1" or "0"), ordered by ID. The flags come
-	 *                           from the same SQL comparisons as the query that picks the users, so letter
-	 *                           case is ignored there too, as in the login itself.
-	 *                           ID・user_login・display_name・nickname と、判定 display_matches / nickname_matches
-	 *                           （"1" か "0"）を持つ行（最大 $limit 件、ID 順）。判定はユーザーを選ぶ問い合わせと同じ
-	 *                           SQL の比較から取るので、ログインそのものと同じく大文字小文字を区別しない。
+	 *     @type object[] $users One row per user, up to $limit users, ordered by ID, with ID, user_login,
+	 *                           display_name, nickname (NULL when the user has no nickname row), and the flags
+	 *                           display_matches / nickname_matches ("1" or "0"; NULL instead of "0" when there is
+	 *                           no nickname row). The flags compare the values of the row with the same SQL
+	 *                           comparison as the query that picks the users, so letter case is ignored there
+	 *                           too, as in the login itself.
+	 *                           1人1行・最大 $limit 人・ID 順の行。ID・user_login・display_name・nickname
+	 *                           （nickname の行が無いユーザーは NULL）と、判定 display_matches / nickname_matches
+	 *                           （"1" か "0"。nickname の行が無いときは "0" でなく NULL）を持つ。判定はこの行の値を、
+	 *                           ユーザーを選ぶ問い合わせと同じ SQL の比較で比べるので、ログインそのものと同じく
+	 *                           大文字小文字を区別しない。
 	 * }
 	 */
 	public static function find_users_with_login_as_public_name( $limit = 100 ) {
@@ -803,29 +814,41 @@ class ACGD_Login_Name {
 		$total = self::count_users_with_login_as_public_name();
 
 		// Only table names are put into the SQL text; all three values go through placeholders.
+		// The inner part (ids) picks the users; the middle part (r) reads one row per user, taking the first
+		// nickname row with a scalar subquery instead of a JOIN, which would give one row per nickname row;
+		// the outer part compares the values of that row.
 		// SQL の文字列に埋めるのはテーブル名だけで、値は3つともプレースホルダで渡す。
+		// 内側（ids）でユーザーを選び、中間（r）でユーザーごとに1行を読む。ニックネームは JOIN ではなく
+		// スカラーサブクエリで先頭の nickname の行を取る（JOIN だと nickname の行の数だけ行が増える）。外側でその行の値を比べる。
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A column-to-column comparison has no API. Settings screen only, so no cache.
 		$users = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT DISTINCT ru.ID, ru.user_login, ru.display_name, rn.meta_value AS nickname,
-					( ru.display_name = ru.user_login ) AS display_matches,
-					( rn.meta_value = ru.user_login ) AS nickname_matches
+				"SELECT r.ID, r.user_login, r.display_name, r.nickname,
+					( r.display_name = r.user_login ) AS display_matches,
+					( r.nickname = r.user_login ) AS nickname_matches
 				FROM (
-					SELECT t.ID FROM (
-						SELECT u.ID FROM {$wpdb->users} AS u WHERE u.display_name = u.user_login
-						UNION
-						SELECT n.user_id AS ID FROM {$wpdb->usermeta} AS n
-						INNER JOIN {$wpdb->users} AS u2 ON ( u2.ID = n.user_id )
-						WHERE n.meta_key = 'nickname' AND n.meta_value = u2.user_login
-					) AS t
-					WHERE ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = t.ID AND c.meta_key = %s ) )
-					ORDER BY t.ID ASC
-					LIMIT %d
-				) AS ids
-				INNER JOIN {$wpdb->users} AS ru ON ( ru.ID = ids.ID )
-				LEFT JOIN {$wpdb->usermeta} AS rn ON ( rn.user_id = ru.ID AND rn.meta_key = 'nickname' )
-				WHERE ( ru.display_name = ru.user_login OR rn.meta_value = ru.user_login )
-				ORDER BY ru.ID ASC",
+					SELECT ru.ID, ru.user_login, ru.display_name,
+						(
+							SELECT m.meta_value FROM {$wpdb->usermeta} AS m
+							WHERE m.user_id = ru.ID AND m.meta_key = 'nickname'
+							ORDER BY m.umeta_id ASC
+							LIMIT 1
+						) AS nickname
+					FROM (
+						SELECT t.ID FROM (
+							SELECT u.ID FROM {$wpdb->users} AS u WHERE u.display_name = u.user_login
+							UNION
+							SELECT n.user_id AS ID FROM {$wpdb->usermeta} AS n
+							INNER JOIN {$wpdb->users} AS u2 ON ( u2.ID = n.user_id )
+							WHERE n.meta_key = 'nickname' AND n.meta_value = u2.user_login
+						) AS t
+						WHERE ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = t.ID AND c.meta_key = %s ) )
+						ORDER BY t.ID ASC
+						LIMIT %d
+					) AS ids
+					INNER JOIN {$wpdb->users} AS ru ON ( ru.ID = ids.ID )
+				) AS r
+				ORDER BY r.ID ASC",
 				$is_multisite,
 				$caps_key,
 				max( 1, (int) $limit )
