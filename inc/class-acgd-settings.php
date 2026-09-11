@@ -84,6 +84,44 @@ class ACGD_Settings {
 	const PUBLIC_NAMES_ID = 'acgd-public-names';
 
 	/**
+	 * Prefix of the transient that holds a rejected Access Restriction tab submission, so the form can be
+	 * redisplayed with what the admin actually typed instead of the unchanged saved value (UX review).
+	 * Keyed by the submitting user (options.php redirects to a fresh GET, so $_POST itself does not survive;
+	 * this transient is the bridge). Read once and deleted immediately after (see get_resubmit_data()), and
+	 * expires on its own after RESUBMIT_TTL regardless, so it needs no entry in uninstall.php.
+	 * 「アクセス制限」タブの、拒否された送信内容を保持する transient の接頭辞。保存済みの値ではなく、
+	 * 管理者が実際に入力した内容でフォームを出し直すために使う（UX レビュー）。送信した本人ごとに分ける
+	 * （options.php は新しい GET へ転送するため $_POST 自体は残らず、この transient が橋渡しになる）。
+	 * 一度読んだら即座に消し（get_resubmit_data() を参照）、そうでなくても RESUBMIT_TTL で自然に消えるため、
+	 * uninstall.php への記載は不要。
+	 *
+	 * @var string
+	 */
+	const RESUBMIT_TRANSIENT_PREFIX = 'acgd_access_resubmit_';
+
+	/**
+	 * How long a rejected submission is kept for redisplay. Long enough to cover the redirect-then-render
+	 * round trip; short enough that a stale one from an abandoned attempt does not resurface later.
+	 * 拒否された送信内容を残しておく時間。転送されてから描画されるまでの往復には十分長く、
+	 * 途中でやめた入力が後になって出てこないよう十分短くする。
+	 *
+	 * @var int
+	 */
+	const RESUBMIT_TTL = MINUTE_IN_SECONDS;
+
+	/**
+	 * In-request cache of get_resubmit_data(), so the transient is fetched and deleted only once even
+	 * though both render_access_roles_field() and render_access_ips_field() need it on the same page load.
+	 * false = not yet loaded. null = loaded, and there was nothing to redisplay.
+	 * get_resubmit_data() のリクエスト内キャッシュ。render_access_roles_field() と render_access_ips_field()
+	 * が同じページ読み込みで両方これを必要とするため、transient の取得・削除は1回だけにする。
+	 * false = 未取得。null = 取得済みで、出し直す内容が無かった。
+	 *
+	 * @var array|null|false
+	 */
+	private static $resubmit_cache = false;
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -720,6 +758,7 @@ class ACGD_Settings {
 					esc_html( reset( $validated['invalid'] ) )
 				)
 			);
+			self::stash_resubmit( $new_roles, $ip_text );
 			return $existing;
 		}
 
@@ -739,6 +778,7 @@ class ACGD_Settings {
 				// 揃えるため esc_html__() にしている。
 				esc_html__( 'This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to "No restriction" here or on their own user edit screen. Not saved.', 'etbs-account-guard' )
 			);
+			self::stash_resubmit( $new_roles, $ip_text );
 			return $existing;
 		}
 
@@ -765,15 +805,70 @@ class ACGD_Settings {
 						esc_html( $remote )
 					)
 			);
+			self::stash_resubmit( $new_roles, $ip_text );
 			return $existing;
 		}
 
 		ACGD_Access_Restriction::clear_fault();
+		// A save can only succeed here after a fresh page load without a pending resubmit (the resubmit
+		// path always redisplays the form and stops before another sanitize call happens), so this is only
+		// ever a no-op in practice. Deleted anyway, so a leftover from an abandoned failed attempt within
+		// RESUBMIT_TTL can never outlive a successful save.
+		// ここに到達する保存は、保留中の再表示が無い状態（再表示の経路は必ずフォームを出し直して止まり、
+		// もう一度 sanitize を呼ばない）から来るので、実際には常に無害な呼び出しになる。それでも消しておき、
+		// RESUBMIT_TTL 以内に途中でやめた失敗の残りが、成功した保存より後まで残らないようにする。
+		delete_transient( self::RESUBMIT_TRANSIENT_PREFIX . get_current_user_id() );
 
 		return array(
 			'roles'    => $new_roles,
 			'site_ips' => $ip_text,
 		);
+	}
+
+	/**
+	 * Stashes a rejected Access Restriction tab submission, so the form can be redisplayed with it.
+	 * See RESUBMIT_TRANSIENT_PREFIX for why a transient, rather than returning it as the option value,
+	 * is used.
+	 * 拒否された「アクセス制限」タブの送信内容を、フォームの出し直しに使えるよう保存する。
+	 * なぜオプションの値として返す（保存する）のではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
+	 *
+	 * @param string[] $roles   Sanitized (but possibly check-1/check-2-failing) role => mode. / サニタイズ済み（チェック1・2には失敗しうる）の権限 => モード。
+	 * @param string   $ip_text Raw site-wide IP list text, exactly as submitted (may contain invalid lines). / 送信された生のサイトの IP 一覧（不正な行を含みうる）。
+	 * @return void
+	 */
+	private static function stash_resubmit( $roles, $ip_text ) {
+		set_transient(
+			self::RESUBMIT_TRANSIENT_PREFIX . get_current_user_id(),
+			array(
+				'roles'    => $roles,
+				'site_ips' => $ip_text,
+			),
+			self::RESUBMIT_TTL
+		);
+	}
+
+	/**
+	 * Returns a rejected submission stashed by stash_resubmit(), if any, for the current user. Reads the
+	 * transient once per request (both render_access_roles_field() and render_access_ips_field() call this
+	 * on the same page load) and deletes it immediately, so it is shown exactly once.
+	 * stash_resubmit() が保存した、拒否された送信内容を、現在のユーザーの分だけ返す（無ければ null）。
+	 * transient はリクエストにつき1回だけ読み（render_access_roles_field() と render_access_ips_field() が
+	 * 同じページ読み込みでどちらもこれを呼ぶ）、読んだ直後に消すので、一度だけ表示される。
+	 *
+	 * @return array|null {
+	 *     @type string[] $roles    Role => mode, as submitted. / 送信された 権限 => モード。
+	 *     @type string   $site_ips Raw site-wide IP list text, as submitted. / 送信された生のサイトの IP 一覧。
+	 * }
+	 */
+	private static function get_resubmit_data() {
+		if ( false === self::$resubmit_cache ) {
+			$key  = self::RESUBMIT_TRANSIENT_PREFIX . get_current_user_id();
+			$data = get_transient( $key );
+			delete_transient( $key );
+			self::$resubmit_cache = is_array( $data ) ? $data : null;
+		}
+
+		return self::$resubmit_cache;
 	}
 
 	/**
@@ -886,10 +981,17 @@ class ACGD_Settings {
 	/**
 	 * Prints the per-role mode table. / 権限ごとのモードの表を出力する。
 	 *
+	 * Redisplays a rejected submission (UX review) rather than the saved value, when there is one for the
+	 * current user (get_resubmit_data()), so a save-time check failure does not also discard the roles the
+	 * admin had just chosen.
+	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
+	 * 保存時のチェックに落ちても、管理者が選んだばかりの権限の内容まで失われないようにするため。
+	 *
 	 * @return void
 	 */
 	public static function render_access_roles_field() {
-		$saved_roles = ACGD_Access_Restriction::get_role_modes();
+		$resubmit    = self::get_resubmit_data();
+		$saved_roles = ( $resubmit && isset( $resubmit['roles'] ) ) ? $resubmit['roles'] : ACGD_Access_Restriction::get_role_modes();
 		$all_roles   = wp_roles()->get_names();
 		?>
 		<table class="widefat fixed striped" style="max-width:600px;">
@@ -901,8 +1003,9 @@ class ACGD_Settings {
 			</thead>
 			<tbody>
 				<?php foreach ( $all_roles as $role => $label ) : ?>
+					<?php $role_label = translate_user_role( $label ); ?>
 					<tr>
-						<th scope="row"><?php echo esc_html( translate_user_role( $label ) ); ?></th>
+						<th scope="row"><?php echo esc_html( $role_label ); ?></th>
 						<td>
 							<?php if ( 'administrator' === $role ) : ?>
 								<?php esc_html_e( 'No restriction (fixed)', 'etbs-account-guard' ); ?>
@@ -912,7 +1015,7 @@ class ACGD_Settings {
 								$mode       = isset( $saved_roles[ $role ] ) ? $saved_roles[ $role ] : ACGD_Access_Restriction::MODE_NONE;
 								$field_name = ACGD_Access_Restriction::OPTION . '[roles][' . $role . ']';
 								?>
-								<select id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>">
+								<select id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name, such as Editor */ __( 'Mode for %s', 'etbs-account-guard' ), $role_label ) ); ?>">
 									<option value="none" <?php selected( 'none', $mode ); ?>><?php esc_html_e( 'No restriction', 'etbs-account-guard' ); ?></option>
 									<option value="ip" <?php selected( 'ip', $mode ); ?>><?php esc_html_e( 'IP restriction', 'etbs-account-guard' ); ?></option>
 								</select>
@@ -964,11 +1067,18 @@ class ACGD_Settings {
 	/**
 	 * Prints the site-wide IP list textarea. / サイトの IP 一覧のテキストエリアを出力する。
 	 *
+	 * Redisplays a rejected submission (UX review) rather than the saved value, when there is one for the
+	 * current user (get_resubmit_data()); see render_access_roles_field() for the same reasoning.
+	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
+	 * 理由は render_access_roles_field() と同じ。
+	 *
 	 * @return void
 	 */
 	public static function render_access_ips_field() {
+		$resubmit = self::get_resubmit_data();
+		$ip_text  = ( $resubmit && isset( $resubmit['site_ips'] ) ) ? $resubmit['site_ips'] : ACGD_Access_Restriction::get_site_ip_text();
 		?>
-		<textarea id="acgd-access-site-ips" name="<?php echo esc_attr( ACGD_Access_Restriction::OPTION . '[site_ips]' ); ?>" rows="8" cols="50" class="large-text code"><?php echo esc_textarea( ACGD_Access_Restriction::get_site_ip_text() ); ?></textarea>
+		<textarea id="acgd-access-site-ips" name="<?php echo esc_attr( ACGD_Access_Restriction::OPTION . '[site_ips]' ); ?>" rows="8" cols="50" class="large-text code"><?php echo esc_textarea( $ip_text ); ?></textarea>
 		<?php
 	}
 
@@ -1037,22 +1147,25 @@ class ACGD_Settings {
 			return;
 		endif;
 		?>
-		<table class="widefat fixed striped">
-			<thead>
-				<tr>
-					<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'Mode', 'etbs-account-guard' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php foreach ( $restricted as $row ) : ?>
+		<?php // Horizontal scroll wrapper for narrow viewports (UX review). / 狭い画面幅での横スクロール対策（UX レビュー）。 ?>
+		<div style="overflow-x:auto;">
+			<table class="widefat fixed striped">
+				<thead>
 					<tr>
-						<td><?php echo esc_html( $row['user']->user_login ); ?></td>
-						<td><?php echo esc_html( ACGD_User_Access::describe_modes( $row['modes'] ) ); ?></td>
+						<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Mode', 'etbs-account-guard' ); ?></th>
 					</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					<?php foreach ( $restricted as $row ) : ?>
+						<tr>
+							<td><?php echo esc_html( $row['user']->user_login ); ?></td>
+							<td><?php echo esc_html( ACGD_User_Access::describe_modes( $row['modes'] ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
 		<?php
 	}
 
@@ -1112,35 +1225,38 @@ class ACGD_Settings {
 			return;
 		endif;
 		?>
-		<table class="widefat fixed striped">
-			<thead>
-				<tr>
-					<th scope="col"><?php esc_html_e( 'Date and time', 'etbs-account-guard' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'User', 'etbs-account-guard' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'IP address', 'etbs-account-guard' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'Where', 'etbs-account-guard' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php foreach ( $log as $entry ) : ?>
-					<?php
-					$user = ! empty( $entry['user_id'] ) ? get_userdata( (int) $entry['user_id'] ) : false;
-					?>
+		<?php // Horizontal scroll wrapper for narrow viewports (UX review). / 狭い画面幅での横スクロール対策（UX レビュー）。 ?>
+		<div style="overflow-x:auto;">
+			<table class="widefat fixed striped">
+				<thead>
 					<tr>
-						<td>
-							<?php
-							// date_i18n(), not wp_date() (WordPress 5.3+): this plugin declares no minimum WordPress version.
-							// date_i18n()（wp_date() は WordPress 5.3 以降のため使わない）。このプラグインは WordPress の下限を宣言していない。
-							echo esc_html( date_i18n( 'Y-m-d H:i:s', isset( $entry['time'] ) ? (int) $entry['time'] : 0 ) );
-							?>
-						</td>
-						<td><?php echo esc_html( $user ? $user->user_login : (string) ( isset( $entry['user_id'] ) ? $entry['user_id'] : '' ) ); ?></td>
-						<td><?php echo esc_html( isset( $entry['ip'] ) ? (string) $entry['ip'] : '' ); ?></td>
-						<td><?php echo esc_html( self::describe_denial_context( isset( $entry['context'] ) ? (string) $entry['context'] : '' ) ); ?></td>
+						<th scope="col"><?php esc_html_e( 'Date and time', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'User', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'IP address', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Where', 'etbs-account-guard' ); ?></th>
 					</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					<?php foreach ( $log as $entry ) : ?>
+						<?php
+						$user = ! empty( $entry['user_id'] ) ? get_userdata( (int) $entry['user_id'] ) : false;
+						?>
+						<tr>
+							<td>
+								<?php
+								// date_i18n(), not wp_date() (WordPress 5.3+): this plugin declares no minimum WordPress version.
+								// date_i18n()（wp_date() は WordPress 5.3 以降のため使わない）。このプラグインは WordPress の下限を宣言していない。
+								echo esc_html( date_i18n( 'Y-m-d H:i:s', isset( $entry['time'] ) ? (int) $entry['time'] : 0 ) );
+								?>
+							</td>
+							<td><?php echo esc_html( $user ? $user->user_login : (string) ( isset( $entry['user_id'] ) ? $entry['user_id'] : '' ) ); ?></td>
+							<td><?php echo esc_html( isset( $entry['ip'] ) ? (string) $entry['ip'] : '' ); ?></td>
+							<td><?php echo esc_html( self::describe_denial_context( isset( $entry['context'] ) ? (string) $entry['context'] : '' ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
 		<?php
 	}
 

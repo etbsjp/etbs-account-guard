@@ -302,16 +302,17 @@ msgstr "BASIC 認証は今後の更新で追加予定で、まだ選べません
 msgid "IP addresses added for this user"
 msgstr "このユーザーに追加した IP アドレス"
 
-#. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation
-msgid "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab."
-msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。# の後ろはメモです。「アクセス制限」設定タブのサイトの一覧に加えて許可されます。"
+#. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation, 3: URL of the Access Restriction tab of the settings screen
+msgid "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note. Allowed in addition to the site-wide list on the <a href=\"%3$s\">Access Restriction settings tab</a>."
+msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。# の後ろはメモです。<a href=\"%3$s\">「アクセス制限」設定タブ</a>のサイトの一覧に加えて許可されます。"
 
 #. translators: 1: line number, 2: the line's content
 msgid "Line %1$d of the IP addresses added for this user is not a valid IP address or range: %2$s"
 msgstr "このユーザーに追加した IP アドレスの %1$d 行目が、有効な IP アドレスまたは範囲ではありません: %2$s"
 
-msgid "This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to \"No restriction\" here or on the Access Restriction settings tab. Not saved."
-msgstr "この内容で保存すると、制限されていない管理者 (または他に設定を管理できるユーザー) が1人もいなくなります。どちらかを、ここか「アクセス制限」設定タブで「制限なし」に戻してください。保存しませんでした。"
+#. translators: %s: URL of the Access Restriction tab of the settings screen
+msgid "This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to \"No restriction\" here or on the <a href=\"%s\">Access Restriction settings tab</a>. Not saved."
+msgstr "この内容で保存すると、制限されていない管理者 (または他に設定を管理できるユーザー) が1人もいなくなります。どちらかを、ここか<a href=\"%s\">「アクセス制限」設定タブ</a>で「制限なし」に戻してください。保存しませんでした。"
 
 msgid "IP"
 msgstr "IP"
@@ -384,6 +385,10 @@ msgstr "モード"
 
 msgid "No restriction (fixed)"
 msgstr "制限なし (固定)"
+
+#. translators: %s: role name, such as Editor
+msgid "Mode for %s"
+msgstr "%s のモード"
 
 #. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation
 msgid "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note, and blank lines are ignored."

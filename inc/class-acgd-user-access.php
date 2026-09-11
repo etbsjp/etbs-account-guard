@@ -69,6 +69,31 @@ class ACGD_User_Access {
 	private static $pending_error = '';
 
 	/**
+	 * Prefix of the transient that holds a rejected submission of this screen's fields, so the profile page
+	 * can be redisplayed with what the admin actually typed instead of the unchanged saved value (UX review).
+	 * Keyed by both the submitting admin and the target user's ID (one admin can be mid-edit on more than
+	 * one user's screen; edit_user.php redirects to a fresh GET on failure too, so $_POST does not survive).
+	 * Expires on its own after RESUBMIT_TTL, so it needs no entry in uninstall.php. See the matching constant
+	 * in ACGD_Settings for the Access Restriction tab's own version of this mechanism.
+	 * この画面の項目で拒否された送信内容を保持する transient の接頭辞。保存済みの値ではなく、管理者が
+	 * 実際に入力した内容でプロフィール画面を出し直すために使う（UX レビュー）。送信した管理者と、
+	 * 編集対象のユーザー ID の両方で分ける（1人の管理者が複数ユーザーの編集画面を同時に開きうる。
+	 * edit_user.php も失敗時は新しい GET へ転送するため $_POST は残らない）。RESUBMIT_TTL で自然に消えるため、
+	 * uninstall.php への記載は不要。同じ仕組みの「アクセス制限」タブ版は ACGD_Settings の対応する定数を参照。
+	 *
+	 * @var string
+	 */
+	const RESUBMIT_TRANSIENT_PREFIX = 'acgd_user_resubmit_';
+
+	/**
+	 * How long a rejected submission is kept for redisplay. See ACGD_Settings::RESUBMIT_TTL for the reasoning.
+	 * 拒否された送信内容を残しておく時間。理由は ACGD_Settings::RESUBMIT_TTL を参照。
+	 *
+	 * @var int
+	 */
+	const RESUBMIT_TTL = MINUTE_IN_SECONDS;
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -91,6 +116,12 @@ class ACGD_User_Access {
 	/**
 	 * Prints the Access Restriction section of the user edit screen. / ユーザー編集画面の「アクセス制限」の区画を出力する。
 	 *
+	 * Redisplays a rejected submission (UX review) rather than the saved value, when there is one for this
+	 * admin and this target user (get_resubmit_data()), so a save-time check failure does not also discard
+	 * what the admin had just typed.
+	 * 拒否された送信内容があれば（get_resubmit_data()）、保存済みの値ではなくそちらを出し直す（UX レビュー）。
+	 * 保存時のチェックに落ちても、管理者が入力したばかりの内容まで失われないようにするため。
+	 *
 	 * @param WP_User $user User being edited (never the current user; see the class docblock). / 編集対象のユーザー（現在のユーザー自身にはならない。クラスの docblock を参照）。
 	 * @return void
 	 */
@@ -99,8 +130,9 @@ class ACGD_User_Access {
 			return;
 		}
 
-		$mode = ACGD_Access_Restriction::get_user_mode( $user->ID );
-		$ips  = ACGD_Access_Restriction::get_user_ip_text( $user->ID );
+		$resubmit = self::get_resubmit_data( $user->ID );
+		$mode     = ( $resubmit && isset( $resubmit['mode'] ) ) ? $resubmit['mode'] : ACGD_Access_Restriction::get_user_mode( $user->ID );
+		$ips      = ( $resubmit && isset( $resubmit['ips'] ) ) ? $resubmit['ips'] : ACGD_Access_Restriction::get_user_ip_text( $user->ID );
 		?>
 		<h2 id="<?php echo esc_attr( self::SECTION_ID ); ?>"><?php esc_html_e( 'Access Restriction', 'etbs-account-guard' ); ?></h2>
 		<table class="form-table" role="presentation">
@@ -121,11 +153,18 @@ class ACGD_User_Access {
 					<textarea name="acgd_user_ips" id="acgd-user-ips" rows="5" cols="40" class="large-text code"><?php echo esc_textarea( $ips ); ?></textarea>
 					<p class="description">
 						<?php
-						printf(
-							/* translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation */
-							esc_html__( 'One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab.', 'etbs-account-guard' ),
-							'<code>192.0.2.10</code>',
-							'<code>192.0.2.0/24</code>'
+						echo wp_kses(
+							sprintf(
+								/* translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation, 3: URL of the Access Restriction tab of the settings screen */
+								__( 'One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # is a note. Allowed in addition to the site-wide list on the <a href="%3$s">Access Restriction settings tab</a>.', 'etbs-account-guard' ),
+								'<code>192.0.2.10</code>',
+								'<code>192.0.2.0/24</code>',
+								esc_url( ACGD_Settings::get_page_url( 'access' ) )
+							),
+							array(
+								'code' => array(),
+								'a'    => array( 'href' => true ),
+							)
 						);
 						?>
 					</p>
@@ -182,20 +221,93 @@ class ACGD_User_Access {
 				(int) key( $validated['invalid'] ),
 				esc_html( reset( $validated['invalid'] ) )
 			);
+			self::stash_resubmit( $user_id, $mode, $ip_text );
 			return;
 		}
 
 		if ( ACGD_Access_Restriction::count_unrestricted_admins( ACGD_Access_Restriction::get_role_modes(), array( (int) $user_id => $mode ) ) < 1 ) {
 			// Says where to go, not just what is wrong (UX review, matching the same message on the Access
-			// Restriction settings tab). 何が悪いかだけでなく、どこへ行けばよいかも書く（UX レビュー。
-			// 「アクセス制限」設定タブの同じメッセージと揃えている）。
-			self::$pending_error = esc_html__( 'This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to "No restriction" here or on the Access Restriction settings tab. Not saved.', 'etbs-account-guard' );
+			// Restriction settings tab), and links to it (UX review: a place that is named should be reachable).
+			// wp_kses() (not esc_html__()) is used because the message now carries a real <a> link; the profile
+			// screen prints WP_Error messages unescaped either way (see the comment above).
+			// 何が悪いかだけでなく、どこへ行けばよいかも書く（UX レビュー。「アクセス制限」設定タブの同じ
+			// メッセージと揃えている）。名指しした行き先にはリンクを張る（UX レビュー）。本物の <a> リンクを
+			// 含むため esc_html__() ではなく wp_kses() を使う（プロフィール画面がこれを未エスケープで
+			// 出力すること自体は上のコメントと同じ）。
+			self::$pending_error = wp_kses(
+				sprintf(
+					/* translators: %s: URL of the Access Restriction tab of the settings screen */
+					__( 'This would leave no administrator (or other user who can manage options) without a restriction. Change one of them back to "No restriction" here or on the <a href="%s">Access Restriction settings tab</a>. Not saved.', 'etbs-account-guard' ),
+					esc_url( ACGD_Settings::get_page_url( 'access' ) )
+				),
+				array( 'a' => array( 'href' => true ) )
+			);
+			self::stash_resubmit( $user_id, $mode, $ip_text );
 			return;
 		}
 
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_MODE_META, $mode );
 		update_user_meta( $user_id, ACGD_Access_Restriction::USER_IPS_META, $ip_text );
 		ACGD_Access_Restriction::clear_fault();
+		// See ACGD_Settings::sanitize_access_restriction_settings() for why this is only ever a defensive
+		// no-op in practice, and why it is kept anyway.
+		// 実際には常に無害な呼び出しになる理由と、それでも残す理由は
+		// ACGD_Settings::sanitize_access_restriction_settings() を参照。
+		delete_transient( self::resubmit_key( get_current_user_id(), $user_id ) );
+	}
+
+	/**
+	 * Returns the transient key for a rejected submission of this screen, for one (admin, target user) pair.
+	 * この画面で拒否された送信内容の transient キーを、(管理者, 編集対象ユーザー) の組ごとに返す。
+	 *
+	 * @param int $admin_id  ID of the admin submitting the form. / フォームを送信した管理者の ID。
+	 * @param int $target_id ID of the user being edited. / 編集対象のユーザーの ID。
+	 * @return string Transient key. / transient のキー。
+	 */
+	private static function resubmit_key( $admin_id, $target_id ) {
+		return self::RESUBMIT_TRANSIENT_PREFIX . (int) $admin_id . '_' . (int) $target_id;
+	}
+
+	/**
+	 * Stashes a rejected submission of this screen's fields, so the profile page can be redisplayed with it.
+	 * See RESUBMIT_TRANSIENT_PREFIX for why a transient, rather than writing straight to user meta, is used.
+	 * この画面で拒否された送信内容を、プロフィール画面の出し直しに使えるよう保存する。
+	 * なぜユーザーメタへ直接書くのではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
+	 *
+	 * @param int    $target_id Target user being edited. / 編集対象のユーザー。
+	 * @param string $mode      Submitted mode ('follow', 'none' or 'ip'; already validated by save_fields()). / 送信されたモード（'follow'・'none'・'ip'。save_fields() で検証済み）。
+	 * @param string $ip_text   Raw added-IP text, exactly as submitted (may contain invalid lines). / 送信された生の追加 IP（不正な行を含みうる）。
+	 * @return void
+	 */
+	private static function stash_resubmit( $target_id, $mode, $ip_text ) {
+		set_transient(
+			self::resubmit_key( get_current_user_id(), $target_id ),
+			array(
+				'mode' => $mode,
+				'ips'  => $ip_text,
+			),
+			self::RESUBMIT_TTL
+		);
+	}
+
+	/**
+	 * Returns a rejected submission stashed by stash_resubmit(), if any, for the current admin editing the
+	 * given target user. Deletes it immediately, so it is shown exactly once.
+	 * stash_resubmit() が保存した、拒否された送信内容を、現在の管理者が対象ユーザーを編集している分だけ返す
+	 * （無ければ null）。読んだ直後に消すので、一度だけ表示される。
+	 *
+	 * @param int $target_id Target user being edited. / 編集対象のユーザー。
+	 * @return array|null {
+	 *     @type string $mode Mode, as submitted. / 送信されたモード。
+	 *     @type string $ips  Raw added-IP text, as submitted. / 送信された生の追加 IP。
+	 * }
+	 */
+	private static function get_resubmit_data( $target_id ) {
+		$key  = self::resubmit_key( get_current_user_id(), $target_id );
+		$data = get_transient( $key );
+		delete_transient( $key );
+
+		return is_array( $data ) ? $data : null;
 	}
 
 	/**
