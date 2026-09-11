@@ -358,6 +358,13 @@ msgstr "今のあなたの接続元では、この新しい設定を満たせま
 msgid "Your own account would not satisfy these new settings: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved."
 msgstr "この新しい設定では、あなた自身のアクセスが満たせません。今の接続元 (%s) が一覧に入っていません。この住所を一覧に追加するか、この住所からでも許可される設定にしてください。保存しませんでした。"
 
+msgid "Your own account, from where you are connecting right now, would not satisfy this new setting. Not saved."
+msgstr "今のあなたの接続元では、この新しい設定を満たせません。保存しませんでした。"
+
+#. translators: %s: the current user's own IP address, to add to the IP list
+msgid "Your own account would not satisfy this new setting: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved."
+msgstr "この新しい設定では、あなた自身のアクセスが満たせません。今の接続元 (%s) が一覧に入っていません。この住所を一覧に追加するか、この住所からでも許可される設定にしてください。保存しませんでした。"
+
 msgid "Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Saving this tab again, once the settings are valid, clears this warning."
 msgstr "アクセス制限は内部の問題により停止しており、直るまでは誰でも IP の確認なしにサインインできます。設定を正しい内容にしてこのタブを保存し直すと、この警告は消えます。"
 

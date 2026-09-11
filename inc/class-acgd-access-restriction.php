@@ -828,10 +828,17 @@ class ACGD_Access_Restriction {
 
 	/**
 	 * Tells whether the current user's own access would still be allowed under prospective role modes and
-	 * site IP list. Used by save-time check 2 (docs/spec.md 5.1) when saving the Access Restriction tab,
-	 * which can change both at once.
+	 * site IP list. Used by save-time check 2 (docs/spec.md 5.1) when saving the Access Restriction tab
+	 * (which can change both at once) and, with $forced_user_mode / $forced_user_ip_entries, when saving the
+	 * current user's own row on the user edit screen (docs/spec.md 5.1, 5.6): that screen changes the
+	 * current user's own mode and per-user IP list, neither of which is yet written to the database when
+	 * this is called, so the prospective values have to be passed in rather than re-read from storage.
 	 * 現在のユーザー自身のアクセスが、保存前の権限モードとサイトの IP 一覧のもとでも成り立つかを返す。
-	 * 「アクセス制限」タブの保存時のチェック2（docs/spec.md 5.1）に使う。このタブは両方を同時に変えうる。
+	 * 「アクセス制限」タブの保存時のチェック2（docs/spec.md 5.1）に使うほか、$forced_user_mode /
+	 * $forced_user_ip_entries を渡せば、ユーザー編集画面で現在のユーザー自身の行を保存するとき
+	 * （docs/spec.md 5.1・5.6）にも使える：あの画面は現在のユーザー自身のモードとユーザーごとの IP 一覧を
+	 * 変えるが、この呼び出しの時点ではどちらもまだ DB に書き込まれていないため、保存しようとしている値を
+	 * 引数で渡す必要がある（DB から読み直せない）。
 	 *
 	 * A 'basic' requirement is satisfied only when the current request itself already carries BASIC
 	 * credentials that match the current user's own saved ones (ACGD_Basic_Auth::request_satisfies()) — the
@@ -846,23 +853,36 @@ class ACGD_Access_Restriction {
 	 * （docs/spec.md 5.3 はユーザー編集画面の「確認」の往復を先に通すことを求めており、それはこのタブの
 	 * チェック2ではなくユーザーごとの別経路。ACGD_User_Access を参照）。
 	 *
-	 * @param string[] $role_modes       Prospective role => mode. / 保存しようとしている 権限 => モード。
-	 * @param string[] $site_ip_entries  Prospective site-wide IP entries, already parsed (parse_ip_list()). / 保存しようとしているサイトの IP 一覧（parse_ip_list() 済み）。
+	 * @param string[]    $role_modes             Prospective role => mode. / 保存しようとしている 権限 => モード。
+	 * @param string[]    $site_ip_entries        Prospective site-wide IP entries, already parsed (parse_ip_list()). / 保存しようとしているサイトの IP 一覧（parse_ip_list() 済み）。
+	 * @param string|null $forced_user_mode       When given, used instead of the current user's saved mode
+	 *                                            (the user edit screen's own prospective mode, not yet saved).
+	 *                                            Null (default) reads the current user's saved mode, unchanged.
+	 *                                            与えたときは、現在のユーザーの保存済みモードの代わりに使う
+	 *                                            （ユーザー編集画面で保存しようとしているモード。まだ未保存）。
+	 *                                            既定の null は、現在のユーザーの保存済みモードをそのまま使う。
+	 * @param string[]|null $forced_user_ip_entries When given, used instead of the current user's saved
+	 *                                              per-user IP entries (already parsed). Null (default) reads
+	 *                                              them from storage, unchanged.
+	 *                                              与えたときは、現在のユーザーの保存済みのユーザーごとの
+	 *                                              IP 一覧（解析済み）の代わりに使う。既定の null は、
+	 *                                              保存済みの値をそのまま読む。
 	 * @return bool Whether the current user would still get in. / 現在のユーザーがなお入れるか。
 	 */
-	public static function current_user_still_allowed( $role_modes, $site_ip_entries ) {
+	public static function current_user_still_allowed( $role_modes, $site_ip_entries, $forced_user_mode = null, $forced_user_ip_entries = null ) {
 		$current = wp_get_current_user();
 		if ( ! $current instanceof WP_User || 0 === $current->ID ) {
 			return true; // No authenticated context; nothing of "oneself" to check. / 認証されたユーザーが無く、確かめる「本人」がいない。
 		}
 
-		$modes = self::compute_effective_modes( $current, $role_modes );
+		$modes = self::compute_effective_modes( $current, $role_modes, $forced_user_mode );
 		if ( in_array( self::MODE_BASIC, $modes, true ) && ! ACGD_Basic_Auth::request_satisfies( $current ) ) {
 			return false;
 		}
 		if ( in_array( self::MODE_IP, $modes, true ) ) {
-			$remote  = self::get_remote_addr();
-			$entries = array_merge( $site_ip_entries, self::parse_ip_list( self::get_user_ip_text( $current->ID ) ) );
+			$remote          = self::get_remote_addr();
+			$user_ip_entries = null !== $forced_user_ip_entries ? $forced_user_ip_entries : self::parse_ip_list( self::get_user_ip_text( $current->ID ) );
+			$entries         = array_merge( $site_ip_entries, $user_ip_entries );
 
 			return null !== $remote && self::ip_in_list( $remote, $entries );
 		}

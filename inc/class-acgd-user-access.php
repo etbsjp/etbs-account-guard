@@ -321,13 +321,15 @@ class ACGD_User_Access {
 	 * On an invalid IP list, a save that would leave no unrestricted manage_options user (save-time check 1,
 	 * docs/spec.md 5.1), a BASIC ID already used by someone else, a BASIC mode with no credentials, BASIC
 	 * mode blocked by the receive diagnosis (docs/spec.md 5.3), or — when the target is the current admin's
-	 * own account — a BASIC setup that has not just been confirmed through the "Verify" round trip (save-time
-	 * check 2, docs/spec.md 5.1 and 5.3), nothing is written and an error is queued for append_pending_error()
-	 * to attach.
+	 * own account — a BASIC setup that has not just been confirmed through the "Verify" round trip, or a new
+	 * setting (any mode, not just BASIC) that the current request itself would not satisfy (save-time check
+	 * 2, docs/spec.md 5.1 and 5.3), nothing is written and an error is queued for append_pending_error() to
+	 * attach.
 	 * IP 一覧が不正なとき、保存後に制限なしの manage_options ユーザーが1人もいなくなるとき（保存時の
 	 * チェック1、docs/spec.md 5.1）、BASIC の ID が既に他の人に使われているとき、BASIC モードなのに
 	 * 資格情報が無いとき、受信の診断により BASIC モードが止められているとき（docs/spec.md 5.3）、
-	 * または対象が今の管理者自身のときに「確認」の往復をたった今通していない BASIC 設定
+	 * または対象が今の管理者自身のときに「確認」の往復をたった今通していない BASIC 設定、もしくは
+	 * （BASIC に限らずどのモードでも）今のリクエスト自体が満たせない新しい設定
 	 * （保存時のチェック2、docs/spec.md 5.1・5.3）のいずれかに当たれば、何も書き込まず
 	 * append_pending_error() が使うエラーを積む。
 	 *
@@ -464,6 +466,48 @@ class ACGD_User_Access {
 				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
 				return;
 			}
+
+			// Save-time check 2 for non-BASIC modes (docs/spec.md 5.1): mirrors the BASIC branch above, for
+			// the case that branch does not cover. Before this fix, choosing "IP restriction" (or "Follow the
+			// role setting" when a held non-administrator role's own setting resolves to 'ip' or 'basic') for
+			// one's own account here had no equivalent of check 2 at all, so an admin could lock themselves
+			// out immediately (etbs-senior-wp audit, issue #4). $mode / $validated['entries'] are what is
+			// about to be saved, not yet written, so they are passed in rather than read back from storage;
+			// current_user_still_allowed() itself covers both an 'ip' and a role-driven 'basic' outcome
+			// (see its own docblock), using the current request's REMOTE_ADDR / BASIC credentials exactly as
+			// the settings tab's own check 2 does.
+			// 非 BASIC モードの保存時チェック2（docs/spec.md 5.1）：上の BASIC 分岐がカバーしない場合の
+			// 横展開。この修正前は、自分自身に対してここで「IP制限」を選ぶ場合（または「権限の設定に従う」
+			// のままで、自分が持つ非administrator権限の設定が 'ip'／'basic' に解決される場合）に相当する
+			// チェック2が一切無く、管理者が自分自身を即座に締め出せた（大の監査指摘、issue #4）。
+			// $mode・$validated['entries'] はこれから保存する値でまだ書き込まれていないため、DB から
+			// 読み直すのではなく引数で渡す。current_user_still_allowed() 自体が 'ip' と権限由来の 'basic' の
+			// 両方をカバーする（自身の docblock を参照）。判定には今のリクエストの REMOTE_ADDR・BASIC
+			// 資格情報を使う点も「アクセス制限」設定タブ自身のチェック2と同じ。
+			if ( $is_self && ! ACGD_Access_Restriction::current_user_still_allowed(
+				ACGD_Access_Restriction::get_role_modes(),
+				ACGD_Access_Restriction::parse_ip_list( ACGD_Access_Restriction::get_site_ip_text() ),
+				$mode,
+				$validated['entries']
+			) ) {
+				$remote              = ACGD_Access_Restriction::get_remote_addr();
+				self::$pending_error = null === $remote
+					? esc_html__( 'Your own account, from where you are connecting right now, would not satisfy this new setting. Not saved.', 'etbs-account-guard' )
+					: sprintf(
+						/* translators: %s: the current user's own IP address, to add to the IP list */
+						esc_html__( 'Your own account would not satisfy this new setting: your current connection (%s) is not on the list. Add it, or choose a setting that still allows it. Not saved.', 'etbs-account-guard' ),
+						// $remote already passed inet_pton() validation in get_remote_addr(); esc_html() here
+						// is defense in depth, not a load-bearing escape (matches the settings tab's own
+						// equivalent message; see ACGD_Settings::sanitize_access_restriction_settings()).
+						// $remote は get_remote_addr() 内で inet_pton() の検証を通過済み。ここでの esc_html() は
+						// 保険であり、これが無いと危険という意味ではない（「アクセス制限」設定タブの同じ
+						// メッセージと揃えている。ACGD_Settings::sanitize_access_restriction_settings() を参照）。
+						esc_html( $remote )
+					);
+				self::stash_resubmit( $user_id, $mode, $ip_text, $basic_id );
+				return;
+			}
+
 			if ( $new_password ) {
 				$final_hash = password_hash( $basic_pass, PASSWORD_DEFAULT );
 			}
