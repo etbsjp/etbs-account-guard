@@ -134,14 +134,16 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 - **e**：本体の `redirect_canonical()`（`template_redirect` の優先度 10）より**前**に処理する。プレーンパーマリンクの `/?author=1`（転送されずに投稿者ページが出る）も対象。
   管理画面（`edit.php?author=` の絞り込みなど）・REST・admin-ajax には掛けない。
   判定は `$_GET` ではなく**解析済みのクエリ変数**（`$wp->query_vars['author']`）で行う。`WP::parse_request()` は公開クエリ変数をクエリ文字列からも POST のデータからも取り込み、メインクエリはその結果に従うが、`redirect_canonical()` が見るのは `$_GET` だけ。
+  ただし転送するのは、**リクエスト自身が `author` を持ってきたとき**（`$_GET` か `$_POST` にキーがあるとき）だけ。`WP::parse_request()` は一致した書き換えルールからもクエリ変数を取り込むので、テーマやプラグインの書き換えルールが作った `author=` は、そのページ自身のアドレスとして転送しない。
 - **f**：
-  - ログイン：`authenticate` の結果が `invalid_username` / `invalid_email` / `incorrect_password` のときだけ、共通のエラー（コード `acgd_invalid_credentials`・文言 *The username or password you entered is incorrect.*）に差し替える。
+  - ログイン：`authenticate` の結果が `invalid_username` / `invalid_email` / `incorrect_password` / `application_passwords_disabled` / `application_passwords_disabled_for_user` のときだけ、共通のエラー（コード `acgd_invalid_credentials`・文言 *The username or password you entered is incorrect.*）に差し替える。
+    後ろの2つは、本体が `authenticate` の優先度 20 にも登録している `wp_authenticate_application_password()` が、REST API・XML-RPC のリクエスト（アプリケーションパスワードが作られたことのあるサイト）で、**存在するアカウントにだけ**返すもの（前段の `incorrect_password` を置き換える）。一覧は `ACGD_Login_Name::REVEALING_LOGIN_CODES` の1つだけにし、REST 側（下記）も同じものを使う。
     ★ コードは本体の `incorrect_password` を流用せず、独自のコードにする。`wp-login.php` はユーザー名欄を先頭のエラーコードが `incorrect_password`（と `empty_password`）のときだけ入力済みで戻すので、どの場合も欄が同じ状態（空）で戻るようにするため。独自のコードは `shake_error_codes` に足す（フォームは従来どおり揺れる）。
     共通のエラーは先頭に置く（ユーザー名欄・揺れ・REST の HTTP ステータスは先頭のコードで決まる）。置き場は `ACGD_Invalid_Credentials`（`inc/class-acgd-invalid-credentials.php`）で、1.1.0 のアクセス制限も同じものを使う。
     **それ以外のコード（空欄・画像認証・ログインロックなど他プラグインのエラー）は置き換えない**（職員の方が困る）。共通のエラーの後ろに残す。
     「パスワードをお忘れですか」のリンクは残す。
   - REST API（アプリケーションパスワードの Basic 認証）：アプリケーションパスワードは `authenticate` を通らず、`determine_current_user` で確かめられる。本体だけの構成なら失敗は `rest_not_logged_in` にまとまるが、`rest_authentication_errors` の優先度 90（`rest_application_password_check_errors`）より前に現在のユーザーを確定させるもの（他プラグインなど）があると、`invalid_username` と `incorrect_password` が別々の 401 で返る。
-    `rest_authentication_errors` の優先度 9999 で、`invalid_username` / `invalid_email` / `incorrect_password` / `application_passwords_disabled` / `application_passwords_disabled_for_user` のどれかを含むエラーを、共通のエラー（`acgd_invalid_credentials`・status 401・文言はログインと同じ msgid）に差し替える。
+    `rest_authentication_errors` の優先度 9999 で、ログインと同じ一覧（`invalid_username` / `invalid_email` / `incorrect_password` / `application_passwords_disabled` / `application_passwords_disabled_for_user`）のどれかを含むエラーを、共通のエラー（`acgd_invalid_credentials`・status 401・文言はログインと同じ msgid）に差し替える。
   - パスワード再発行：名前の有無が分かるコード（アカウントが無いときの `invalidcombo` / `invalid_email`、再発行が許可されていない存在するアカウントにだけ返る `no_password_reset`）**だけ**のときは、存在するアカウントが通る関門 `apply_filters( 'allow_password_reset', true, 0 )` を先に通す。`WP_Error` が返ったら、名前の有無が分かるコードを消してそのエラーを出す（転送しない）。そうでなければ**アカウントがあるときと同じ画面**（`wp-login.php?checkemail=confirm`）へ進める。メールは送らない。
     関門のコールバックが ID 0 で例外（`Throwable`）を投げたら、許可（true）とみなす。
     名前の有無が分かるコードが**他のエラーと混ざっているとき**（空欄、`lostpassword_post` で足された画像認証など）は、名前の有無が分かるコードだけを `remove()` し、他のエラーは残す（転送しない）。
@@ -150,8 +152,10 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
   - 既知の限界：WooCommerce のマイアカウントの**パスワード再発行フォーム**は独自の文言を出すので、1.0.0 の対象外（README に書く）。ログインフォームは `authenticate` を通るので対象になる。
   - 既知の限界：SiteGuard WP Plugin と併用するときは、SiteGuard の「ログイン詳細エラーメッセージの無効化」（Same Login Error Message）を ON のままにする。OFF だと画像認証エラーの文言が存在するアカウントにだけ出る（SiteGuard 自身の挙動）。README に書く。
   - 既知の限界：パスワード再発行の `retrieve_password_email_failure` と、メールを送るかどうかによる応答時間の差は残る。README に書く。
-- **g**：`is_author()` かつ**ログインしていない**とき 404（投稿者のフィード `/author/<名前>/feed/`・`?author_name=` を含む）。ログイン中は従来どおり表示する（設定画面の説明に「確認はログアウトして行う」旨を書く）。
-- **h**：`display_name === user_login` または `nickname === user_login` のユーザーを、設定画面のログイン名の保護タブに一覧する。各行からユーザー編集画面へリンク。
+  - 既知の限界：ログインの応答時間の差。本体はアカウントがあるときだけ `wp_check_password()` を呼ぶので、アカウントの有無で応答時間に差が出る。空の照合を足すと、SiteGuard の画像認証の誤答（照合しない）と逆向きの差ができるため単純ではなく、**1.0.0 では塞がない**（README・readme.txt の既知の限界に、パスワード再発行の時間差と並べて書く）。
+- **g**：`is_author()` かつ**ログインしていない**とき 404（投稿者のフィード `/author/<名前>/feed/`・`?author_name=` を含む）。ログイン中は従来どおり表示する（設定画面の説明に「結果はブラウザーのプライベートウィンドウで確かめる」旨と、オンにする前にテーマが投稿者ページへリンクしているかを確かめる手順を書く）。
+- **h**：`display_name === user_login` または `nickname === user_login` のユーザーを、設定画面のログイン名の保護タブに一覧する（見出しの id は `acgd-public-names`）。列はログイン名 (ユーザー名)・表示名・ニックネームで、ログイン名と同じ値には「(ログイン名と同じ)」を文字で添える。各行のログイン名の下に、ユーザー一覧と同じ形の「編集」リンク（ユーザー編集画面の `#nickname`）を置く。
+  ダッシュボードのウィジェットの先頭に、該当する人数（件数だけの問い合わせ）と一覧へのリンクを出す（0人なら出さない）。
 
 ### 受け入れ条件（1.0.0）
 

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ETBS Account Guard 1.0.0\n"
 "Report-Msgid-Bugs-To: https://github.com/etbsjp/etbs-account-guard/issues\n"
-"PO-Revision-Date: 2026-09-11 12:00+0900\n"
+"PO-Revision-Date: 2026-09-11 15:00+0900\n"
 "Last-Translator: ETBS\n"
 "Language-Team: Japanese\n"
 "Language: ja\n"
@@ -21,8 +21,8 @@ msgid "https://etbs.jp/product-category/wordpress-tools/"
 msgstr "https://etbs.jp/product-category/wordpress-tools/"
 
 #. Description of the plugin
-msgid "Protects the accounts that manage your site. Keeps the login names of your users away from visitors who are not logged in."
-msgstr "サイトを管理するアカウントを守ります。ログインしていない訪問者に、ユーザーのログイン名を渡しません。"
+msgid "Protects the accounts that manage your site. Hides the login names of your users from visitors who are not logged in."
+msgstr "サイトを管理するアカウントを守ります。ログインしていない訪問者から、ユーザーのログイン名を隠します。"
 
 #. Author of the plugin
 msgid "ETBS (DAI)"
@@ -51,23 +51,27 @@ msgid "REST API"
 msgstr "REST API"
 
 #. translators: %s: REST API route of the users, such as /wp/v2/users
-msgid "Hide the user endpoints (%s) from visitors who are not logged in"
-msgstr "ユーザー関連のエンドポイント (%s) をログインしていない訪問者に返さない"
+msgid "Hide the user information of the REST API (%s) from visitors who are not logged in"
+msgstr "REST API のユーザー情報 (%s) を、ログインしていない訪問者には返さない"
 
-msgid "Author data embedded in posts is hidden as well."
-msgstr "投稿に埋め込まれる投稿者の情報も返しません。"
+#. translators: %s: address of the user list of the REST API, such as /wp-json/wp/v2/users
+msgid "While this is off, anyone can see the list of users and their login names by opening %s in a browser."
+msgstr "オフの間は、ブラウザーで %s を開くだけで、誰でもユーザーの一覧とログイン名を見られます。"
+
+msgid "Themes and apps that read author names through the REST API without logging in, such as headless sites, will no longer get them."
+msgstr "ログインせずに REST API から投稿者名を読み込むテーマやアプリ (ヘッドレス構成など) では、投稿者名が表示されなくなります。"
 
 msgid "Logged-in users, including the block editor, can use them as before."
 msgstr "ログイン中のユーザー (ブロックエディターを含む) は従来どおり使えます。"
 
-msgid "oEmbed"
-msgstr "oEmbed"
+msgid "Embeds (oEmbed)"
+msgstr "埋め込み (oEmbed)"
 
 msgid "Use the site name and home page URL as the author of embedded posts"
 msgstr "埋め込まれた投稿の投稿者を、サイト名とトップページの URL にする"
 
-msgid "This applies when another site embeds one of your posts."
-msgstr "他のサイトがこのサイトの投稿を埋め込むときに効きます。"
+msgid "While this is off, a post embedded on another site carries the address of the author page, which contains the login name."
+msgstr "オフの間は、他のサイトに埋め込まれた投稿の情報に、ログイン名を含む投稿者ページのアドレスが入ります。"
 
 msgid "Sitemap"
 msgstr "サイトマップ"
@@ -76,14 +80,17 @@ msgstr "サイトマップ"
 msgid "Remove the user sitemap (%s)"
 msgstr "ユーザーのサイトマップ (%s) を出さない"
 
+msgid "While this is off, the user sitemap lists author page addresses, which contain login names."
+msgstr "オフの間は、ユーザーのサイトマップに、ログイン名を含む投稿者ページのアドレスが並びます。"
+
 msgid "Sitemaps of posts and pages are not affected."
 msgstr "投稿と固定ページのサイトマップには影響しません。"
 
-msgid "Class names"
-msgstr "クラス名"
+msgid "HTML class names"
+msgstr "HTML のクラス名"
 
-msgid "Remove class names that contain the user name"
-msgstr "ユーザー名を含むクラス名を外す"
+msgid "Remove class names that contain the login name"
+msgstr "ログイン名を含むクラス名を外す"
 
 #. translators: 1: class name added to comments by registered users, 2: class name added to author pages
 msgid "This removes %1$s from comments by registered users and %2$s from author pages."
@@ -93,15 +100,18 @@ msgstr "登録ユーザーのコメントから %1$s を、投稿者ページか
 msgid "Class names that contain the user ID, such as %s, are kept."
 msgstr "%s のようなユーザー ID を含むクラス名は残します。"
 
+msgid "If your custom CSS uses these class names, that CSS will no longer apply."
+msgstr "これらのクラス名を使った CSS を書いている場合は、その CSS が効かなくなります。"
+
 msgid "Author ID links"
 msgstr "投稿者 ID のリンク"
 
-#. translators: %s: example of a link by author ID, such as /?author=1
-msgid "Redirect %s to the home page"
-msgstr "%s をトップページへ転送する"
+#. translators: %s: example of a link by author number, such as /?author=1
+msgid "Redirect links by author number, such as %s, to the home page"
+msgstr "%s のような投稿者番号のリンクをトップページへ転送する"
 
-msgid "Otherwise WordPress redirects these links to the author page, whose URL contains the user name."
-msgstr "オフのときは、WordPress はこのリンクを、URL にユーザー名を含む投稿者ページへ転送します。"
+msgid "While this is off, WordPress sends these links to the author page, whose address contains the login name."
+msgstr "オフの間は、WordPress がこのリンクを、アドレスにログイン名を含む投稿者ページへ転送します。"
 
 msgid "Filtering by author in the admin screens is not affected."
 msgstr "管理画面での投稿者による絞り込みには影響しません。"
@@ -112,8 +122,14 @@ msgstr "ログインエラー"
 msgid "Show the same error for an unknown username and a wrong password"
 msgstr "存在しないユーザー名とパスワードの誤りで、同じエラーを出す"
 
-msgid "On the lost password screen, an unknown username or email address leads to the same screen as a registered one, and no email is sent."
-msgstr "パスワード再発行の画面では、登録されていないユーザー名やメールアドレスでも登録済みのときと同じ画面へ進み、メールは送りません。"
+msgid "While this is off, the error message tells whether the username exists."
+msgstr "オフの間は、エラーの文言の違いから、そのユーザー名が登録されているかどうかが分かります。"
+
+msgid "On the lost password screen, an unknown username or email address shows the same screen as a registered one."
+msgstr "パスワード再発行の画面では、登録されていないユーザー名やメールアドレスを入力しても、登録済みのときと同じ画面を表示します。"
+
+msgid "Registered users receive the password reset email as before."
+msgstr "登録済みのユーザーには、従来どおり再設定のメールが届きます。"
 
 msgid "Errors from other plugins, such as CAPTCHA or login lockout, are shown as they are."
 msgstr "画像認証やログインロックなど、他のプラグインのエラーはそのまま表示します。"
@@ -122,23 +138,33 @@ msgid "Author pages"
 msgstr "投稿者ページ"
 
 #. translators: %s: URL of an author page, such as /author/{name}/
-msgid "Return 404 (Page not found) for author pages (%s)"
-msgstr "投稿者ページ (%s) を404 (ページが見つかりません) にする"
+msgid "Show a \"Page not found\" screen instead of author pages (%s) to visitors who are not logged in"
+msgstr "ログインしていない訪問者には、投稿者ページ (%s) の代わりに「ページが見つかりません」を表示する"
 
-msgid "Turn this on if your theme does not show links to author pages, because those links will lead to a Page not found screen."
-msgstr "オンにすると投稿者ページへのリンクが「ページが見つかりません」の画面になるため、テーマが投稿者ページへのリンクを出していない場合にオンにしてください。"
+msgid "While this is off, the address of each author page contains the login name, so anyone who follows a link to it can see the login name."
+msgstr "オフの間は、投稿者ページのアドレスにログイン名が含まれるため、そのページへのリンクからログイン名が分かります。"
 
-msgid "While you are logged in, author pages are shown as before, so log out to check this setting."
-msgstr "ログイン中は投稿者ページが従来どおり表示されるため、この設定の確認はログアウトして行ってください。"
+msgid "Before turning this on, open a post on your site and click the author name."
+msgstr "オンにする前に、サイトの投稿で投稿者名をクリックしてみてください。"
+
+#. translators: %s: the part that the address of every author page contains, such as /author/
+msgid "If a page whose address contains %s opens, your theme links to author pages, and those links will lead to \"Page not found\"."
+msgstr "アドレスに %s を含むページが開く場合は、テーマが投稿者ページへリンクしているため、オンにするとそのリンク先が「ページが見つかりません」になります。"
+
+msgid "While you are logged in, author pages are shown as before, so check the result in a private window of your browser."
+msgstr "ログイン中は従来どおり表示されるため、結果はブラウザーのプライベートウィンドウで確かめてください。"
 
 msgid "Settings tabs"
 msgstr "設定のタブ"
 
-msgid "Each item hides login names from visitors who are not logged in at one place in WordPress."
-msgstr "各項目は、WordPress の中の1か所で、ログインしていない訪問者からログイン名を隠します。"
+msgid "WordPress reveals login names to visitors who are not logged in at several places, and each item below closes one of them."
+msgstr "WordPress には、ログインしていない訪問者にもログイン名が分かってしまう場所が複数あり、下の各項目がそれぞれ1か所を塞ぎます。"
 
-msgid "Uncheck an item only if it conflicts with your theme or another plugin."
-msgstr "テーマや他のプラグインと衝突する場合にだけ、その項目のチェックを外してください。"
+msgid "Keep them on, and turn one off only if your theme or another plugin stops working as expected after you activate this plugin."
+msgstr "通常はオンのままにし、有効化した後にテーマや他のプラグインの表示・動作がおかしくなった場合にだけ、関係する項目をオフにしてください。"
+
+msgid "\"Author pages\" is off by default; read its description before turning it on."
+msgstr "「投稿者ページ」は既定でオフのため、説明を読んだうえでオンにしてください。"
 
 msgid "Users whose public name is their login name"
 msgstr "公開される名前がログイン名と同じユーザー"
@@ -159,8 +185,8 @@ msgstr "表示名またはニックネームがログイン名と同じユーザ
 msgid "Showing the first %1$d of %2$d users."
 msgstr "%2$d人中、最初の%1$d人を表示しています。"
 
-msgid "Login name"
-msgstr "ログイン名"
+msgid "Login name (Username)"
+msgstr "ログイン名 (ユーザー名)"
 
 msgid "Display name"
 msgstr "表示名"
@@ -168,20 +194,29 @@ msgstr "表示名"
 msgid "Nickname"
 msgstr "ニックネーム"
 
-msgid "Same as the login name"
-msgstr "ログイン名と同じもの"
+msgid "Edit"
+msgstr "編集"
 
-msgid "Display name and nickname"
-msgstr "表示名とニックネーム"
+#. translators: %s: display name or nickname that is the same as the login name
+msgid "%s (same as the login name)"
+msgstr "%s (ログイン名と同じ)"
 
-msgid "ETBS Account Guard keeps the login names of your users away from visitors who are not logged in."
-msgstr "ETBS Account Guard は、ログインしていない訪問者に、ユーザーのログイン名を渡さないようにします。"
+#. translators: %d: number of users
+msgid "%d user has a display name or nickname that is the same as their login name."
+msgid_plural "%d users have a display name or nickname that is the same as their login name."
+msgstr[0] "表示名またはニックネームがログイン名と同じユーザーが%d人います。"
+
+msgid "Review the users"
+msgstr "一覧を確認する"
+
+msgid "Hides the login names of your users from visitors who are not logged in."
+msgstr "ログインしていない訪問者から、ユーザーのログイン名を隠します。"
 
 msgid "How to use"
 msgstr "使い方"
 
-msgid "Most protections work as soon as the plugin is activated."
-msgstr "ほとんどの保護は、プラグインを有効化した時点で働きます。"
+msgid "All protections except \"Author pages\" work as soon as the plugin is activated."
+msgstr "「投稿者ページ」以外の保護は、有効化した時点で働きます。"
 
 msgid "You can turn each one on or off on the settings screen."
 msgstr "項目ごとに、設定画面でオン・オフを切り替えられます。"
@@ -196,11 +231,12 @@ msgid "Notes"
 msgstr "注意事項"
 
 #. translators: %s: URL of an author page, such as /author/{name}/
-msgid "Author pages (%s) are still shown by default."
-msgstr "投稿者ページ (%s) は、既定では従来どおり表示されます。"
+msgid "Author pages (%s) are still shown by default, and their addresses contain the login name."
+msgstr "投稿者ページ (%s) は既定では表示されたままで、そのアドレスにはログイン名が含まれます。"
 
-msgid "To return 404 for them, turn on \"Author pages\" on the settings screen."
-msgstr "404にするには、設定画面で「投稿者ページ」をオンにしてください。"
+#. translators: %s: URL of the "Author pages" item on the settings screen
+msgid "If your theme does not link to author pages, turn on \"Author pages\" on the <a href=\"%s\">settings screen</a>."
+msgstr "テーマが投稿者ページへリンクしていない場合は、<a href=\"%s\">設定画面</a>の「投稿者ページ」をオンにしてください。"
 
 msgid "The lost password form of WooCommerce My Account is not covered."
 msgstr "WooCommerce のマイアカウントのパスワード再発行フォームは対象外です。"
@@ -217,6 +253,14 @@ msgstr "サポート"
 msgid "Open the settings"
 msgstr "設定を開く"
 
+msgid "(opens in a new tab)"
+msgstr "(新しいタブで開く)"
+
+#. translators: Joins two sentences of the same paragraph. 1: first sentence, 2: next sentence. Remove the space in languages that do not put a space between sentences.
+msgctxt "sentences in a row"
+msgid "%1$s %2$s"
+msgstr "%1$s%2$s"
+
 #. translators: %s: link inviting the reader to support the development of this plugin
 msgid "If ETBS Account Guard is useful to you, please %s."
 msgstr "ETBS Account Guard がお役に立ちましたら、%s。"
@@ -224,9 +268,9 @@ msgstr "ETBS Account Guard がお役に立ちましたら、%s。"
 msgid "consider supporting its development"
 msgstr "開発の支援をご検討ください"
 
-#. translators: %s: link for requesting custom development
-msgid "For custom development, please %s."
-msgstr "カスタマイズをご希望の場合は、%s。"
+#. translators: %s: link for requesting new features or custom development
+msgid "For new features or custom development, please %s."
+msgstr "機能の追加や独自の開発をご希望の場合は、%s。"
 
 msgid "send us a request"
 msgstr "開発をご依頼ください"

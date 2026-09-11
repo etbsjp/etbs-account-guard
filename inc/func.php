@@ -95,24 +95,58 @@ function acgd_get_support_url( $page ) {
  * Returns a support link that opens in a new tab.
  * 新しいタブで開く支援リンクを返す。
  *
+ * Screen reader users are told that the link opens in a new tab, in the same form core uses.
+ * スクリーンリーダーの利用者には、本体と同じ形で「新しいタブで開く」ことを伝える。
+ *
  * @param string $page Which page: 'donate' or 'request'. / どのページか（'donate' または 'request'）。
  * @param string $text Link text, not escaped. / リンク文言（未エスケープ）。
  * @return string The escaped HTML of the link. / エスケープ済みのリンク HTML。
  */
 function acgd_get_support_link( $page, $text ) {
 	return sprintf(
-		'<a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>',
+		'<a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s<span class="screen-reader-text"> %3$s</span></a>',
 		esc_url( acgd_get_support_url( $page ) ),
-		esc_html( $text )
+		esc_html( $text ),
+		esc_html__( '(opens in a new tab)', 'etbs-account-guard' )
 	);
+}
+
+/**
+ * Joins sentences that belong to the same paragraph, with the separator of the current language.
+ * 同じ段落に入る文を、表示中の言語の区切りでつなぐ。
+ *
+ * Each sentence is its own translation (the translation functions take one sentence each), so the space
+ * between sentences cannot live inside them. English puts a space there, Japanese does not; the separator
+ * is therefore a translation of its own, and the Japanese translation drops the space.
+ * 文はそれぞれ別の翻訳にする（翻訳関数には1文ずつ入れる）ので、文と文の間の空白を訳文の中に持てない。
+ * 英語はそこに空白を入れ、日本語は入れない。そのため区切りを独立した翻訳にし、日本語訳では空白を外す。
+ *
+ * @param string[] $sentences Sentences, already escaped. / 文（エスケープ済み）。
+ * @return string The joined sentences. / つないだ文。
+ */
+function acgd_join_sentences( $sentences ) {
+	$sentences = array_values( (array) $sentences );
+	$joined    = (string) array_shift( $sentences );
+
+	foreach ( $sentences as $sentence ) {
+		$joined = sprintf(
+			/* translators: Joins two sentences of the same paragraph. 1: first sentence, 2: next sentence. Remove the space in languages that do not put a space between sentences. */
+			esc_html_x( '%1$s %2$s', 'sentences in a row', 'etbs-account-guard' ), // phpcs:ignore WordPress.WP.I18n.NoEmptyStrings -- The separator itself is what is translated.
+			$joined,
+			$sentence
+		);
+	}
+
+	return $joined;
 }
 
 /**
  * Returns the two support sentences shared by the settings screen footer and the dashboard widget.
  * 設定画面のフッターとダッシュボードのウィジェットで共通に使う、支援の案内2文を返す。
  *
- * Each sentence is a separate translation, as the translation functions take one sentence each.
- * 翻訳関数には1文ずつ入れる決まりなので、2文は別々の翻訳にしている。
+ * Each sentence is a separate translation, as the translation functions take one sentence each,
+ * and acgd_join_sentences() puts them together.
+ * 翻訳関数には1文ずつ入れる決まりなので、2文は別々の翻訳にし、acgd_join_sentences() でつなぐ。
  *
  * @return string The escaped HTML of the two sentences. / エスケープ済みの2文の HTML。
  */
@@ -123,12 +157,35 @@ function acgd_get_support_sentences() {
 		acgd_get_support_link( 'donate', __( 'consider supporting its development', 'etbs-account-guard' ) )
 	);
 	$request = sprintf(
-		/* translators: %s: link for requesting custom development */
-		esc_html__( 'For custom development, please %s.', 'etbs-account-guard' ),
+		/* translators: %s: link for requesting new features or custom development */
+		esc_html__( 'For new features or custom development, please %s.', 'etbs-account-guard' ),
 		acgd_get_support_link( 'request', __( 'send us a request', 'etbs-account-guard' ) )
 	);
 
-	return $donate . ' ' . $request;
+	return acgd_join_sentences( array( $donate, $request ) );
+}
+
+/**
+ * HTML allowed in the sentences printed by this plugin's admin screens.
+ * このプラグインの管理画面が出力する文で許可する HTML。
+ *
+ * Links (including the support links that open in a new tab and their screen reader text) and <code>.
+ * リンク（新しいタブで開く支援リンクと、そのスクリーンリーダー用の文言を含む）と <code>。
+ *
+ * @return array Allowed HTML for wp_kses(). / wp_kses() に渡す許可リスト。
+ */
+function acgd_allowed_sentence_html() {
+	return array(
+		'a'    => array(
+			'href'   => true,
+			'target' => true,
+			'rel'    => true,
+		),
+		'span' => array(
+			'class' => true,
+		),
+		'code' => array(),
+	);
 }
 
 /**

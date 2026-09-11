@@ -47,9 +47,24 @@ class ACGD_Login_Name {
 	 * Login error codes that tell whether an account exists (item f).
 	 * アカウントの有無が分かってしまうログインエラーのコード（f）。
 	 *
+	 * wp_authenticate_username_password() / wp_authenticate_email_password() answer invalid_username /
+	 * invalid_email for an unknown account and incorrect_password for an existing one.
+	 * Core also hooks wp_authenticate_application_password() on authenticate at 20. For REST API and XML-RPC
+	 * requests on a site where an application password has ever been created, it answers invalid_username /
+	 * invalid_email for an unknown account, and for an existing one incorrect_password,
+	 * application_passwords_disabled (application passwords are off for the site) or
+	 * application_passwords_disabled_for_user, replacing the error of the earlier callbacks.
+	 * wp_authenticate_username_password() / wp_authenticate_email_password() は、アカウントが無いときは
+	 * invalid_username / invalid_email、あるときは incorrect_password を返す。
+	 * 本体は wp_authenticate_application_password() も authenticate の優先度 20 に登録している。アプリケーション
+	 * パスワードが作られたことのあるサイトの REST API・XML-RPC のリクエストでは、アカウントが無いときは
+	 * invalid_username / invalid_email、あるときは incorrect_password・application_passwords_disabled
+	 * （サイトでアプリケーションパスワードが無効）・application_passwords_disabled_for_user を返し、
+	 * それまでのコールバックのエラーを置き換える。
+	 *
 	 * @var string[]
 	 */
-	const REVEALING_LOGIN_CODES = array( 'invalid_username', 'invalid_email', 'incorrect_password' );
+	const REVEALING_LOGIN_CODES = array( 'invalid_username', 'invalid_email', 'incorrect_password', 'application_passwords_disabled', 'application_passwords_disabled_for_user' );
 
 	/**
 	 * Priority of the rest_authentication_errors filter that rewrites the REST login errors (item f).
@@ -68,16 +83,16 @@ class ACGD_Login_Name {
 	 * REST API authentication error codes that tell whether an account exists (item f).
 	 * アカウントの有無が分かってしまう REST API の認証エラーのコード（f）。
 	 *
-	 * wp_authenticate_application_password() answers invalid_username / invalid_email for an unknown account,
-	 * and for an existing one incorrect_password, application_passwords_disabled (application passwords are
-	 * off for the site) or application_passwords_disabled_for_user.
-	 * wp_authenticate_application_password() は、アカウントが無いときは invalid_username / invalid_email、
-	 * あるときは incorrect_password・application_passwords_disabled（サイトでアプリケーションパスワードが無効）・
-	 * application_passwords_disabled_for_user を返す。
+	 * The same list as REVEALING_LOGIN_CODES: the REST API gets these errors from the same
+	 * wp_authenticate_application_password(), called from determine_current_user instead of authenticate.
+	 * One list keeps the two paths from drifting apart.
+	 * REVEALING_LOGIN_CODES と同じ一覧。REST API のこれらのエラーは、authenticate ではなく
+	 * determine_current_user から呼ばれる同じ wp_authenticate_application_password() が返す。
+	 * 一覧を1つにして、2つの経路の間でずれが生じないようにする。
 	 *
 	 * @var string[]
 	 */
-	const REVEALING_REST_CODES = array( 'invalid_username', 'invalid_email', 'incorrect_password', 'application_passwords_disabled', 'application_passwords_disabled_for_user' );
+	const REVEALING_REST_CODES = self::REVEALING_LOGIN_CODES;
 
 	/**
 	 * Lost password error codes that tell whether an account exists (item f).
@@ -452,9 +467,12 @@ class ACGD_Login_Name {
 	 * archive without redirecting, are covered too.
 	 * Every value of the parameter is redirected, not only digits: WP_Query also treats values such as
 	 * "1abc" as an author query, while redirect_canonical() redirects digits only.
-	 * The decision is made on the parsed query variable ($wp->query_vars), not on $_GET. WP::parse_request()
+	 * The decision is made on the parsed query variable ($wp->query_vars), not on $_GET alone. WP::parse_request()
 	 * fills the public query variables from the query string and from POST data alike, and the main query
 	 * follows what it parsed, whereas redirect_canonical() looks at $_GET only.
+	 * It also fills them from a matched rewrite rule, so the request must carry author itself (in the query
+	 * string or in POST data). An author= made by a rewrite rule of a theme or plugin belongs to that page's
+	 * own address and is left alone.
 	 * The admin screens (the author filter of edit.php), the REST API and admin-ajax never reach
 	 * template_redirect; the explicit checks below state that and keep it true if this is ever moved.
 	 * A 302 is used because the switch can be turned off, and a cached 301 would outlive it.
@@ -464,9 +482,12 @@ class ACGD_Login_Name {
 	 * 出す基本パーマリンクも対象になる。
 	 * 数字だけでなくパラメータの値を問わず転送する。WP_Query は "1abc" のような値も投稿者の絞り込みとして扱うが、
 	 * redirect_canonical() が転送するのは数字だけだから。
-	 * 判定は $_GET ではなく、解析済みのクエリ変数（$wp->query_vars）で行う。WP::parse_request() は公開クエリ変数を
+	 * 判定は $_GET だけでなく、解析済みのクエリ変数（$wp->query_vars）で行う。WP::parse_request() は公開クエリ変数を
 	 * クエリ文字列からも POST のデータからも同じように取り込み、メインクエリはその解析結果に従う。
 	 * 一方 redirect_canonical() が見るのは $_GET だけである。
+	 * ただし、一致した書き換えルールからも取り込むので、リクエスト自身が author を持ってきたとき（クエリ文字列か
+	 * POST のデータ）に限る。テーマやプラグインの書き換えルールが作った author= は、そのページ自身のアドレスの
+	 * 一部なので触れない。
 	 * 管理画面（edit.php の投稿者での絞り込み）・REST API・admin-ajax は template_redirect に来ない。
 	 * 下の明示的な判定はそれを書き表し、将来この処理を移しても成り立つようにするためのもの。
 	 * スイッチを OFF にできるので 302 にする。301 だとブラウザにキャッシュされ、OFF にした後も残る。
@@ -490,6 +511,15 @@ class ACGD_Login_Name {
 			return;
 		}
 
+		// The request itself must carry author; one made by a rewrite rule is left alone (see above).
+		// Only whether the key exists is read, and nothing is changed, so there is no nonce to check.
+		// リクエスト自身が author を持ってきたときに限る。書き換えルールが作ったものには触れない（上記）。
+		// キーの有無を見るだけで何も変更しないので、確かめる nonce は無い。
+		$from_request = isset( $_GET['author'] ) || isset( $_POST['author'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.NonceVerification.Missing -- Presence check only; no value is used and nothing is changed.
+		if ( ! $from_request ) {
+			return;
+		}
+
 		wp_safe_redirect( home_url( '/' ), 302 );
 		exit;
 	}
@@ -502,11 +532,11 @@ class ACGD_Login_Name {
 	 * Replaces the login errors that tell whether an account exists with one common error (item f).
 	 * アカウントの有無が分かってしまうログインエラーを、共通の1つのエラーに差し替える（f）。
 	 *
-	 * Only invalid_username / invalid_email / incorrect_password are replaced; any other code (empty fields,
-	 * CAPTCHA, login lockout and so on from other plugins) stays with its message, after the common error.
+	 * Only the codes of REVEALING_LOGIN_CODES are replaced; any other code (empty fields, CAPTCHA, login
+	 * lockout and so on from other plugins) stays with its message, after the common error.
 	 * The code of the common error is chosen so that the username field comes back the same in both cases
 	 * (see ACGD_Invalid_Credentials::CODE).
-	 * 差し替えるのは invalid_username / invalid_email / incorrect_password だけで、それ以外のコード（空欄、
+	 * 差し替えるのは REVEALING_LOGIN_CODES のコードだけで、それ以外のコード（空欄、
 	 * 他プラグインの画像認証・ログインロックなど）は文言とともに共通のエラーの後ろに残す。
 	 * 共通のエラーのコードは、どちらの場合もユーザー名欄が同じ状態で戻るように選んでいる
 	 * （ACGD_Invalid_Credentials::CODE を参照）。
@@ -676,13 +706,51 @@ class ACGD_Login_Name {
 	/*-------------------------------------------*/
 
 	/**
+	 * Counts users whose display name or nickname is the same as their login name (item h). Read only.
+	 * 表示名またはニックネームがログイン名と同じユーザーを数える（h）。読み取りのみ。
+	 *
+	 * Only the count, for the dashboard widget, which shows it to users who can manage options.
+	 * WP_User_Query cannot compare two columns, so this is one direct query. On multisite it keeps to the
+	 * users of the current site, as WP_User_Query does. The WHERE clause is the same as in
+	 * find_users_with_login_as_public_name().
+	 * ダッシュボードのウィジェット（manage_options のユーザーにだけ出す）のための、件数だけの問い合わせ。
+	 * WP_User_Query は列どうしを比べられないので、1本の直接のクエリにする。マルチサイトでは
+	 * WP_User_Query と同じく現在のサイトのユーザーに絞る。WHERE 句は find_users_with_login_as_public_name() と同じ。
+	 *
+	 * @return int Number of matching users. / 該当するユーザーの数。
+	 */
+	public static function count_users_with_login_as_public_name() {
+		global $wpdb;
+
+		// On a single site the EXISTS clause is skipped by passing 0. / シングルサイトでは 0 を渡して EXISTS を飛ばす。
+		$is_multisite = is_multisite() ? 1 : 0;
+		$caps_key     = $wpdb->get_blog_prefix() . 'capabilities';
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A column-to-column comparison has no API. Admin screens of manage_options users only, so no cache.
+		$total = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT( DISTINCT u.ID )
+				FROM {$wpdb->users} AS u
+				LEFT JOIN {$wpdb->usermeta} AS n ON ( n.user_id = u.ID AND n.meta_key = 'nickname' )
+				WHERE ( u.display_name = u.user_login OR n.meta_value = u.user_login )
+				AND ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = u.ID AND c.meta_key = %s ) )",
+				$is_multisite,
+				$caps_key
+			)
+		);
+		// phpcs:enable
+
+		return $total;
+	}
+
+	/**
 	 * Finds users whose display name or nickname is the same as their login name (item h). Read only.
 	 * 表示名またはニックネームがログイン名と同じユーザーを探す（h）。読み取りのみ。
 	 *
-	 * WP_User_Query cannot compare two columns, so this is one direct query. On multisite it keeps to the
-	 * users of the current site, as WP_User_Query does. It runs only on the settings screen.
-	 * WP_User_Query は列どうしを比べられないので、1本の直接のクエリにする。マルチサイトでは
-	 * WP_User_Query と同じく現在のサイトのユーザーに絞る。設定画面でだけ動く。
+	 * The count comes from count_users_with_login_as_public_name(); the rows come from one direct query
+	 * with the same WHERE clause. It runs only on the settings screen.
+	 * 件数は count_users_with_login_as_public_name() から取り、行は同じ WHERE 句の1本の直接のクエリで取る。
+	 * 設定画面でだけ動く。
 	 *
 	 * @param int $limit Maximum number of users to return. / 返すユーザーの上限。
 	 * @return array {
@@ -703,19 +771,9 @@ class ACGD_Login_Name {
 		$is_multisite = is_multisite() ? 1 : 0;
 		$caps_key     = $wpdb->get_blog_prefix() . 'capabilities';
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A column-to-column comparison has no API. Settings screen only, so no cache.
-		$total = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT( DISTINCT u.ID )
-				FROM {$wpdb->users} AS u
-				LEFT JOIN {$wpdb->usermeta} AS n ON ( n.user_id = u.ID AND n.meta_key = 'nickname' )
-				WHERE ( u.display_name = u.user_login OR n.meta_value = u.user_login )
-				AND ( %d = 0 OR EXISTS ( SELECT 1 FROM {$wpdb->usermeta} AS c WHERE c.user_id = u.ID AND c.meta_key = %s ) )",
-				$is_multisite,
-				$caps_key
-			)
-		);
+		$total = self::count_users_with_login_as_public_name();
 
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A column-to-column comparison has no API. Settings screen only, so no cache.
 		$users = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT DISTINCT u.ID, u.user_login, u.display_name, n.meta_value AS nickname,

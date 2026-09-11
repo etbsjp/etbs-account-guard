@@ -59,6 +59,14 @@ class ACGD_Settings {
 	const PUBLIC_NAME_LIST_LIMIT = 100;
 
 	/**
+	 * HTML id of the heading of the list of item h. The dashboard widget links to it.
+	 * h の一覧の見出しの HTML の id。ダッシュボードのウィジェットがここへリンクする。
+	 *
+	 * @var string
+	 */
+	const PUBLIC_NAMES_ID = 'acgd-public-names';
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -203,10 +211,14 @@ class ACGD_Settings {
 	 * Returns the fields of the Login Name Protection tab, in the order of items a to g.
 	 * 「ログイン名の保護」タブの項目を a〜g の順で返す。
 	 *
-	 * 'label' and 'description' are HTML with every translated part escaped; only <code> is added around
-	 * fixed values. They are printed through wp_kses() with <code> allowed.
-	 * 'label' と 'description' は、翻訳部分をすべてエスケープした HTML。固定の値を <code> で囲むだけで、
+	 * 'label' and each entry of 'description' are HTML with every translated part escaped; only <code> is
+	 * added around fixed values. They are printed through wp_kses() with <code> allowed.
+	 * 'description' holds one sentence per entry, and each is printed as its own paragraph. The descriptions
+	 * follow one pattern: what can be seen while the item is off, then what changes when it is on.
+	 * 'label' と 'description' の各要素は、翻訳部分をすべてエスケープした HTML。固定の値を <code> で囲むだけで、
 	 * 出力時は <code> だけを許可した wp_kses() を通す。
+	 * 'description' は1要素に1文を持ち、それぞれを1つの段落として出す。説明は「オフの間に何が見えるか」、
+	 * 続いて「オンにすると何が変わるか」の順に揃える。
 	 *
 	 * @return array[] Switch name => array( 'title', 'label', 'description' ). / スイッチ名 => 見出し・ラベル・説明。
 	 */
@@ -216,19 +228,24 @@ class ACGD_Settings {
 				'title'       => __( 'REST API', 'etbs-account-guard' ),
 				'label'       => sprintf(
 					/* translators: %s: REST API route of the users, such as /wp/v2/users */
-					esc_html__( 'Hide the user endpoints (%s) from visitors who are not logged in', 'etbs-account-guard' ),
+					esc_html__( 'Hide the user information of the REST API (%s) from visitors who are not logged in', 'etbs-account-guard' ),
 					self::code( '/wp/v2/users' )
 				),
 				'description' => array(
-					esc_html__( 'Author data embedded in posts is hidden as well.', 'etbs-account-guard' ),
+					sprintf(
+						/* translators: %s: address of the user list of the REST API, such as /wp-json/wp/v2/users */
+						esc_html__( 'While this is off, anyone can see the list of users and their login names by opening %s in a browser.', 'etbs-account-guard' ),
+						self::code( '/wp-json/wp/v2/users' )
+					),
+					esc_html__( 'Themes and apps that read author names through the REST API without logging in, such as headless sites, will no longer get them.', 'etbs-account-guard' ),
 					esc_html__( 'Logged-in users, including the block editor, can use them as before.', 'etbs-account-guard' ),
 				),
 			),
 			'oembed_author'  => array(
-				'title'       => __( 'oEmbed', 'etbs-account-guard' ),
+				'title'       => __( 'Embeds (oEmbed)', 'etbs-account-guard' ),
 				'label'       => esc_html__( 'Use the site name and home page URL as the author of embedded posts', 'etbs-account-guard' ),
 				'description' => array(
-					esc_html__( 'This applies when another site embeds one of your posts.', 'etbs-account-guard' ),
+					esc_html__( 'While this is off, a post embedded on another site carries the address of the author page, which contains the login name.', 'etbs-account-guard' ),
 				),
 			),
 			'users_sitemap'  => array(
@@ -239,12 +256,13 @@ class ACGD_Settings {
 					self::code( 'wp-sitemap-users-1.xml' )
 				),
 				'description' => array(
+					esc_html__( 'While this is off, the user sitemap lists author page addresses, which contain login names.', 'etbs-account-guard' ),
 					esc_html__( 'Sitemaps of posts and pages are not affected.', 'etbs-account-guard' ),
 				),
 			),
 			'name_classes'   => array(
-				'title'       => __( 'Class names', 'etbs-account-guard' ),
-				'label'       => esc_html__( 'Remove class names that contain the user name', 'etbs-account-guard' ),
+				'title'       => __( 'HTML class names', 'etbs-account-guard' ),
+				'label'       => esc_html__( 'Remove class names that contain the login name', 'etbs-account-guard' ),
 				'description' => array(
 					sprintf(
 						/* translators: 1: class name added to comments by registered users, 2: class name added to author pages */
@@ -257,17 +275,18 @@ class ACGD_Settings {
 						esc_html__( 'Class names that contain the user ID, such as %s, are kept.', 'etbs-account-guard' ),
 						self::code( 'author-1' )
 					),
+					esc_html__( 'If your custom CSS uses these class names, that CSS will no longer apply.', 'etbs-account-guard' ),
 				),
 			),
 			'author_query'   => array(
 				'title'       => __( 'Author ID links', 'etbs-account-guard' ),
 				'label'       => sprintf(
-					/* translators: %s: example of a link by author ID, such as /?author=1 */
-					esc_html__( 'Redirect %s to the home page', 'etbs-account-guard' ),
+					/* translators: %s: example of a link by author number, such as /?author=1 */
+					esc_html__( 'Redirect links by author number, such as %s, to the home page', 'etbs-account-guard' ),
 					self::code( '/?author=1' )
 				),
 				'description' => array(
-					esc_html__( 'Otherwise WordPress redirects these links to the author page, whose URL contains the user name.', 'etbs-account-guard' ),
+					esc_html__( 'While this is off, WordPress sends these links to the author page, whose address contains the login name.', 'etbs-account-guard' ),
 					esc_html__( 'Filtering by author in the admin screens is not affected.', 'etbs-account-guard' ),
 				),
 			),
@@ -275,7 +294,9 @@ class ACGD_Settings {
 				'title'       => __( 'Login errors', 'etbs-account-guard' ),
 				'label'       => esc_html__( 'Show the same error for an unknown username and a wrong password', 'etbs-account-guard' ),
 				'description' => array(
-					esc_html__( 'On the lost password screen, an unknown username or email address leads to the same screen as a registered one, and no email is sent.', 'etbs-account-guard' ),
+					esc_html__( 'While this is off, the error message tells whether the username exists.', 'etbs-account-guard' ),
+					esc_html__( 'On the lost password screen, an unknown username or email address shows the same screen as a registered one.', 'etbs-account-guard' ),
+					esc_html__( 'Registered users receive the password reset email as before.', 'etbs-account-guard' ),
 					esc_html__( 'Errors from other plugins, such as CAPTCHA or login lockout, are shown as they are.', 'etbs-account-guard' ),
 				),
 			),
@@ -283,15 +304,34 @@ class ACGD_Settings {
 				'title'       => __( 'Author pages', 'etbs-account-guard' ),
 				'label'       => sprintf(
 					/* translators: %s: URL of an author page, such as /author/{name}/ */
-					esc_html__( 'Return 404 (Page not found) for author pages (%s)', 'etbs-account-guard' ),
+					esc_html__( 'Show a "Page not found" screen instead of author pages (%s) to visitors who are not logged in', 'etbs-account-guard' ),
 					self::code( '/author/{name}/' )
 				),
 				'description' => array(
-					esc_html__( 'Turn this on if your theme does not show links to author pages, because those links will lead to a Page not found screen.', 'etbs-account-guard' ),
-					esc_html__( 'While you are logged in, author pages are shown as before, so log out to check this setting.', 'etbs-account-guard' ),
+					esc_html__( 'While this is off, the address of each author page contains the login name, so anyone who follows a link to it can see the login name.', 'etbs-account-guard' ),
+					esc_html__( 'Before turning this on, open a post on your site and click the author name.', 'etbs-account-guard' ),
+					sprintf(
+						/* translators: %s: the part that the address of every author page contains, such as /author/ */
+						esc_html__( 'If a page whose address contains %s opens, your theme links to author pages, and those links will lead to "Page not found".', 'etbs-account-guard' ),
+						self::code( '/author/' )
+					),
+					esc_html__( 'While you are logged in, author pages are shown as before, so check the result in a private window of your browser.', 'etbs-account-guard' ),
 				),
 			),
 		);
+	}
+
+	/**
+	 * Returns the HTML id of the checkbox of one switch. Links (such as the one from the dashboard widget
+	 * to "Author pages") use it as the anchor.
+	 * スイッチ1つのチェックボックスの HTML の id を返す。リンク（ダッシュボードのウィジェットから
+	 * 「投稿者ページ」へのものなど）はこれをアンカーに使う。
+	 *
+	 * @param string $key Switch name (a key of ACGD_Login_Name::get_defaults()). / スイッチ名（ACGD_Login_Name::get_defaults() のキー）。
+	 * @return string HTML id, such as acgd-login-name-author-archive. / HTML の id（例 acgd-login-name-author-archive）。
+	 */
+	public static function get_field_id( $key ) {
+		return 'acgd-login-name-' . str_replace( '_', '-', $key );
 	}
 
 	/**
@@ -390,9 +430,20 @@ class ACGD_Settings {
 	public static function render_login_name_section() {
 		?>
 		<p>
-			<?php esc_html_e( 'Each item hides login names from visitors who are not logged in at one place in WordPress.', 'etbs-account-guard' ); ?>
-			<?php esc_html_e( 'Uncheck an item only if it conflicts with your theme or another plugin.', 'etbs-account-guard' ); ?>
+			<?php
+			// Joined without a space in languages that do not use one. / 空白を使わない言語では空白なしでつなぐ。
+			echo wp_kses(
+				acgd_join_sentences(
+					array(
+						esc_html__( 'WordPress reveals login names to visitors who are not logged in at several places, and each item below closes one of them.', 'etbs-account-guard' ),
+						esc_html__( 'Keep them on, and turn one off only if your theme or another plugin stops working as expected after you activate this plugin.', 'etbs-account-guard' ),
+					)
+				),
+				acgd_allowed_sentence_html()
+			);
+			?>
 		</p>
+		<p><?php esc_html_e( '"Author pages" is off by default; read its description before turning it on.', 'etbs-account-guard' ); ?></p>
 		<?php
 	}
 
@@ -409,17 +460,27 @@ class ACGD_Settings {
 			return;
 		}
 
-		$field    = $fields[ $key ];
-		$settings = ACGD_Login_Name::get_settings();
-		$input_id = 'acgd-login-name-' . str_replace( '_', '-', $key );
+		$field        = $fields[ $key ];
+		$settings     = ACGD_Login_Name::get_settings();
+		$input_id     = self::get_field_id( $key );
+		$descriptions = array_values( $field['description'] );
+
+		// One paragraph per sentence, each with an id; the checkbox lists them in aria-describedby.
+		// 1文につき1段落とし、それぞれに id を付ける。チェックボックスは aria-describedby でそれらを列挙する。
+		$description_ids = array();
+		foreach ( array_keys( $descriptions ) as $index ) {
+			$description_ids[] = $input_id . '-description-' . ( $index + 1 );
+		}
 		?>
 		<fieldset>
 			<legend class="screen-reader-text"><span><?php echo esc_html( $field['title'] ); ?></span></legend>
 			<label for="<?php echo esc_attr( $input_id ); ?>">
-				<input type="checkbox" id="<?php echo esc_attr( $input_id ); ?>" name="<?php echo esc_attr( ACGD_Login_Name::OPTION . '[' . $key . ']' ); ?>" value="1" <?php checked( ! empty( $settings[ $key ] ) ); ?> />
+				<input type="checkbox" id="<?php echo esc_attr( $input_id ); ?>" name="<?php echo esc_attr( ACGD_Login_Name::OPTION . '[' . $key . ']' ); ?>" value="1" aria-describedby="<?php echo esc_attr( implode( ' ', $description_ids ) ); ?>" <?php checked( ! empty( $settings[ $key ] ) ); ?> />
 				<?php echo wp_kses( $field['label'], self::allowed_field_html() ); ?>
 			</label>
-			<p class="description"><?php echo wp_kses( implode( ' ', $field['description'] ), self::allowed_field_html() ); ?></p>
+			<?php foreach ( $descriptions as $index => $sentence ) : ?>
+				<p class="description" id="<?php echo esc_attr( $description_ids[ $index ] ); ?>"><?php echo wp_kses( $sentence, self::allowed_field_html() ); ?></p>
+			<?php endforeach; ?>
 		</fieldset>
 		<?php
 	}
@@ -433,11 +494,20 @@ class ACGD_Settings {
 	private static function render_public_name_section() {
 		$result = ACGD_Login_Name::find_users_with_login_as_public_name( self::PUBLIC_NAME_LIST_LIMIT );
 		?>
-		<h2><?php esc_html_e( 'Users whose public name is their login name', 'etbs-account-guard' ); ?></h2>
+		<h2 id="<?php echo esc_attr( self::PUBLIC_NAMES_ID ); ?>"><?php esc_html_e( 'Users whose public name is their login name', 'etbs-account-guard' ); ?></h2>
 		<p>
-			<?php esc_html_e( 'Display names and nicknames are shown to visitors, for example as the author of posts and comments and in feeds.', 'etbs-account-guard' ); ?>
-			<?php esc_html_e( 'For each user below, open the profile, change the nickname, and choose a different name in "Display name publicly as".', 'etbs-account-guard' ); ?>
-			<?php esc_html_e( 'This plugin does not change them automatically.', 'etbs-account-guard' ); ?>
+			<?php
+			echo wp_kses(
+				acgd_join_sentences(
+					array(
+						esc_html__( 'Display names and nicknames are shown to visitors, for example as the author of posts and comments and in feeds.', 'etbs-account-guard' ),
+						esc_html__( 'For each user below, open the profile, change the nickname, and choose a different name in "Display name publicly as".', 'etbs-account-guard' ),
+						esc_html__( 'This plugin does not change them automatically.', 'etbs-account-guard' ),
+					)
+				),
+				acgd_allowed_sentence_html()
+			);
+			?>
 		</p>
 		<?php
 		if ( 0 === $result['total'] ) {
@@ -465,10 +535,9 @@ class ACGD_Settings {
 		<table class="widefat striped">
 			<thead>
 				<tr>
-					<th scope="col"><?php esc_html_e( 'Login name', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>
 					<th scope="col"><?php esc_html_e( 'Display name', 'etbs-account-guard' ); ?></th>
 					<th scope="col"><?php esc_html_e( 'Nickname', 'etbs-account-guard' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'Same as the login name', 'etbs-account-guard' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -482,13 +551,14 @@ class ACGD_Settings {
 						<td>
 							<?php if ( $edit_link ) : ?>
 								<a href="<?php echo esc_url( $edit_link ); ?>"><strong><?php echo esc_html( $user->user_login ); ?></strong></a>
+								<?php // The same row action as the Users screen; it opens the profile at the nickname field. / ユーザー一覧と同じ行の操作。プロフィールをニックネームの欄で開く。 ?>
+								<div class="row-actions visible"><span class="edit"><a href="<?php echo esc_url( $edit_link . '#nickname' ); ?>"><?php esc_html_e( 'Edit', 'etbs-account-guard' ); ?></a></span></div>
 							<?php else : ?>
 								<strong><?php echo esc_html( $user->user_login ); ?></strong>
 							<?php endif; ?>
 						</td>
-						<td><?php echo esc_html( $user->display_name ); ?></td>
-						<td><?php echo esc_html( (string) $user->nickname ); ?></td>
-						<td><?php echo esc_html( self::describe_match( ! empty( $user->display_matches ), ! empty( $user->nickname_matches ) ) ); ?></td>
+						<td><?php echo esc_html( self::describe_public_name( $user->display_name, ! empty( $user->display_matches ) ) ); ?></td>
+						<td><?php echo esc_html( self::describe_public_name( (string) $user->nickname, ! empty( $user->nickname_matches ) ) ); ?></td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
@@ -497,21 +567,22 @@ class ACGD_Settings {
 	}
 
 	/**
-	 * Returns which public name is the same as the login name, for the list of item h.
-	 * h の一覧用に、どの公開される名前がログイン名と同じかを返す。
+	 * Returns a public name for the list of item h, with a note in words when it is the same as the login name.
+	 * h の一覧用に公開される名前を返す。ログイン名と同じときは、そのことを文字で添える。
 	 *
-	 * @param bool $display_matches  Whether the display name matches. / 表示名が同じか。
-	 * @param bool $nickname_matches Whether the nickname matches. / ニックネームが同じか。
-	 * @return string Label, not escaped. / ラベル（未エスケープ）。
+	 * The note is text, not only a color or an icon, so that it is not lost for anyone.
+	 * 色やアイコンだけに頼らず文字で添えるので、誰にとっても情報が失われない。
+	 *
+	 * @param string $name    Display name or nickname. / 表示名またはニックネーム。
+	 * @param bool   $matches Whether it is the same as the login name. / ログイン名と同じか。
+	 * @return string Text, not escaped. / 文字列（未エスケープ）。
 	 */
-	private static function describe_match( $display_matches, $nickname_matches ) {
-		if ( $display_matches && $nickname_matches ) {
-			return __( 'Display name and nickname', 'etbs-account-guard' );
-		}
-		if ( $display_matches ) {
-			return __( 'Display name', 'etbs-account-guard' );
+	public static function describe_public_name( $name, $matches ) {
+		if ( ! $matches ) {
+			return $name;
 		}
 
-		return __( 'Nickname', 'etbs-account-guard' );
+		/* translators: %s: display name or nickname that is the same as the login name */
+		return sprintf( __( '%s (same as the login name)', 'etbs-account-guard' ), $name );
 	}
 }
