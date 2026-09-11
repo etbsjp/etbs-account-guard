@@ -25,17 +25,36 @@ ETBS Account Guard closes these places. Each one can be turned on or off from Se
 * **Author pages** (off by default) – Author pages (`/author/{name}/`) return 404 for visitors who are not logged in. Before turning this on, open a post on your site and click the author name. If a page whose address contains `/author/` opens, your theme links to author pages, and those links will lead to "Page not found". Logged-in users still see author pages, so check the result in a private window of your browser.
 * **Public names** – The settings screen lists users whose display name or nickname is the same as their login name, so that you can change them. Nothing is changed automatically.
 
+= Access Restriction (IP restriction) =
+
+On the Access Restriction tab of Settings > ETBS Account Guard, you can require an IP address check for a role, for a specific user, or both. The **administrator** role itself is always unrestricted; a specific administrator can still be restricted from their own user edit screen. A user's own setting always wins over their role's setting, and a user held to more than one requirement (through more than one role) must satisfy all of them.
+
+* **At login** (wp-login.php, XML-RPC, and anything that authenticates a username and password) – a restricted account connecting from an address not on its allowed list is refused with the same message as a wrong password; the reason is never revealed. This is judged after any CAPTCHA plugin (such as SiteGuard WP Plugin) has already run, so a CAPTCHA failure and an IP restriction never look different from each other.
+* **On every later request** (the admin screens, admin-ajax.php, admin-post.php, the front end and the REST API) – a restricted account connecting from a disallowed address has only that one session discarded; the request continues as if signed out. Nothing is blocked with an error page, so public pages and forms that do not require sign-in keep working normally.
+* **Application passwords** are turned off for a restricted user, checked again on every REST API request.
+* The IP list combines one site-wide list with any addresses added just for one user. Each line is a single IPv4 or IPv6 address or a range in CIDR notation; text after `#` is a note. Only the address the server itself sees for the connection (`REMOTE_ADDR`) is used; headers such as `X-Forwarded-For` are never read, since a visitor can set those themselves.
+* Saving the Access Restriction tab, or a user's own restriction on their user edit screen, is refused (with an explanation) if it would leave no unrestricted administrator (or other user who can manage options), or if it would lock out the very access you are saving from.
+* The last 100 denials are listed on the Denial Log tab.
+* If Access Restriction ever malfunctions, it turns itself off and shows a warning on the Access Restriction tab and the dashboard widget, rather than locking anyone out by mistake.
+
+= Emergency switch =
+
+If Access Restriction ever locks everyone out, add `define( 'ACGD_DISABLE_RESTRICTION', true );` to `wp-config.php`. This stops Access Restriction only; Login Name Protection keeps working.
+
 = What it does not do =
 
 Two-factor authentication, login attempt limits, CAPTCHA and firewalls are not included. Use a dedicated security plugin for them. The `?author=` redirect and the login messages overlap with some of those plugins; having both does no harm.
+
+BASIC authentication as a third restriction mode (alongside "no restriction" and "IP restriction") is planned for a later update; it cannot be chosen yet.
 
 = Known limitations =
 
 * The lost password form of WooCommerce My Account shows its own messages and is not covered. The WooCommerce login form is covered.
 * Links to author pages that your theme prints still contain the name used in the author page URL.
-* If you also use SiteGuard WP Plugin, keep its "Same Login Error Message" setting turned on (it is on by default on a single site). When it is off, the CAPTCHA error message of SiteGuard appears only for existing accounts. This is how SiteGuard itself behaves, and this plugin cannot change it.
+* If you also use SiteGuard WP Plugin, keep its "Same Login Error Message" setting turned on (it is on by default on a single site). When it is off, the CAPTCHA error message of SiteGuard appears only for existing accounts, and separately, only for a restricted account's own IP restriction. This is how SiteGuard itself behaves, and this plugin cannot change it.
 * On the lost password screen, when the email to an existing account cannot be sent, that error is shown as it is, so that problems with sending email on your site are noticed. This error, and the difference in response time between sending an email and not sending one, remain.
-* On the login screen, WordPress checks the password only when the account exists, so the response time can differ between an existing account and an unknown one. Like the difference in response time on the lost password screen, this is not addressed in 1.0.0.
+* On the login screen, WordPress checks the password only when the account exists, so the response time can differ between an existing account and an unknown one. Like the difference in response time on the lost password screen, this is not addressed yet.
+* BASIC authentication is not available yet; only "No restriction" and "IP restriction" can be chosen.
 
 == Installation ==
 
@@ -55,9 +74,11 @@ No. Each item returns to the behavior of WordPress itself when it is turned off.
 
 = What is removed when I delete the plugin? =
 
-Only the update check state saved by the bundled update checker, which is rebuilt by the next check. The settings are kept so that they come back if you install the plugin again.
+The update check state saved by the bundled update checker (rebuilt by the next check) and the denial log of Access Restriction. All settings, including the per-role and per-user Access Restriction modes and IP lists, are kept so that they come back if you install the plugin again.
 
 == Changelog ==
+
+* [ New Feature ] Added Access Restriction, letting a role or a specific user be required to connect from an allowed IP address, with a denial log and an emergency switch to turn it off.
 
 = 1.0.0 =
 * Initial release.

@@ -277,3 +277,159 @@ msgstr "開発を支援"
 
 msgid "Request development"
 msgstr "開発のご依頼"
+
+msgid "Access Restriction"
+msgstr "アクセス制限"
+
+msgid "Denial Log"
+msgstr "拒否の記録"
+
+msgid "Mode for this user"
+msgstr "このユーザーのモード"
+
+msgid "Follow the role setting"
+msgstr "権限の設定に従う"
+
+msgid "No restriction"
+msgstr "制限なし"
+
+msgid "IP restriction"
+msgstr "IP 制限"
+
+msgid "BASIC authentication will be added by a later update and cannot be chosen yet."
+msgstr "BASIC 認証は今後の更新で追加予定で、まだ選べません。"
+
+msgid "IP addresses added for this user"
+msgstr "このユーザーに追加した IP アドレス"
+
+msgid "One IP address or range (CIDR) per line. Text after # is a note. Allowed in addition to the site-wide list on the Access Restriction settings tab."
+msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください。# の後ろはメモです。「アクセス制限」設定タブのサイトの一覧に加えて許可されます。"
+
+#. translators: 1: line number, 2: the line's content
+msgid "Line %1$d of the IP addresses added for this user is not a valid IP address or range: %2$s"
+msgstr "このユーザーに追加した IP アドレスの %1$d 行目が、有効な IP アドレスまたは範囲ではありません: %2$s"
+
+msgid "This would leave no administrator (or other user who can manage options) without a restriction. Not saved."
+msgstr "この内容で保存すると、制限されていない管理者 (または他に設定を管理できるユーザー) が1人もいなくなります。保存しませんでした。"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "BASIC"
+msgstr "BASIC"
+
+msgctxt "joins two access restriction modes"
+msgid " + "
+msgstr " + "
+
+#. translators: %s: URL of the Access Restriction tab of the settings screen
+msgid "Access Restriction is stopped because of an internal problem. Open the <a href=\"%s\">Access Restriction tab</a> of the settings screen for details."
+msgstr "アクセス制限は内部の問題により停止しています。詳しくは設定画面の<a href=\"%s\">「アクセス制限」タブ</a>を開いて確認してください。"
+
+#. translators: 1: PHP constant, ACGD_DISABLE_RESTRICTION; 2: URL of the Access Restriction tab of the settings screen
+msgid "If Access Restriction ever locks everyone out, add %1$s to wp-config.php to stop it (details on the <a href=\"%2$s\">Access Restriction settings tab</a>)."
+msgstr "アクセス制限で誰も入れなくなった場合は、wp-config.php に %1$s を追加すると止められます (詳しくは<a href=\"%2$s\">「アクセス制限」設定タブ</a>を参照)。"
+
+msgid "Restriction by role"
+msgstr "権限による制限"
+
+msgid "Roles"
+msgstr "権限"
+
+msgid "Site-wide IP list"
+msgstr "サイトの IP 一覧"
+
+msgid "Allowed IP addresses"
+msgstr "許可する IP アドレス"
+
+#. translators: 1: line number, 2: the line's content
+msgid "Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s"
+msgstr "サイトの IP 一覧の %1$d 行目が、有効な IP アドレスまたは範囲ではありません: %2$s"
+
+msgid "Your own account, from where you are connecting right now, would not satisfy these new settings. Not saved."
+msgstr "今のあなたの接続元では、この新しい設定を満たせません。保存しませんでした。"
+
+msgid "Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Saving this tab again, once the settings are valid, clears this warning."
+msgstr "アクセス制限は内部の問題により停止しており、直るまでは誰でも IP の確認なしにサインインできます。設定を正しい内容にしてこのタブを保存し直すと、この警告は消えます。"
+
+#. translators: %s: PHP constant name, ACGD_DISABLE_RESTRICTION
+msgid "The emergency switch (%s in wp-config.php) is turned on, so Access Restriction is stopped. Login Name Protection is not affected."
+msgstr "非常用スイッチ (wp-config.php の %s) がオンのため、アクセス制限は停止しています。ログイン名の保護には影響しません。"
+
+msgid "Choose a mode for each role. Everyone with that role is restricted, unless their own user setting overrides it."
+msgstr "権限ごとにモードを選んでください。その権限を持つ全員が対象になりますが、ユーザー自身の設定があればそちらが優先します。"
+
+msgid "A user who holds more than one role, with different modes, is held to all of them."
+msgstr "複数の権限を持ち、モードが食い違うユーザーには、そのすべてを課します。"
+
+msgid "administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead."
+msgstr "administrator は権限単位では常に制限なしです。特定の管理者を制限したい場合は、そのユーザーの編集画面で設定してください。"
+
+msgid "BASIC authentication will be added by a later update; only \"No restriction\" and \"IP restriction\" can be chosen here for now."
+msgstr "BASIC 認証は今後の更新で追加予定です。現時点ではここで選べるのは「制限なし」と「IP 制限」だけです。"
+
+msgid "Role"
+msgstr "権限"
+
+msgid "Mode"
+msgstr "モード"
+
+msgid "No restriction (fixed)"
+msgstr "制限なし (固定)"
+
+msgid "One IP address or range (CIDR) per line. Text after # is a note, and blank lines are ignored."
+msgstr "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください。# の後ろはメモで、空行は無視します。"
+
+msgid "A restricted user is let in from any address on this list, plus any address added just for them on their own user edit screen."
+msgstr "制限対象のユーザーは、この一覧にあるアドレスと、そのユーザー自身の編集画面で個別に追加したアドレスのどちらからでも入れます。"
+
+msgid "Judged from the address the server sees for this connection only; headers such as X-Forwarded-For are never used."
+msgstr "判定は、この接続についてサーバーから見えているアドレスだけで行います。X-Forwarded-For などのヘッダーは一切使いません。"
+
+msgid "Your current connection"
+msgstr "今のあなたの接続"
+
+msgid "The server cannot tell what address you are connecting from right now."
+msgstr "サーバーは今のあなたの接続元のアドレスを判別できません。"
+
+#. translators: %s: the visitor's IP address, as the server sees it for this connection
+msgid "The server sees this connection as coming from %s."
+msgstr "サーバーには、この接続は %s から来ているように見えています。"
+
+msgid "Users who are currently restricted"
+msgstr "現在制限されているユーザー"
+
+msgid "No user is restricted right now."
+msgstr "現在、制限されているユーザーはいません。"
+
+msgid "Emergency switch"
+msgstr "非常用スイッチ"
+
+#. translators: %s: PHP constant to add to wp-config.php, ACGD_DISABLE_RESTRICTION
+msgid "If Access Restriction locks everyone out, add %s to wp-config.php. This stops Access Restriction only; Login Name Protection keeps working."
+msgstr "アクセス制限で誰も入れなくなった場合は、wp-config.php に %s を追加してください。止まるのはアクセス制限だけで、ログイン名の保護は動作し続けます。"
+
+#. translators: %d: maximum number of entries kept in the denial log
+msgid "The most recent %d denials are kept here."
+msgstr "直近の %d 件の拒否をここに保持します。"
+
+msgid "No denials have been recorded."
+msgstr "記録された拒否はありません。"
+
+msgid "Date and time"
+msgstr "日時"
+
+msgid "User"
+msgstr "ユーザー"
+
+msgid "IP address"
+msgstr "IP アドレス"
+
+msgid "Where"
+msgstr "場面"
+
+msgid "Login"
+msgstr "ログイン"
+
+msgid "After login"
+msgstr "ログイン後"

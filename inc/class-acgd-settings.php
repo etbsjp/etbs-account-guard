@@ -3,10 +3,10 @@
  * Settings screen: Settings > ETBS Account Guard (screen ID settings_page_etbs-account-guard).
  * 設定画面「設定 > ETBS Account Guard」（画面ID settings_page_etbs-account-guard）。
  *
- * The screen is built as tabs. 1.0.0 has one tab, Login Name Protection; 1.1.0 adds Access Restriction
- * and Denial Log by adding entries to get_tabs() and a renderer for each.
- * 画面はタブの形で作る。1.0.0 のタブは「ログイン名の保護」の1つだけで、1.1.0 で get_tabs() に項目を足し、
- * それぞれの描画関数を足して「アクセス制限」「拒否の記録」を加える。
+ * The screen is built as tabs, added to get_tabs() with one renderer each: Login Name Protection (1.0.0),
+ * and Access Restriction and Denial Log (1.1.0).
+ * 画面はタブの形で作る。get_tabs() に項目を足し、それぞれに描画関数を持たせる：
+ * 「ログイン名の保護」（1.0.0）、「アクセス制限」「拒否の記録」（1.1.0）。
  *
  * @package etbs-account-guard
  */
@@ -52,7 +52,24 @@ class ACGD_Settings {
 	const LOGIN_NAME_SECTIONS = 'etbs-account-guard-login-name';
 
 	/**
-	 * Maximum number of users listed in item h. / h の一覧に出すユーザーの上限。
+	 * Settings group of the Access Restriction tab (the option_page value sent to options.php).
+	 * 「アクセス制限」タブの設定グループ（options.php へ送る option_page の値）。
+	 *
+	 * @var string
+	 */
+	const ACCESS_GROUP = 'acgd_access_restriction';
+
+	/**
+	 * Page ID of the Settings API sections of the Access Restriction tab.
+	 * 「アクセス制限」タブの Settings API のセクションを束ねるページID。
+	 *
+	 * @var string
+	 */
+	const ACCESS_SECTIONS = 'etbs-account-guard-access';
+
+	/**
+	 * Maximum number of users listed in item h, and in the "resulting restricted users" list of the Access
+	 * Restriction tab. h の一覧と、「アクセス制限」タブの「結果として制限されるユーザーの一覧」に出すユーザーの上限。
 	 *
 	 * @var int
 	 */
@@ -74,20 +91,20 @@ class ACGD_Settings {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_page' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
+		add_action( 'admin_init', array( __CLASS__, 'register_access_restriction_settings' ) );
 	}
 
 	/**
 	 * Returns the tabs of the settings screen: slug => label.
 	 * 設定画面のタブを返す（スラッグ => ラベル）。
 	 *
-	 * 1.1.0 adds 'access' (Access Restriction) and 'log' (Denial Log) here.
-	 * 1.1.0 でここに 'access'（アクセス制限）と 'log'（拒否の記録）を足す。
-	 *
 	 * @return string[] Tabs. / タブ。
 	 */
 	public static function get_tabs() {
 		return array(
 			'login-name' => __( 'Login Name Protection', 'etbs-account-guard' ),
+			'access'     => __( 'Access Restriction', 'etbs-account-guard' ),
+			'log'        => __( 'Denial Log', 'etbs-account-guard' ),
 		);
 	}
 
@@ -394,10 +411,20 @@ class ACGD_Settings {
 			</nav>
 
 			<?php
-			// One renderer per tab. 1.1.0 adds the renderers of its tabs here.
-			// タブごとに描画関数を1つ持つ。1.1.0 でそのタブの描画関数をここに足す。
+			// The Access Restriction tab warns here, above the tab content, when this feature is currently
+			// stopped (docs/spec.md 5.5): a fault of its own, or the emergency switch.
+			// 「アクセス制限」タブでは、この機能が止まっているとき（docs/spec.md 5.5：自分自身の故障、
+			// または非常用スイッチ）に、タブの中身より上でここに警告を出す。
+			if ( 'access' === $current ) {
+				self::render_access_restriction_notices();
+			}
+			// One renderer per tab. / タブごとに描画関数を1つ持つ。
 			if ( 'login-name' === $current ) {
 				self::render_login_name_tab();
+			} elseif ( 'access' === $current ) {
+				self::render_access_tab();
+			} elseif ( 'log' === $current ) {
+				self::render_log_tab();
 			}
 			?>
 		</div>
@@ -585,5 +612,508 @@ class ACGD_Settings {
 
 		/* translators: %s: display name or nickname that is the same as the login name */
 		return sprintf( __( '%s (same as the login name)', 'etbs-account-guard' ), $name );
+	}
+
+	/*-------------------------------------------*/
+	/* Access Restriction tab: settings / 「アクセス制限」タブ：設定
+	/*-------------------------------------------*/
+
+	/**
+	 * Registers the option, the section and the fields of the Access Restriction tab.
+	 * 「アクセス制限」タブのオプション・セクション・項目を登録する。
+	 *
+	 * A separate admin_init callback from register_settings(), so that a change to one tab's registration
+	 * never risks the other's. The option is saved by core's options.php, so, like the Login Name Protection
+	 * option, it never appears in an update_option() search (see uninstall.php).
+	 * register_settings() とは別の admin_init コールバックにし、片方のタブの登録を変えても
+	 * もう片方に影響しないようにする。このオプションも本体の options.php が保存するため、
+	 * 「ログイン名の保護」のオプションと同じく update_option() を検索しても現れない（uninstall.php を参照）。
+	 *
+	 * @return void
+	 */
+	public static function register_access_restriction_settings() {
+		register_setting(
+			self::ACCESS_GROUP,
+			ACGD_Access_Restriction::OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_access_restriction_settings' ),
+				'show_in_rest'      => false,
+			)
+		);
+
+		add_settings_section(
+			'acgd_access_roles',
+			__( 'Restriction by role', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_roles_section' ),
+			self::ACCESS_SECTIONS
+		);
+		add_settings_field(
+			'acgd_access_roles_table',
+			__( 'Roles', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_roles_field' ),
+			self::ACCESS_SECTIONS,
+			'acgd_access_roles'
+		);
+
+		add_settings_section(
+			'acgd_access_ips',
+			__( 'Site-wide IP list', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_ips_section' ),
+			self::ACCESS_SECTIONS
+		);
+		add_settings_field(
+			'acgd_access_site_ips',
+			__( 'Allowed IP addresses', 'etbs-account-guard' ),
+			array( __CLASS__, 'render_access_ips_field' ),
+			self::ACCESS_SECTIONS,
+			'acgd_access_ips'
+		);
+	}
+
+	/**
+	 * Sanitizes and validates the Access Restriction tab, and applies save-time checks 1 and 2 (docs/spec.md 5.1).
+	 * 「アクセス制限」タブを検証し、保存時のチェック1・2（docs/spec.md 5.1）を適用する。
+	 *
+	 * Check 3 (every BASIC-mode user has credentials set) is not implemented here: BASIC mode is not offered
+	 * by this screen yet (see sanitize_role_modes()), so it cannot be reached from here (issue #4).
+	 * On any failure, the previously saved value is returned unchanged and an error is queued with
+	 * add_settings_error(), which the Settings API prints back on this same tab.
+	 * チェック3（BASIC モードのユーザー全員が資格情報を設定済み）はここでは実装しない。この画面では
+	 * まだ BASIC モードを選べない（sanitize_role_modes() を参照）ため、ここには到達しない（issue #4）。
+	 * どの判定に失敗しても、保存済みの値をそのまま返し、add_settings_error() でエラーを積む。
+	 * Settings API が同じタブにそれを出し直す。
+	 *
+	 * @param mixed $input Submitted value. / 送信された値。
+	 * @return array The value to save. / 保存する値。
+	 */
+	public static function sanitize_access_restriction_settings( $input ) {
+		$existing = get_option( ACGD_Access_Restriction::OPTION, array() );
+		if ( ! is_array( $existing ) ) {
+			$existing = array();
+		}
+		if ( ! is_array( $input ) ) {
+			$input = array();
+		}
+
+		$new_roles = self::sanitize_role_modes( isset( $input['roles'] ) ? $input['roles'] : array() );
+		$ip_text   = isset( $input['site_ips'] ) ? (string) wp_unslash( $input['site_ips'] ) : '';
+		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
+
+		if ( $validated['invalid'] ) {
+			add_settings_error(
+				ACGD_Access_Restriction::OPTION,
+				'acgd_invalid_ip',
+				sprintf(
+					/* translators: 1: line number, 2: the line's content */
+					__( 'Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s', 'etbs-account-guard' ),
+					(int) key( $validated['invalid'] ),
+					reset( $validated['invalid'] )
+				)
+			);
+			return $existing;
+		}
+
+		// Save-time check 1 (docs/spec.md 5.1): at least one unrestricted manage_options user must remain.
+		// 保存時のチェック1（docs/spec.md 5.1）：制限されていない manage_options のユーザーが1人以上残ること。
+		if ( ACGD_Access_Restriction::count_unrestricted_admins( $new_roles ) < 1 ) {
+			add_settings_error(
+				ACGD_Access_Restriction::OPTION,
+				'acgd_no_unrestricted_admin',
+				__( 'This would leave no administrator (or other user who can manage options) without a restriction. Not saved.', 'etbs-account-guard' )
+			);
+			return $existing;
+		}
+
+		// Save-time check 2 (docs/spec.md 5.1): the current access must satisfy the new settings.
+		// 保存時のチェック2（docs/spec.md 5.1）：いまのアクセスが新しい設定を満たしていること。
+		if ( ! ACGD_Access_Restriction::current_user_still_allowed( $new_roles, $validated['entries'] ) ) {
+			add_settings_error(
+				ACGD_Access_Restriction::OPTION,
+				'acgd_self_lockout',
+				__( 'Your own account, from where you are connecting right now, would not satisfy these new settings. Not saved.', 'etbs-account-guard' )
+			);
+			return $existing;
+		}
+
+		ACGD_Access_Restriction::clear_fault();
+
+		return array(
+			'roles'    => $new_roles,
+			'site_ips' => $ip_text,
+		);
+	}
+
+	/**
+	 * Keeps only known roles and known modes from the submitted per-role table.
+	 * 送信された権限ごとの表から、既知の権限・既知のモードだけを残す。
+	 *
+	 * administrator never appears in the result, whatever was submitted for it: it is always unrestricted at
+	 * the role level (docs/spec.md 5.1). 'basic' is a valid stored mode (see ACGD_Access_Restriction), but
+	 * this screen does not offer it yet (BASIC authentication itself is issue #4), so it is not in the list
+	 * of modes accepted here; an unknown or missing value falls back to 'none'.
+	 * administrator は、送信内容にかかわらず結果に現れない。権限単位では常に制限なしのため
+	 * （docs/spec.md 5.1）。'basic' は保存できるモードの1つだが（ACGD_Access_Restriction を参照）、
+	 * この画面ではまだ選べない（BASIC 認証そのものは issue #4）ため、ここで受け付けるモードの一覧には無く、
+	 * 未知の値・未送信は 'none' に倒す。
+	 *
+	 * @param mixed $input Submitted value: role => mode. / 送信された値（権限 => モード）。
+	 * @return string[] Role => mode ('none' or 'ip' only). / 権限 => モード（'none' か 'ip' のみ）。
+	 */
+	private static function sanitize_role_modes( $input ) {
+		if ( ! is_array( $input ) ) {
+			$input = array();
+		}
+
+		$allowed_modes = array( ACGD_Access_Restriction::MODE_NONE, ACGD_Access_Restriction::MODE_IP );
+		$output        = array();
+
+		foreach ( array_keys( wp_roles()->get_names() ) as $role ) {
+			if ( 'administrator' === $role ) {
+				continue;
+			}
+			$mode            = isset( $input[ $role ] ) ? sanitize_key( wp_unslash( $input[ $role ] ) ) : ACGD_Access_Restriction::MODE_NONE;
+			$output[ $role ] = in_array( $mode, $allowed_modes, true ) ? $mode : ACGD_Access_Restriction::MODE_NONE;
+		}
+
+		return $output;
+	}
+
+	/*-------------------------------------------*/
+	/* Access Restriction tab: screen / 「アクセス制限」タブ：画面
+	/*-------------------------------------------*/
+
+	/**
+	 * Prints the Access Restriction tab: warnings are printed separately, before the tabs, by
+	 * render_access_restriction_notices(), called from render_page().
+	 * 「アクセス制限」タブを出力する。警告は render_page() から呼ぶ render_access_restriction_notices() が、
+	 * タブより前に別に出す。
+	 *
+	 * @return void
+	 */
+	private static function render_access_tab() {
+		?>
+		<form method="post" action="options.php">
+			<?php
+			settings_fields( self::ACCESS_GROUP );
+			do_settings_sections( self::ACCESS_SECTIONS );
+			submit_button();
+			?>
+		</form>
+		<?php
+		self::render_current_connection();
+		self::render_restricted_users_list();
+		self::render_emergency_switch_notice();
+	}
+
+	/**
+	 * Prints a warning when Access Restriction is currently stopped (docs/spec.md 5.5): a fault of its own,
+	 * or the emergency switch. Printed above the tab content by render_page().
+	 * アクセス制限が止まっているとき（docs/spec.md 5.5：自分自身の故障、または非常用スイッチ）に警告を出す。
+	 * render_page() が、タブの中身より前にこれを出す。
+	 *
+	 * @return void
+	 */
+	private static function render_access_restriction_notices() {
+		if ( ACGD_Access_Restriction::has_fault() ) {
+			?>
+			<div class="notice notice-error"><p><?php esc_html_e( 'Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Saving this tab again, once the settings are valid, clears this warning.', 'etbs-account-guard' ); ?></p></div>
+			<?php
+		}
+		if ( ACGD_Access_Restriction::is_switch_disabled() ) {
+			?>
+			<div class="notice notice-warning"><p><?php echo wp_kses( sprintf( /* translators: %s: PHP constant name, ACGD_DISABLE_RESTRICTION */ esc_html__( 'The emergency switch (%s in wp-config.php) is turned on, so Access Restriction is stopped. Login Name Protection is not affected.', 'etbs-account-guard' ), self::code( 'ACGD_DISABLE_RESTRICTION' ) ), self::allowed_field_html() ); ?></p></div>
+			<?php
+		}
+	}
+
+	/**
+	 * Prints the introduction of the per-role restriction section. / 権限ごとの制限の前置きを出力する。
+	 *
+	 * @return void
+	 */
+	public static function render_access_roles_section() {
+		?>
+		<p>
+			<?php
+			echo wp_kses(
+				acgd_join_sentences(
+					array(
+						esc_html__( 'Choose a mode for each role. Everyone with that role is restricted, unless their own user setting overrides it.', 'etbs-account-guard' ),
+						esc_html__( 'A user who holds more than one role, with different modes, is held to all of them.', 'etbs-account-guard' ),
+					)
+				),
+				self::allowed_field_html()
+			);
+			?>
+		</p>
+		<p><?php esc_html_e( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead.', 'etbs-account-guard' ); ?></p>
+		<p><?php esc_html_e( 'BASIC authentication will be added by a later update; only "No restriction" and "IP restriction" can be chosen here for now.', 'etbs-account-guard' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Prints the per-role mode table. / 権限ごとのモードの表を出力する。
+	 *
+	 * @return void
+	 */
+	public static function render_access_roles_field() {
+		$saved_roles = ACGD_Access_Restriction::get_role_modes();
+		$all_roles   = wp_roles()->get_names();
+		?>
+		<table class="widefat fixed striped" style="max-width:600px;">
+			<thead>
+				<tr>
+					<th scope="col"><?php esc_html_e( 'Role', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'Mode', 'etbs-account-guard' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $all_roles as $role => $label ) : ?>
+					<tr>
+						<th scope="row"><?php echo esc_html( translate_user_role( $label ) ); ?></th>
+						<td>
+							<?php if ( 'administrator' === $role ) : ?>
+								<?php esc_html_e( 'No restriction (fixed)', 'etbs-account-guard' ); ?>
+							<?php else : ?>
+								<?php
+								$field_id   = 'acgd-access-role-' . $role;
+								$mode       = isset( $saved_roles[ $role ] ) ? $saved_roles[ $role ] : ACGD_Access_Restriction::MODE_NONE;
+								$field_name = ACGD_Access_Restriction::OPTION . '[roles][' . $role . ']';
+								?>
+								<select id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>">
+									<option value="none" <?php selected( 'none', $mode ); ?>><?php esc_html_e( 'No restriction', 'etbs-account-guard' ); ?></option>
+									<option value="ip" <?php selected( 'ip', $mode ); ?>><?php esc_html_e( 'IP restriction', 'etbs-account-guard' ); ?></option>
+								</select>
+							<?php endif; ?>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Prints the introduction of the site-wide IP list section. / サイトの IP 一覧の前置きを出力する。
+	 *
+	 * @return void
+	 */
+	public static function render_access_ips_section() {
+		?>
+		<p>
+			<?php
+			echo wp_kses(
+				acgd_join_sentences(
+					array(
+						esc_html__( 'One IP address or range (CIDR) per line. Text after # is a note, and blank lines are ignored.', 'etbs-account-guard' ),
+						esc_html__( 'A restricted user is let in from any address on this list, plus any address added just for them on their own user edit screen.', 'etbs-account-guard' ),
+						esc_html__( 'Judged from the address the server sees for this connection only; headers such as X-Forwarded-For are never used.', 'etbs-account-guard' ),
+					)
+				),
+				self::allowed_field_html()
+			);
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Prints the site-wide IP list textarea. / サイトの IP 一覧のテキストエリアを出力する。
+	 *
+	 * @return void
+	 */
+	public static function render_access_ips_field() {
+		?>
+		<textarea id="acgd-access-site-ips" name="<?php echo esc_attr( ACGD_Access_Restriction::OPTION . '[site_ips]' ); ?>" rows="8" cols="50" class="large-text code"><?php echo esc_textarea( ACGD_Access_Restriction::get_site_ip_text() ); ?></textarea>
+		<?php
+	}
+
+	/**
+	 * Prints the address the server currently sees for this connection (docs/spec.md 5.2,
+	 * "サーバから見えている、いまの接続元"). Read only; not part of the form.
+	 * サーバが今のこの接続について見ているアドレスを出力する（docs/spec.md 5.2
+	 * 「サーバから見えている、いまの接続元」）。読み取りのみで、フォームの一部ではない。
+	 *
+	 * @return void
+	 */
+	private static function render_current_connection() {
+		$remote = ACGD_Access_Restriction::get_remote_addr();
+		?>
+		<h2><?php esc_html_e( 'Your current connection', 'etbs-account-guard' ); ?></h2>
+		<p>
+			<?php
+			if ( null === $remote ) {
+				esc_html_e( 'The server cannot tell what address you are connecting from right now.', 'etbs-account-guard' );
+			} else {
+				echo wp_kses(
+					sprintf(
+						/* translators: %s: the visitor's IP address, as the server sees it for this connection */
+						esc_html__( 'The server sees this connection as coming from %s.', 'etbs-account-guard' ),
+						self::code( $remote )
+					),
+					self::allowed_field_html()
+				);
+			}
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Prints the list of users who end up restricted under the saved settings (docs/spec.md 5.6,
+	 * "結果として制限されるユーザーの一覧"). Read only.
+	 * 保存済みの設定のもとで、結果として制限されるユーザーの一覧を出力する（docs/spec.md 5.6
+	 * 「結果として制限されるユーザーの一覧」）。読み取りのみ。
+	 *
+	 * @return void
+	 */
+	private static function render_restricted_users_list() {
+		$role_modes = ACGD_Access_Restriction::get_role_modes();
+		$restricted = array();
+		foreach ( get_users() as $user ) {
+			$modes = ACGD_Access_Restriction::compute_effective_modes( $user, $role_modes );
+			if ( $modes ) {
+				$restricted[] = array(
+					'user'  => $user,
+					'modes' => $modes,
+				);
+			}
+			if ( count( $restricted ) >= self::PUBLIC_NAME_LIST_LIMIT ) {
+				break;
+			}
+		}
+		?>
+		<h2><?php esc_html_e( 'Users who are currently restricted', 'etbs-account-guard' ); ?></h2>
+		<?php if ( ! $restricted ) : ?>
+			<p><?php esc_html_e( 'No user is restricted right now.', 'etbs-account-guard' ); ?></p>
+			<?php
+			return;
+		endif;
+		?>
+		<table class="widefat fixed striped">
+			<thead>
+				<tr>
+					<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'Mode', 'etbs-account-guard' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $restricted as $row ) : ?>
+					<tr>
+						<td><?php echo esc_html( $row['user']->user_login ); ?></td>
+						<td><?php echo esc_html( ACGD_User_Access::describe_modes( $row['modes'] ) ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Prints the explanation of the emergency switch (docs/spec.md 5.5). One of the three places it is
+	 * documented (README.md / readme.txt, this tab, and the dashboard widget notes).
+	 * 非常用スイッチ（docs/spec.md 5.5）の説明を出力する。書く3か所のうちの1つ
+	 * （README.md・readme.txt、このタブ、ダッシュボードのウィジェットの注意事項）。
+	 *
+	 * @return void
+	 */
+	private static function render_emergency_switch_notice() {
+		?>
+		<h2><?php esc_html_e( 'Emergency switch', 'etbs-account-guard' ); ?></h2>
+		<p>
+			<?php
+			echo wp_kses(
+				sprintf(
+					/* translators: %s: PHP constant to add to wp-config.php, ACGD_DISABLE_RESTRICTION */
+					esc_html__( 'If Access Restriction locks everyone out, add %s to wp-config.php. This stops Access Restriction only; Login Name Protection keeps working.', 'etbs-account-guard' ),
+					self::code( "define( 'ACGD_DISABLE_RESTRICTION', true );" )
+				),
+				self::allowed_field_html()
+			);
+			?>
+		</p>
+		<?php
+	}
+
+	/*-------------------------------------------*/
+	/* Denial Log tab / 「拒否の記録」タブ
+	/*-------------------------------------------*/
+
+	/**
+	 * Prints the Denial Log tab (docs/spec.md 5.4): the most recent denials, newest first. Read only; there
+	 * is nothing to save on this tab.
+	 * 「拒否の記録」タブ（docs/spec.md 5.4）を出力する（直近の拒否を新しい順で）。読み取りのみで、
+	 * このタブに保存するものは無い。
+	 *
+	 * @return void
+	 */
+	private static function render_log_tab() {
+		$log = ACGD_Access_Restriction::get_denial_log();
+		?>
+		<p>
+			<?php
+			printf(
+				/* translators: %d: maximum number of entries kept in the denial log */
+				esc_html__( 'The most recent %d denials are kept here.', 'etbs-account-guard' ),
+				(int) ACGD_Access_Restriction::DENIAL_LOG_MAX
+			);
+			?>
+		</p>
+		<?php if ( ! $log ) : ?>
+			<p><?php esc_html_e( 'No denials have been recorded.', 'etbs-account-guard' ); ?></p>
+			<?php
+			return;
+		endif;
+		?>
+		<table class="widefat fixed striped">
+			<thead>
+				<tr>
+					<th scope="col"><?php esc_html_e( 'Date and time', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'User', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'IP address', 'etbs-account-guard' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'Where', 'etbs-account-guard' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $log as $entry ) : ?>
+					<?php
+					$user = ! empty( $entry['user_id'] ) ? get_userdata( (int) $entry['user_id'] ) : false;
+					?>
+					<tr>
+						<td>
+							<?php
+							// date_i18n(), not wp_date() (WordPress 5.3+): this plugin declares no minimum WordPress version.
+							// date_i18n()（wp_date() は WordPress 5.3 以降のため使わない）。このプラグインは WordPress の下限を宣言していない。
+							echo esc_html( date_i18n( 'Y-m-d H:i:s', isset( $entry['time'] ) ? (int) $entry['time'] : 0 ) );
+							?>
+						</td>
+						<td><?php echo esc_html( $user ? $user->user_login : (string) ( isset( $entry['user_id'] ) ? $entry['user_id'] : '' ) ); ?></td>
+						<td><?php echo esc_html( isset( $entry['ip'] ) ? (string) $entry['ip'] : '' ); ?></td>
+						<td><?php echo esc_html( self::describe_denial_context( isset( $entry['context'] ) ? (string) $entry['context'] : '' ) ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Describes one denial log context in words. / 拒否の記録の場面を文字で表す。
+	 *
+	 * @param string $context One of 'login', 'session' or 'rest'. / 'login'・'session'・'rest' のいずれか。
+	 * @return string Description, not escaped. / 説明（未エスケープ）。
+	 */
+	private static function describe_denial_context( $context ) {
+		switch ( $context ) {
+			case 'login':
+				return __( 'Login', 'etbs-account-guard' );
+			case 'session':
+				return __( 'After login', 'etbs-account-guard' );
+			case 'rest':
+				return __( 'REST API', 'etbs-account-guard' );
+			default:
+				return $context;
+		}
 	}
 }
