@@ -106,8 +106,9 @@ class ACGD_Access_Restriction {
 	 * filter at priority 1, so it runs on every request that carries an Authorization header, including
 	 * Application Passwords — ran a get_users( meta_key EXISTS ) query even on sites with nobody in BASIC
 	 * mode). Kept in sync at the single place that writes USER_BASIC_ID_META
-	 * (ACGD_User_Access::save_fields(), via update_basic_id_count()), so it always reflects the real count
-	 * without a query of its own. Autoloaded on purpose: it is read on that same hot path, so keeping it in
+	 * (ACGD_User_Access::save_fields(), via update_basic_id_count()), which recomputes the true count from
+	 * usermeta on that rare, manual save so it always reflects reality. Read on the hot path without a query
+	 * of its own. Autoloaded on purpose: it is read on that same hot path, so keeping it in
 	 * the autoloaded options cache (loaded once per request regardless) costs nothing extra, unlike a
 	 * dedicated get_option() call for a non-autoloaded value. This is a derived cache, not something a user
 	 * configured, so it belongs with the "temporary state" that uninstall.php deletes (docs/spec.md 3.6),
@@ -117,8 +118,9 @@ class ACGD_Access_Restriction {
 	 * determine_current_user フィルタの優先度1で、Authorization ヘッダーを持つリクエストすべて
 	 * （アプリケーションパスワードを含む）で動く——が、BASIC モードの利用者が1人もいないサイトでも
 	 * get_users( meta_key EXISTS ) を毎回実行していた）。USER_BASIC_ID_META を書き込む唯一の場所
-	 * （ACGD_User_Access::save_fields()。update_basic_id_count() 経由）でだけ更新するため、自前のクエリ無しで
-	 * 常に実際の件数と一致する。autoload するのは意図的：同じ高頻度の経路で読むため、どのみち1リクエストに
+	 * （ACGD_User_Access::save_fields()。update_basic_id_count() 経由）でだけ、その稀な手動保存のたびに
+	 * usermeta から真の値を再計算するため常に実態と一致する。読み取り側の高頻度経路では自前のクエリ無しで
+	 * 読める。autoload するのは意図的：同じ高頻度の経路で読むため、どのみち1リクエストに
 	 * 1回読み込まれる autoload オプションのキャッシュに乗せれば追加コストが無い（autoload しない値の
 	 * 専用 get_option() はそのぶんの問い合わせが増える）。これは利用者が設定した値ではなく派生的な
 	 * キャッシュなので、uninstall.php が消す「一時状態」（docs/spec.md 3.6）に属する。拒否の記録・
@@ -355,16 +357,40 @@ class ACGD_Access_Restriction {
 	}
 
 	/**
-	 * Keeps BASIC_ID_COUNT_OPTION in sync with whether one user's BASIC authentication ID is non-empty before
-	 * and after a save. Called from the single place that writes USER_BASIC_ID_META
+	 * Keeps BASIC_ID_COUNT_OPTION in sync after a save that may have changed whether one user's BASIC
+	 * authentication ID is non-empty. Called from the single place that writes USER_BASIC_ID_META
 	 * (ACGD_User_Access::save_fields()), right after that write. A no-op unless presence actually flipped
 	 * (someone's ID field going from blank to set, or set to blank), so repeated saves that leave BASIC
 	 * credentials untouched — the overwhelming majority, since most saves are of the IP or "no restriction"
 	 * modes — never touch this option at all.
-	 * BASIC_ID_COUNT_OPTION を、1人のユーザーの BASIC 認証 ID が保存の前後で空文字かどうかに合わせて更新する。
-	 * USER_BASIC_ID_META を書き込む唯一の場所（ACGD_User_Access::save_fields()）から、その書き込み直後に
-	 * 呼ぶ。ID の有無が実際に変わったとき（空→設定、設定→空）以外は何もしない。BASIC の資格情報に触れない
-	 * 保存（大多数を占める IP や「制限なし」モードの保存）では、このオプションに一切触れない。
+	 *
+	 * Recomputes the true count from the usermeta table rather than adjusting the cached value by +1/-1
+	 * (security review, MEDIUM/race condition, 2026-09-11): two admins saving different users' BASIC settings
+	 * at nearly the same time would otherwise race on the same read-modify-write of this option, and one
+	 * increment/decrement would be lost. Because the value was never a re-derivation but a running diff, a
+	 * loss here does not self-heal — it persists until someone happens to flip presence again. If the drift
+	 * lands on 0 while at least one user still has an ID, get_users_with_basic_id() would start returning an
+	 * empty array and lock out every existing, legitimately-configured BASIC user. A save here is a rare,
+	 * manual admin action (docs/spec.md 5.6, only reachable from the user edit screen's own section), so
+	 * recomputing with a direct COUNT query on every flip costs nothing that matters — unlike
+	 * get_users_with_basic_id() above, which stays a cached-count-guarded read because that path runs on
+	 * every request carrying an Authorization header.
+	 * BASIC_ID_COUNT_OPTION を、1人のユーザーの BASIC 認証 ID の有無が保存で変わったかもしれないことに
+	 * 合わせて更新する。USER_BASIC_ID_META を書き込む唯一の場所（ACGD_User_Access::save_fields()）から、
+	 * その書き込み直後に呼ぶ。ID の有無が実際に変わったとき（空→設定、設定→空）以外は何もしない。BASIC の
+	 * 資格情報に触れない保存（大多数を占める IP や「制限なし」モードの保存）では、このオプションに一切触れない。
+	 *
+	 * 算術的な +1/-1 でキャッシュ値を調整するのではなく、usermeta テーブルから真の値を再計算する
+	 * （セキュリティレビュー・中／レースコンディション、2026-09-11）：そうしないと、2人の管理者がほぼ
+	 * 同時に別々のユーザーの BASIC 設定を保存したとき、同じオプションへの read-modify-write が競合し、
+	 * 片方の増減が失われる。この値はもともと再計算ではなく差分の積み上げだったため、一度失われても
+	 * 自己修復せず、次に誰かが偶然また有無を変えるまでズレたままになる。実際には1人以上 BASIC ID を
+	 * 持つのにズレが0まで下がると、get_users_with_basic_id() が空配列を返すようになり、既存の正当な
+	 * BASIC 利用者が全員ロックアウトされる。ここでの保存はレアな手動の管理操作（docs/spec.md 5.6、
+	 * ユーザー編集画面のこの区画からしか届かない）なので、有無が変わるたびに直接の COUNT クエリで
+	 * 再計算しても実害のあるコストにはならない——高頻度な読み取り経路（Authorization ヘッダーを持つ
+	 * リクエストすべてで動く）である上の get_users_with_basic_id() をキャッシュされた件数で早期リターン
+	 * させ続けているのとは目的が異なる。
 	 *
 	 * @param bool $had_id Whether the user had a non-empty BASIC authentication ID before this save. / 保存前に BASIC 認証 ID を持っていたか。
 	 * @param bool $has_id Whether the user has a non-empty BASIC authentication ID after this save. / 保存後に BASIC 認証 ID を持っているか。
@@ -375,8 +401,23 @@ class ACGD_Access_Restriction {
 			return;
 		}
 
-		$count = (int) get_option( self::BASIC_ID_COUNT_OPTION, 0 );
-		$count = $has_id ? ( $count + 1 ) : max( 0, $count - 1 );
+		global $wpdb;
+
+		// Only the meta key goes through a placeholder; the empty-string comparison is a literal, not user
+		// input. No cache is warmed for this (WordPress core has none for a raw aggregate like this), matching
+		// the same direct-query pattern used by ACGD_Login_Name::count_users_with_login_as_public_name().
+		// プレースホルダに通すのは meta_key だけで、空文字との比較はリテラル（利用者入力ではない）。
+		// この種の集約に対する WordPress 本体のキャッシュは無く、ACGD_Login_Name::count_users_with_login_as_public_name()
+		// と同じ直接クエリの型に揃えている。
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- No core API aggregates "how many users have a non-empty value for this meta key". Rare admin-save path only.
+		$count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value != ''",
+				self::USER_BASIC_ID_META
+			)
+		);
+		// phpcs:enable
+
 		update_option( self::BASIC_ID_COUNT_OPTION, $count, true ); // Autoloaded on purpose; see BASIC_ID_COUNT_OPTION. / 意図的に autoload する。理由は BASIC_ID_COUNT_OPTION を参照。
 	}
 

@@ -1200,11 +1200,19 @@ class ACGD_Settings {
 		</p>
 		<p>
 			<?php
+			// Two sentences, each its own translation (coding-rules.md: one sentence per translation
+			// function), joined the same way as the paragraph above.
+			// 2文をそれぞれ別の翻訳にし（coding-rules.md：翻訳関数には1文ずつ）、上の段落と同じ方法でつなぐ。
 			echo wp_kses(
-				sprintf(
-					/* translators: %s: direct link to the current admin's own user edit screen */
-					__( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead. To restrict your own account, use this direct link to your <a href="%s">user edit screen</a>.', 'etbs-account-guard' ),
-					esc_url( $own_url )
+				acgd_join_sentences(
+					array(
+						esc_html__( 'administrator is always unrestricted at the role level; restrict a specific administrator from their own user edit screen instead.', 'etbs-account-guard' ),
+						sprintf(
+							/* translators: %s: direct link to the current admin's own user edit screen */
+							__( 'To restrict your own account, use this direct link to your <a href="%s">user edit screen</a>.', 'etbs-account-guard' ),
+							esc_url( $own_url )
+						),
+					)
 				),
 				array( 'a' => array( 'href' => true ) )
 			);
