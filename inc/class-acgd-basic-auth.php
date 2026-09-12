@@ -217,6 +217,42 @@ class ACGD_Basic_Auth {
 	private static $submitted_credentials = false;
 
 	/**
+	 * The $_SERVER keys a BASIC credential can arrive in, and therefore every key that has to be removed
+	 * again (docs/spec.md 5.3 ★★★). One list, read by both clear_submitted_credentials_from_server() and
+	 * has_credentials_in_server(), because those two must never disagree: a key present in what "clear"
+	 * removes but missing from what "has" looks for — or the reverse — reopens the very window this plugin
+	 * closes (code review, Low).
+	 * ★ The pair PHP_AUTH_USER / PHP_AUTH_PW is also read individually in
+	 * parse_submitted_credentials(), which cannot loop over them: it reads one as the ID and the other as
+	 * the password. A new key added to the parsing side must be added here as well, or "has" will answer
+	 * false, the priority 15 callback will stop early, and that key's credentials will stay in $_SERVER.
+	 * BASIC の資格情報が届きうる $_SERVER のキー——つまり、消し直さなければならないキーの全体
+	 * （docs/spec.md 5.3 ★★★）。clear_submitted_credentials_from_server() と
+	 * has_credentials_in_server() の両方がこの1つの一覧を読む。両者が食い違ってはならないため：
+	 * 「消す」側にあって「あるか」側に無いキー（あるいはその逆）は、このプラグインが閉じている窓を
+	 * そのまま開け直してしまう（コードレビュー・Low）。
+	 * ★ PHP_AUTH_USER / PHP_AUTH_PW の組は parse_submitted_credentials() でも個別に読んでいる。
+	 * あちらはこの2つをループで回せない：片方を ID、もう片方をパスワードとして読むため。解析側にキーを
+	 * 足したときは、必ずこちらにも足すこと。さもないと「あるか」が false を返して優先度15のコールバックが
+	 * 早期に止まり、そのキーの資格情報が $_SERVER に残る。
+	 *
+	 * @var string[]
+	 */
+	const CREDENTIAL_SERVER_KEYS = array( 'PHP_AUTH_USER', 'PHP_AUTH_PW', 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' );
+
+	/**
+	 * The subset of CREDENTIAL_SERVER_KEYS that carries a whole "Authorization: Basic <base64>" header, to be
+	 * decoded by hand when PHP_AUTH_* is not populated (docs/spec.md 5.3: CGI/FastCGI). Kept as its own list
+	 * so parse_submitted_credentials() loops over exactly these and nothing else.
+	 * CREDENTIAL_SERVER_KEYS のうち、「Authorization: Basic <base64>」のヘッダーそのものを運ぶキー。
+	 * PHP_AUTH_* が埋まらない環境（docs/spec.md 5.3：CGI/FastCGI）で自前で復号する対象。
+	 * parse_submitted_credentials() がまさにこれだけを回せるよう、別の一覧として持つ。
+	 *
+	 * @var string[]
+	 */
+	const AUTHORIZATION_HEADER_KEYS = array( 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' );
+
+	/**
 	 * In-request cache of the user whose saved BASIC credentials match the credentials submitted with this
 	 * request: false = not resolved yet, null = resolved, no match, WP_User = the matching user.
 	 * このリクエストで送信された資格情報が、保存済みの BASIC 資格情報と一致したユーザーのリクエスト内
@@ -373,7 +409,7 @@ class ACGD_Basic_Auth {
 			);
 		}
 
-		foreach ( array( 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' ) as $key ) {
+		foreach ( self::AUTHORIZATION_HEADER_KEYS as $key ) {
 			if ( empty( $_SERVER[ $key ] ) ) {
 				continue;
 			}
@@ -418,7 +454,9 @@ class ACGD_Basic_Auth {
 	 * @return void
 	 */
 	private static function clear_submitted_credentials_from_server() {
-		unset( $_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW'], $_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] );
+		foreach ( self::CREDENTIAL_SERVER_KEYS as $key ) {
+			unset( $_SERVER[ $key ] );
+		}
 	}
 
 	/**
@@ -426,22 +464,29 @@ class ACGD_Basic_Auth {
 	 * anything for clear_submitted_credentials_from_server() to remove. Deliberately reads $_SERVER on every
 	 * call and caches nothing: this is the state of the request right now, which is a different question from
 	 * "what did this request originally submit" (get_submitted_credentials(), which caches and keeps
-	 * answering after the header has been cleared). Kept next to its counterpart so the list of keys lives in
-	 * one place (code review, Low).
+	 * answering after the header has been cleared). Reads the same CREDENTIAL_SERVER_KEYS its counterpart
+	 * removes, so the two can never disagree about which keys count (code review, Low: they used to repeat
+	 * the list, and a key added to one but not the other would let this return false, stop the callback
+	 * early, and leave that key's credentials sitting in $_SERVER).
 	 * 同じキーのどれかが $_SERVER にまだ残っているか——つまり
 	 * clear_submitted_credentials_from_server() に消す対象がまだ残っているか——を返す。毎回 $_SERVER を読み、
 	 * 何もキャッシュしないのは意図的：これは「今このリクエストがどういう状態か」であって、
 	 * 「このリクエストが元々何を送ってきたか」（get_submitted_credentials()。あちらはキャッシュし、
-	 * ヘッダーを消した後も答え続ける）とは別の問いだから。キーの一覧を1箇所に保つため、対になるメソッドの
-	 * 隣に置く（コードレビュー・Low）。
+	 * ヘッダーを消した後も答え続ける）とは別の問いだから。見るのは、対になるメソッドが消すのと同じ
+	 * CREDENTIAL_SERVER_KEYS。そうすることで「どのキーを数えるか」で両者が食い違うことが起こり得なくなる
+	 * （コードレビュー・Low：以前は一覧をそれぞれ書き並べていた。片方にだけキーを足すと、こちらが false を
+	 * 返してコールバックを早期に止め、そのキーの資格情報が $_SERVER に残ってしまう）。
 	 *
 	 * @return bool True while any BASIC credential key remains in $_SERVER. / BASIC の資格情報のキーが $_SERVER に残っていれば true。
 	 */
 	private static function has_credentials_in_server() {
-		return isset( $_SERVER['PHP_AUTH_USER'] )
-			|| isset( $_SERVER['PHP_AUTH_PW'] )
-			|| isset( $_SERVER['HTTP_AUTHORIZATION'] )
-			|| isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] );
+		foreach ( self::CREDENTIAL_SERVER_KEYS as $key ) {
+			if ( isset( $_SERVER[ $key ] ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/*-------------------------------------------*/
@@ -561,14 +606,19 @@ class ACGD_Basic_Auth {
 			/*
 			 * Re-entry guard, the counterpart of priority 1's own ( false !== $matched_user ) check.
 			 * determine_current_user fires again whenever something re-resolves the current user (any
-			 * wp_set_current_user() call does), and the answer here cannot change within one request: the
-			 * id $input carries at this priority comes from core's auth cookie, which is the same on every
-			 * pass. So consult the confirmation at most once (code review, Low).
+			 * wp_set_current_user() call does), and as far as core is concerned the answer here does not
+			 * change within one request: the id $input carries at this priority comes from core's auth
+			 * cookie, which is the same on every pass. (Another plugin filtering in a different id before
+			 * priority 15 could change it — this deliberately answers from the first pass either way, since
+			 * the confirmation it looks up belongs to whoever core says is signed in.) So consult the
+			 * confirmation at most once (code review, Low).
 			 * 再入ガード。優先度1が持っている ( false !== $matched_user ) の判定に相当するもの。
 			 * determine_current_user は、現在のユーザーを再解決する何か（wp_set_current_user() の呼び出しなど）
-			 * があるたびに再発火するが、ここでの答えは1リクエストの中で変わりようがない：この優先度で $input が
-			 * 運んでくる ID は本体の auth cookie 由来で、何度発火しても同じ。よって確認の参照は多くても1回に
-			 * 留める（コードレビュー・Low）。
+			 * があるたびに再発火するが、本体だけを見ればここでの答えは1リクエストの中で変わらない：この
+			 * 優先度で $input が運んでくる ID は本体の auth cookie 由来で、何度発火しても同じ。（優先度15より
+			 * 前で別のプラグインが違う ID をフィルタで返せば変わり得る。その場合もここは最初の1回の答えを
+			 * 採る——引く確認は「本体がログイン中だと言っている人」のものだから。）よって確認の参照は多くても
+			 * 1回に留める（コードレビュー・Low）。
 			 */
 			if ( self::$confirmed_header_checked ) {
 				return $input;
@@ -620,13 +670,23 @@ class ACGD_Basic_Auth {
 			 * the Access Restriction tab again and clear_fault() runs. The other four call sites are all on
 			 * the deciding path, where docs/spec.md 5.5's "stop and let through" is the whole point: if the
 			 * code that decides whether to let someone in cannot run, the honest thing is to stop deciding
-			 * and say so loudly. This callback decides nothing — priority 15 only tidies a header away so
-			 * core does not print a notice about it — so a failure here costs a cosmetic notice, while
-			 * recording it would cost the entire feature. That trade is not worth making (code review,
-			 * Medium).
+			 * and say so loudly. This callback decides nothing — priority 15 only strips a header core would
+			 * otherwise pick up.
+			 * What a failure here actually costs (see init() for the mechanism and docs/spec.md 5.3 ★★★):
+			 * core's red "Basic Authentication ... not compatible with Application Passwords" notice sits
+			 * next to the green one on the profile screen, and — because the header then survives into
+			 * core's own wp_validate_application_password() at priority 20, whose failure answers through
+			 * rest_authentication_errors — that admin's REST requests come back 401 for as long as the
+			 * confirmation window lasts, which breaks their block editor between "Verify" and "Update
+			 * Profile". Real, and bounded to one admin for a few minutes. Recording it would instead cost
+			 * IP restriction and BASIC authentication for the whole site until somebody clears the fault by
+			 * hand. That trade is not worth making (code review, Medium).
 			 * A fault here must still never break core's own authentication for this request, which is what
-			 * the bare catch guarantees. If a place to record non-stopping faults is wanted later, that is
-			 * its own piece of work, not something to bolt on here.
+			 * the catch guarantees. What it must not do is vanish without trace: a future TypeError or an
+			 * object-cache failure would otherwise switch off the 5.3 ★★★ protection in silence. So it is
+			 * written to the debug log when WP_DEBUG is on — class and message only, never the credentials.
+			 * A stopping-free fault log for production is its own piece of work, not something to bolt on
+			 * here (docs/spec.md 5.5).
 			 * 止めて通す。そして——このクラスの他の Throwable の catch と違い——ここでは
 			 * ACGD_Access_Restriction::record_fault() を呼ばない。
 			 * ★ record_fault() はログではなく機能停止スイッチである：is_disabled() は
@@ -635,14 +695,26 @@ class ACGD_Basic_Auth {
 			 * 走るまで永続する。他の4箇所はすべて判定の経路にあり、そこでは docs/spec.md 5.5 の
 			 * 「止めて通す」がまさに要点になる：入れてよいかを決めるコードが動けないなら、決めるのをやめて
 			 * 大きな声で知らせるのが誠実だから。このコールバックは何も決めていない——優先度15は、本体が
-			 * それについて通知を出さないようヘッダーを片付けるだけ——なので、ここでの失敗の代償は見た目の
-			 * 通知1つであり、記録してしまえば代償は機能全体になる。釣り合わない取引はしない
-			 * （コードレビュー・Medium）。
-			 * ここでの故障がこのリクエストの本体側の認証を壊すことは絶対に無い、という点は素の catch が
-			 * 引き続き保証する。停止を伴わない記録先が欲しくなったら、それはそれ自体が別の作業であって、
-			 * ここに後付けするものではない。
+			 * 拾ってしまうヘッダーを剥がすだけ。
+			 * ここでの失敗が実際に招く代償（仕組みは init()、docs/spec.md 5.3 ★★★ を参照）：プロフィール
+			 * 画面で本体の赤い通知「サイトでは Basic 認証が使われているようですが、現在、アプリケーション
+			 * パスワードとは互換性がありません」が緑の通知と並ぶ。そして——ヘッダーが残ったまま優先度20の
+			 * 本体の wp_validate_application_password() に届き、その失敗が rest_authentication_errors 経由で
+			 * 応答するため——確認の窓が続く間、その管理者の REST が 401 を返し、「確認」から「プロフィールを
+			 * 更新」までの間ブロックエディターが壊れる。実害はあるが、1人の管理者・数分に限られる。
+			 * 一方、記録してしまえば代償は、誰かが手で故障を解除するまでサイト全体の IP 制限と BASIC 認証に
+			 * なる。釣り合わない取引はしない（コードレビュー・Medium）。
+			 * ここでの故障がこのリクエストの本体側の認証を壊すことは絶対に無い、という点は catch が引き続き
+			 * 保証する。ただし痕跡も無く消えてはならない：そのままでは、将来の TypeError やオブジェクト
+			 * キャッシュの障害で 5.3 ★★★ の保護が黙って効かなくなる。そこで WP_DEBUG が真のときだけ
+			 * デバッグログに書く——クラス名とメッセージだけで、資格情報は決して載せない。本番でも止めずに
+			 * 記録する仕組みは、それ自体が別の作業であって、ここに後付けするものではない
+			 * （docs/spec.md 5.5）。
 			 */
-			unset( $e );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostic for a protection that otherwise fails silently (docs/spec.md 5.5); logs the exception class and message only, never the submitted credentials. / 黙って効かなくなりうる保護のための、デバッグ時限定の診断（docs/spec.md 5.5）。載せるのは例外のクラス名とメッセージだけで、送信された資格情報は決して載せない。
+				error_log( 'ETBS Account Guard: maybe_strip_confirmed_header() failed: ' . get_class( $e ) . ': ' . $e->getMessage() );
+			}
 		}
 
 		return $input;
