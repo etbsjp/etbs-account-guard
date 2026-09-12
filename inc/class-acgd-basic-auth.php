@@ -799,22 +799,33 @@ class ACGD_Basic_Auth {
 
 		/*
 		 * acgd_user_id is a field of the form, so whoever submits chooses it — on its own it names nobody in
-		 * particular. wp-admin/user-edit.php carries core's own user_id for the same person in the query
-		 * string, and core itself uses that one; wp-admin/profile.php carries no user_id at all, because
-		 * core takes the current user there. So: when core's user_id is present, the two must agree, and a
-		 * mismatch is declined. That is what actually ties this request to the screen it claims to come
-		 * from, which the nonce alone does not do (the nonce is built from acgd_user_id, so it agrees with
-		 * whatever that field says — an admin can pass their own screen's nonce while naming their own ID,
-		 * which is harmless, but the comment below used to promise more than the code delivered; PR #6,
-		 * code review round, Low).
+		 * particular. Core has its own user_id for the same person, and core is the one that validates its
+		 * nonce against that: wp-admin/user-edit.php prints it as a hidden field of this very form (line 971
+		 * in WP 7.1), which means it rides along on BOTH screens, because wp-admin/profile.php only defines
+		 * IS_PROFILE_PAGE and requires user-edit.php — on profile.php it holds the current user's own ID
+		 * (confirmed by reading the rendered DOM of both screens, not assumed from the query string, where
+		 * only user-edit.php has it). So the two must agree, and a mismatch is declined. That is what
+		 * actually ties this request to the screen it claims to come from, which the nonce alone does not do
+		 * (the nonce is built from acgd_user_id, so it agrees with whatever that field says — an admin can
+		 * pass their own screen's nonce while naming their own ID, which is harmless, but the comment below
+		 * used to promise more than the code delivered; PR #6, code review round, Low).
+		 * The isset() is kept rather than requiring the field: core printing it is core's business, and if a
+		 * future layout stops printing it, this must go back to declining nothing rather than start
+		 * rejecting every legitimate click.
 		 * acgd_user_id はフォームのフィールドなので送信する側が選べる値であり、それ単体では誰も特定しない。
-		 * wp-admin/user-edit.php は同じ人物を指す本体自身の user_id をクエリ文字列に持ち、本体はそちらを使う。
-		 * wp-admin/profile.php には user_id が無い（本体がそこでは現在のユーザーを対象にするため）。よって、
-		 * 本体の user_id があるときは両者が一致していなければならず、食い違えば拒否する。リクエストを
-		 * 「それが名乗る画面」に実際に結び付けているのはこの突き合わせであり、nonce だけでは結び付かない
-		 * （nonce は acgd_user_id から組み立てるので、そのフィールドの言うことに必ず同意する。管理者が自分の
-		 * 画面の nonce を自分の ID で通すことはできるが、それ自体は無害。ただし下のコメントは実装より強い
-		 * 約束をしていた。PR #6・コードレビュー回・Low）。
+		 * 本体は同じ人物を指す自分自身の user_id を持っており、本体の nonce を検証しているのはそちらに対して。
+		 * その user_id は wp-admin/user-edit.php がこのフォーム自身の hidden フィールドとして出力している
+		 * （WP 7.1 では 971 行目）ため、**2画面とも**一緒に送られてくる——wp-admin/profile.php は
+		 * IS_PROFILE_PAGE を定義して user-edit.php を require するだけなので、profile.php では現在の
+		 * ユーザー自身の ID が入る（クエリ文字列に user_id があるのは user-edit.php だけ、という思い込みでは
+		 * なく、両画面の描画後の DOM を読んで確認した）。よって両者は一致していなければならず、食い違えば
+		 * 拒否する。リクエストを「それが名乗る画面」に実際に結び付けているのはこの突き合わせであり、
+		 * nonce だけでは結び付かない（nonce は acgd_user_id から組み立てるので、そのフィールドの言うことに
+		 * 必ず同意する。管理者が自分の画面の nonce を自分の ID で通すことはできるが、それ自体は無害。
+		 * ただし下のコメントは実装より強い約束をしていた。PR #6・コードレビュー回・Low）。
+		 * フィールドを必須にせず isset() のままにしてあるのは、出力するかどうかは本体の側の事情であり、
+		 * 将来の画面構成でこれが出力されなくなったときには「何も拒否しない」に戻るべきで、正当なクリックを
+		 * すべて弾き始めてはならないため。
 		 */
 		if ( isset( $_REQUEST['user_id'] ) && (int) $_REQUEST['user_id'] !== $target_id ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Compared against the posted target before any nonce is built or any value is used; the nonces are verified immediately below. / nonce を組み立てる前・値を使う前の突き合わせのみ。nonce は直後に検証する。
 			self::decline_verify_request();
