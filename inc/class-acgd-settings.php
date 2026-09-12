@@ -1061,7 +1061,7 @@ class ACGD_Settings {
 				'text'  => __( 'Could not determine whether the username and password reach WordPress. BASIC authentication cannot be turned on until the diagnosis succeeds.', 'etbs-account-guard' ),
 			),
 		);
-		$label = isset( $labels[ $result['status'] ] ) ? $labels[ $result['status'] ] : $labels['unknown'];
+		$label  = isset( $labels[ $result['status'] ] ) ? $labels[ $result['status'] ] : $labels['unknown'];
 		?>
 		<div class="notice inline <?php echo esc_attr( $label['class'] ); ?>">
 			<p><strong><?php echo esc_html( $label['text'] ); ?></strong></p>
