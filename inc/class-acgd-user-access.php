@@ -322,16 +322,36 @@ class ACGD_User_Access {
 						<?php self::render_verify_token_field(); ?>
 						<?php
 						/*
-						 * formaction/formmethod post this same form's fields to a different URL (the "Verify"
-						 * admin-post handler) instead of user-edit.php, without duplicating every field into a
-						 * second <form> (decision record on issue #4). The nonce printed at the end of this
-						 * section is shared with that handler.
-						 * formaction/formmethod で、この同じフォームの内容を user-edit.php ではなく別の URL
-						 * （「確認」の admin-post ハンドラ）へ送る。フィールドを2つ目の <form> に複製せずに済む
-						 * （issue #4 の decision record）。この区画の末尾で出す nonce をそのハンドラと共有する。
+						 * A plain secondary submit button of core's own <form id="your-profile">: no
+						 * formaction, no formmethod, and a name of its own rather than "action". Clicking it
+						 * submits this whole form — mode, added IPs, the BASIC id/password — to the very screen
+						 * it is on, where ACGD_Basic_Auth::maybe_handle_verify_request() picks it up on
+						 * admin_init and redirects to the confirmation screen before core's own save can run.
+						 * ★ It cannot be name="action" value="acgd_verify_basic" with a formaction pointing at
+						 * admin-post.php, which is what this was: wp-admin/user-edit.php prints its own
+						 * <input type="hidden" name="action" value="update" /> after this hook point, PHP keeps
+						 * the last value of a repeated key, and admin-post.php answered every real browser
+						 * click with HTTP 400 (issue #4, UI test finding — see
+						 * ACGD_Basic_Auth::VERIFY_REQUEST_FIELD for the full account and for why moving the
+						 * action into the formaction's query string does not work either).
+						 * The nonce printed at the end of this section is shared with that handler, as is
+						 * core's own "update-user_<ID>" nonce, which it checks too.
+						 * 本体自身の <form id="your-profile"> の、ごく普通の副次的な送信ボタン：formaction も
+						 * formmethod も付けず、名前も「action」ではなく自前のものにする。押すとこのフォーム
+						 * 全体——モード・追加した IP・BASIC の ID/パスワード——が、今いる画面そのものへ送信され、
+						 * ACGD_Basic_Auth::maybe_handle_verify_request() が admin_init で受け取って、本体自身の
+						 * 保存が動くより前に確認画面へリダイレクトする。
+						 * ★ 従来のように name="action" value="acgd_verify_basic" ＋ admin-post.php を指す
+						 * formaction にはできない：wp-admin/user-edit.php は自前の
+						 * <input type="hidden" name="action" value="update" /> をこのフック位置より後ろに出力し、
+						 * PHP は同名キーを後勝ちで採るため、実ブラウザからのクリックは admin-post.php で
+						 * すべて HTTP 400 になっていた（issue #4、UIテストで判明。詳細と、action を formaction の
+						 * クエリ文字列へ移す案も効かない理由は ACGD_Basic_Auth::VERIFY_REQUEST_FIELD を参照）。
+						 * この区画の末尾で出す nonce をそのハンドラと共有するのは従来どおりで、本体自身の
+						 * 「update-user_<ID>」の nonce もあわせて検証される。
 						 */
 						?>
-						<button type="submit" class="button" formaction="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" formmethod="post" name="action" value="<?php echo esc_attr( ACGD_Basic_Auth::VERIFY_REQUEST_ACTION ); ?>">
+						<button type="submit" class="button" name="<?php echo esc_attr( ACGD_Basic_Auth::VERIFY_REQUEST_FIELD ); ?>" value="1">
 							<?php esc_html_e( 'Verify', 'etbs-account-guard' ); ?>
 						</button>
 						<p class="description">
@@ -785,12 +805,12 @@ class ACGD_User_Access {
 	/**
 	 * Stashes a rejected (or not-yet-verified) submission of this screen's fields, so the profile page can be
 	 * redisplayed with it. See RESUBMIT_TRANSIENT_PREFIX for why a transient, rather than writing straight to
-	 * user meta, is used. Public: ACGD_Basic_Auth::handle_verify_request() also stashes this screen's fields
+	 * user meta, is used. Public: ACGD_Basic_Auth::maybe_handle_verify_request() also stashes this screen's fields
 	 * before sending the admin off to confirm their own BASIC credentials, so they come back after the
 	 * confirmation round trip instead of an empty form.
 	 * この画面で拒否された（またはまだ確認していない）送信内容を、プロフィール画面の出し直しに使えるよう
 	 * 保存する。なぜユーザーメタへ直接書くのではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
-	 * public にしているのは、ACGD_Basic_Auth::handle_verify_request() も、管理者を自分の BASIC 資格情報の
+	 * public にしているのは、ACGD_Basic_Auth::maybe_handle_verify_request() も、管理者を自分の BASIC 資格情報の
 	 * 確認へ送り出す前にこの画面の内容を保存し、確認の往復の後に空のフォームではなく元の内容へ戻すため。
 	 *
 	 * @param int    $target_id Target user being edited. / 編集対象のユーザー。

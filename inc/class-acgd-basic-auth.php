@@ -48,16 +48,39 @@ class ACGD_Basic_Auth {
 	const VERIFY_ACTION = 'acgd_basic_verify';
 
 	/**
-	 * admin-post action of the "Verify" button on the user edit screen. Stashes the submitted form (mode, IP
-	 * text and BASIC id/password, reusing ACGD_User_Access's resubmit transient) and the (id, password) pair
-	 * to check, then redirects to VERIFY_ACTION.
-	 * ユーザー編集画面の「確認」ボタンの admin-post アクション。送信されたフォーム（モード・IP・BASIC の
-	 * ID/パスワード。ACGD_User_Access の再表示用 transient を流用）と、確認する (id, password) の組を
-	 * 保存してから VERIFY_ACTION へリダイレクトする。
+	 * Name of the "Verify" button on the user edit screen. It is the button's own name/value pair, submitted
+	 * with the rest of core's own <form id="your-profile"> to the profile screen itself, and picked up on
+	 * admin_init by maybe_handle_verify_request().
+	 *
+	 * ★ Deliberately NOT "action". This used to be name="action" value="acgd_verify_basic" together with
+	 * formaction="…/admin-post.php", but wp-admin/user-edit.php prints its own
+	 * <input type="hidden" name="action" value="update" /> (line 970 of WordPress 7.1) AFTER the
+	 * show_user_profile hook this section is rendered from (line 909). The request body therefore carried
+	 * action=acgd_verify_basic first and action=update second, and PHP keeps the LAST value of a repeated
+	 * key — so $_REQUEST['action'] was always "update", and admin-post.php, which has no admin_post_update
+	 * handler, answered with wp_die( '', 400 ): an empty error page. The confirmation screen could not be
+	 * reached from a real browser at all (issue #4, UI test finding; the curl reproduction that had passed
+	 * happened to send the two fields in the opposite order). Putting the action in the formaction's query
+	 * string does not help either: with PHP's default request_order=GP the POST body overwrites the query
+	 * string in $_REQUEST (measured).
+	 * ユーザー編集画面の「確認」ボタンの名前。ボタン自身の name/value の組であり、本体の
+	 * <form id="your-profile"> の他の項目と一緒にプロフィール画面そのものへ送信され、admin_init の
+	 * maybe_handle_verify_request() が受け取る。
+	 *
+	 * ★ 「action」にはしない（意図的）。以前は name="action" value="acgd_verify_basic" ＋
+	 * formaction="…/admin-post.php" だったが、wp-admin/user-edit.php は自前の
+	 * <input type="hidden" name="action" value="update" />（WordPress 7.1 の 970 行目）を、この区画を描画する
+	 * show_user_profile フック（909 行目）より **後ろ** に出力する。そのため送信本文には
+	 * action=acgd_verify_basic → action=update の順で2つ入り、PHP は同名キーを **後勝ち** で採るので
+	 * $_REQUEST['action'] は常に "update" になっていた。admin-post.php には admin_post_update が無いため
+	 * wp_die( '', 400 )（本文が空のエラー画面）になり、実ブラウザからは確認画面へ一度も到達できなかった
+	 * （issue #4、UIテストで判明。通っていた curl の再現は、たまたま2つの順序が逆だっただけ）。
+	 * formaction のクエリ文字列に action を入れる案も効かない：PHP の既定 request_order=GP では
+	 * POST 本文が $_REQUEST のクエリ文字列を上書きする（実測）。
 	 *
 	 * @var string
 	 */
-	const VERIFY_REQUEST_ACTION = 'acgd_verify_basic';
+	const VERIFY_REQUEST_FIELD = 'acgd_verify_basic';
 
 	/**
 	 * Prefix of the transient that holds a pending (id, password) pair awaiting confirmation through
@@ -225,7 +248,27 @@ class ACGD_Basic_Auth {
 		// 確認画面と「確認」ボタンの往復。どちらも wp-login.php の階層（docs/spec.md 5.3）。
 		add_action( 'login_form_' . self::CHALLENGE_ACTION, array( __CLASS__, 'handle_challenge' ) );
 		add_action( 'login_form_' . self::VERIFY_ACTION, array( __CLASS__, 'handle_verify' ) );
-		add_action( 'admin_post_' . self::VERIFY_REQUEST_ACTION, array( __CLASS__, 'handle_verify_request' ) );
+		/*
+		 * admin_init, not admin_post_*: the "Verify" button submits core's own profile form to the profile
+		 * screen itself, and carries no "action" field of its own (see VERIFY_REQUEST_FIELD for why it cannot).
+		 * The timing works out because wp-admin/user-edit.php's very first statement is
+		 * require_once __DIR__ . '/admin.php' (line 10 of WordPress 7.1), and wp-admin/admin.php fires
+		 * admin_init at line 180 — long before user-edit.php reaches `switch ( $action ) { case 'update':`
+		 * (line 131), which is where core's own save (check_admin_referer() then edit_user()) happens. So this
+		 * handler gets the request first and redirects away before any profile field is written.
+		 * Priority 11, after ACGD_Access_Restriction::check_access_on_request() (registered at the default 10):
+		 * enforcing access on this request still comes first, exactly as on every other admin screen.
+		 * admin_post_* ではなく admin_init に掛ける：「確認」ボタンは本体自身のプロフィール用フォームを
+		 * プロフィール画面そのものへ送信し、自前の「action」フィールドを持たない（持てない理由は
+		 * VERIFY_REQUEST_FIELD を参照）。タイミングが成り立つのは、wp-admin/user-edit.php の最初の文が
+		 * require_once __DIR__ . '/admin.php'（WordPress 7.1 の 10 行目）であり、wp-admin/admin.php は
+		 * 180 行目で admin_init を発火するため——本体の保存（check_admin_referer() のあと edit_user()）を行う
+		 * `switch ( $action ) { case 'update':`（131 行目）に到達するよりはるかに前になる。よってこのハンドラが
+		 * 先にリクエストを受け取り、プロフィールの項目が1つも書き込まれないうちにリダイレクトで離脱できる。
+		 * 優先度 11＝ACGD_Access_Restriction::check_access_on_request()（既定の 10 で登録）より後：
+		 * このリクエストに対するアクセス制限の判定が先に効く点は、他の管理画面と全く同じにする。
+		 */
+		add_action( 'admin_init', array( __CLASS__, 'maybe_handle_verify_request' ), 11 );
 
 		// Receive diagnosis (docs/spec.md 5.3). / 受信の診断（docs/spec.md 5.3）。
 		add_action( 'admin_post_acgd_run_basic_diagnosis', array( __CLASS__, 'handle_run_diagnosis' ) );
@@ -606,31 +649,92 @@ class ACGD_Basic_Auth {
 	/*-------------------------------------------*/
 
 	/**
-	 * Handles the admin-post request behind the user edit screen's "Verify" button (a secondary submit
-	 * button, using the formaction/formmethod attributes to post the same form's fields — mode, added IPs,
-	 * and the BASIC id/password — to this URL instead of the profile screen; see ACGD_User_Access). Stashes
-	 * the submitted form for redisplay and the (id, password) pair to confirm, then sends the browser to
-	 * VERIFY_ACTION. Only ever meaningful for an admin verifying their own account (docs/spec.md 5.3); a
-	 * mismatched target is bounced back without starting a confirmation.
-	 * ユーザー編集画面の「確認」ボタン（formaction/formmethod 属性で、同じフォームの内容——モード・追加した
-	 * IP・BASIC の ID/パスワード——をプロフィール画面ではなくこの URL へ POST する副次的な送信ボタン。
-	 * ACGD_User_Access を参照）の裏側にある admin-post リクエストを処理する。送信されたフォームを
-	 * 出し直し用に、(id, password) の組を確認用にそれぞれ保存してから、ブラウザを VERIFY_ACTION へ送る。
+	 * Handles the user edit screen's "Verify" button, on admin_init, before core's own profile save can run
+	 * (see init() for the timing and VERIFY_REQUEST_FIELD for why this is no longer an admin-post action).
+	 * The button is a secondary submit button inside core's own <form id="your-profile">, so this request
+	 * carries that whole form — mode, added IPs, and the BASIC id/password — as well as core's "action=update"
+	 * hidden field. Stashes the submitted form for redisplay and the (id, password) pair to confirm, then
+	 * sends the browser to VERIFY_ACTION.
+	 *
+	 * ★ Every path out of this method that acts on the button redirects and exits, so wp-admin/user-edit.php
+	 * never reaches its own `case 'update':` — clicking "Verify" must not also save the profile.
+	 *
+	 * Only ever meaningful for an admin verifying their own account (docs/spec.md 5.3); a mismatched target is
+	 * bounced back without starting a confirmation.
+	 * ユーザー編集画面の「確認」ボタンを、本体自身のプロフィール保存が動くより前の admin_init で処理する
+	 * （タイミングは init()、admin-post アクションをやめた理由は VERIFY_REQUEST_FIELD を参照）。
+	 * このボタンは本体自身の <form id="your-profile"> の中にある副次的な送信ボタンなので、このリクエストには
+	 * そのフォーム全体——モード・追加した IP・BASIC の ID/パスワード——と、本体の「action=update」の隠し
+	 * フィールドが一緒に乗っている。送信されたフォームを出し直し用に、(id, password) の組を確認用に
+	 * それぞれ保存してから、ブラウザを VERIFY_ACTION へ送る。
+	 *
+	 * ★ このボタンに反応する経路はすべてリダイレクトして exit する。そうすることで
+	 * wp-admin/user-edit.php は自身の `case 'update':` に到達しない——「確認」を押しただけで
+	 * プロフィールまで保存されてはならない。
+	 *
 	 * 意味を持つのは管理者が自分自身を確認するときだけ（docs/spec.md 5.3）。対象が食い違っていれば、
 	 * 確認を始めずに送り返す。
 	 *
 	 * @return void
 	 */
-	public static function handle_verify_request() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to do this.', 'etbs-account-guard' ), '', array( 'response' => 403 ) );
+	public static function maybe_handle_verify_request() {
+		// Presence of the button's own name/value pair is what marks this request; every check below runs
+		// before anything is read out of the form or written anywhere.
+		// このボタン自身の name/value の組があることが目印。以下のチェックはすべて、フォームの内容を読んだり
+		// どこかへ書き込んだりする前に行う。
+		if ( ! isset( $_POST[ self::VERIFY_REQUEST_FIELD ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Presence check only; the nonces are verified immediately below, before any value is read. / 存在確認のみ。値を読む前に、すぐ下で nonce を検証する。
+			return;
 		}
-		if ( ! isset( $_POST[ ACGD_User_Access::NONCE_NAME ] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ ACGD_User_Access::NONCE_NAME ] ) ), ACGD_User_Access::NONCE_ACTION ) ) {
-			wp_die( esc_html__( 'This link has expired. Please try again.', 'etbs-account-guard' ), '', array( 'response' => 403 ) );
+
+		/*
+		 * The guards below return instead of wp_die(): this runs on every admin request now, and the request
+		 * being inspected is core's own profile form. Declining to act simply leaves the request to
+		 * wp-admin/user-edit.php, which applies its own check_admin_referer( 'update-user_<ID>' ) and dies on
+		 * an expired nonce — the same outcome for the person, without this plugin replacing the whole admin
+		 * screen with an error page of its own. Both nonces below are printed into this one form and expire
+		 * together, so a legitimate click never fails one of them while core's own check would still pass.
+		 * 以下のガードは wp_die() ではなく return する：このメソッドは今やすべての管理画面リクエストで動き、
+		 * 見ている対象は本体自身のプロフィールのフォームであるため。反応しなければリクエストはそのまま
+		 * wp-admin/user-edit.php に渡り、そちらが自前の check_admin_referer( 'update-user_<ID>' ) を行って
+		 * 期限切れなら die する——利用者から見た結果は同じで、このプラグインが管理画面まるごとを自前の
+		 * エラーページに差し替えずに済む。下の2つの nonce はどちらもこの1つのフォームに出力され同時に
+		 * 期限切れになるため、正当なクリックで片方だけ落ちて本体側の検査は通る、という状態にはならない。
+		 */
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
 		}
 
 		$admin_id  = get_current_user_id();
-		$target_id = isset( $_POST['acgd_user_id'] ) ? (int) $_POST['acgd_user_id'] : 0;
+		$target_id = isset( $_POST['acgd_user_id'] ) ? (int) $_POST['acgd_user_id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified immediately below; the value is needed to build the nonce action itself. / 直後に検証する。nonce のアクション文字列を組み立てるのにこの値が要るため先に読む。
+
+		/*
+		 * Two nonces, both already present in this one form:
+		 * - This plugin's own (NONCE_NAME / NONCE_ACTION), printed at the end of ACGD_User_Access::
+		 *   render_fields(). It is the nonce the previous admin-post handler checked, kept unchanged so that
+		 *   moving the handler does not weaken this section's own trust boundary.
+		 * - Core's own "update-user_<ID>", in _wpnonce, printed by wp-admin/user-edit.php's
+		 *   wp_nonce_field( 'update-user_' . $user_id ). This handler now intercepts a submission that core
+		 *   itself would have validated with check_admin_referer( 'update-user_' . $user_id ), so checking the
+		 *   very same nonce keeps the interception no more permissive than the save it takes the place of —
+		 *   and, unlike the plugin's own (a single site-wide action string), it binds the request to this
+		 *   exact target user's screen.
+		 * この1つのフォームに元から入っている2つの nonce を、両方とも確かめる：
+		 * - このプラグイン自身のもの（NONCE_NAME / NONCE_ACTION）。ACGD_User_Access::render_fields() の末尾で
+		 *   出力している。従来の admin-post ハンドラが確かめていたのと同じもので、受け口を移したことで
+		 *   この区画自身の信頼境界が緩まないよう、そのまま残す。
+		 * - 本体自身の「update-user_<ID>」（_wpnonce）。wp-admin/user-edit.php の
+		 *   wp_nonce_field( 'update-user_' . $user_id ) が出力している。このハンドラは、本体が
+		 *   check_admin_referer( 'update-user_' . $user_id ) で検証したはずの送信を横取りするのだから、
+		 *   まさに同じ nonce を確かめることで、置き換えた保存処理より緩くならないようにする。加えて、
+		 *   サイト内で1つのアクション文字列でしかないプラグイン側の nonce と違い、
+		 *   こちらはリクエストをこの対象ユーザーの画面そのものに結び付ける。
+		 */
+		if ( ! isset( $_POST[ ACGD_User_Access::NONCE_NAME ] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ ACGD_User_Access::NONCE_NAME ] ) ), ACGD_User_Access::NONCE_ACTION ) ) {
+			return;
+		}
+		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'update-user_' . $target_id ) ) {
+			return;
+		}
 
 		// Land back on whichever screen this form was actually submitted from — "Profile" (profile.php)
 		// when an admin verifies their own account, "Edit User" (user-edit.php?user_id=...) when a
@@ -647,6 +751,31 @@ class ACGD_Basic_Auth {
 		// $target_id; wp_safe_redirect( '' ) then silently emits a 200 with no body instead of redirecting
 		// (the same core quirk documented on validated_redirect_to() below), so fall back once more to
 		// admin_url() rather than ever handing '' to wp_safe_redirect().
+		// ★ Which of the two actually supplies the URL changed when this stopped being an admin-post handler.
+		// The form now posts to itself, and core's wp_get_referer() deliberately returns false when the
+		// referer equals this request's own REQUEST_URI (wp-includes/functions.php), so:
+		//   - opened as profile.php: referer and REQUEST_URI are both /wp-admin/profile.php, wp_get_referer()
+		//     returns false, and get_edit_user_link( self ) supplies /wp-admin/profile.php — the same screen,
+		//     and the same place core itself sends a finished profile save (user-edit.php, `case 'update':`,
+		//     redirects to get_edit_user_link( $user_id ) with updated=true).
+		//   - opened as user-edit.php?user_id=<self>: core's form still posts to profile.php (its action is
+		//     self_admin_url( IS_PROFILE_PAGE ? 'profile.php' : 'user-edit.php' ), and IS_PROFILE_PAGE is true
+		//     for one's own ID however the screen was reached), so the referer differs from REQUEST_URI and
+		//     wp_get_referer() returns user-edit.php?user_id=<self> — back exactly where the admin started.
+		// Either way the admin lands on a screen that renders this section, which is what the HIGH fix was for.
+		// ★ 実際にどちらが URL を供給するかは、admin-post のハンドラをやめた時点で変わった。フォームは今や
+		// 自分自身へ送信され、本体の wp_get_referer() はリファラがこのリクエスト自身の REQUEST_URI と
+		// 等しいとき意図的に false を返す（wp-includes/functions.php）。したがって：
+		//   - profile.php として開いた場合：リファラも REQUEST_URI も /wp-admin/profile.php なので
+		//     wp_get_referer() は false になり、get_edit_user_link( 本人 ) が /wp-admin/profile.php を返す——
+		//     同じ画面であり、本体自身がプロフィール保存の完了後に送る先（user-edit.php の `case 'update':`
+		//     が updated=true 付きで get_edit_user_link( $user_id ) へリダイレクトする）とも同じ。
+		//   - user-edit.php?user_id=<自分> として開いた場合：本体のフォームの送信先はやはり profile.php
+		//     （action は self_admin_url( IS_PROFILE_PAGE ? 'profile.php' : 'user-edit.php' ) であり、
+		//     自分自身の ID ならどちらの入口から来ても IS_PROFILE_PAGE は true）。よってリファラは
+		//     REQUEST_URI と異なり、wp_get_referer() は user-edit.php?user_id=<自分> を返す——出発した画面
+		//     そのものへ戻る。
+		// どちらにせよ、この区画が描画される画面に着地する。HIGH 修正が目指していたのはそこ。
 		// このフォームが実際に送信された画面へ戻す——管理者が自分自身を確認するときは「プロフィール」
 		// （profile.php）、manage_options を持つ管理者が他人を確認するときは「ユーザーを編集」
 		// （user-edit.php?user_id=...）——user-edit.php に固定していた従来の書き方をやめる
@@ -742,16 +871,16 @@ class ACGD_Basic_Auth {
 
 		// This entire method is about the current admin verifying their own account (docs/spec.md 5.3):
 		// there is no "verify someone else's credentials" version of this challenge, since the BASIC
-		// credentials have to be typed by the person they belong to. So unlike handle_verify_request()'s
+		// credentials have to be typed by the person they belong to. So unlike maybe_handle_verify_request()'s
 		// $edit_url (which really can point at someone else's "Edit User" screen), this fallback — only
 		// used if $_REQUEST['redirect_to'] is itself missing or invalid, which normally never happens since
-		// handle_verify_request() always supplies it — is always "Profile" (profile.php), never
+		// maybe_handle_verify_request() always supplies it — is always "Profile" (profile.php), never
 		// "Edit User" (UX review HIGH fix, issue #4, applied here too for the same reason).
 		// このメソッドはすべて、今の管理者が自分自身を確認する話でしかない（docs/spec.md 5.3）：BASIC の
 		// 資格情報は本人が入力する必要があるため、「他人の資格情報を確認する」版は存在しない。そのため
-		// handle_verify_request() の $edit_url（他人の「ユーザーを編集」画面を指しうる）とは違い、この
+		// maybe_handle_verify_request() の $edit_url（他人の「ユーザーを編集」画面を指しうる）とは違い、この
 		// フォールバック——$_REQUEST['redirect_to'] 自体が無い・不正なときだけ使われ、
-		// handle_verify_request() が常にこれを渡すため通常は起きない——は常に「プロフィール」
+		// maybe_handle_verify_request() が常にこれを渡すため通常は起きない——は常に「プロフィール」
 		// （profile.php）であって「ユーザーを編集」ではない（UX レビューの HIGH 修正、issue #4。
 		// 同じ理由でここにも適用する）。
 		$default_back = get_edit_profile_url( $admin_id );
