@@ -78,6 +78,33 @@ class ACGD_User_Access {
 	const SECTION_ID = 'acgd-user-access';
 
 	/**
+	 * HTML id of the nameless hidden submit button that acts as the profile form's default button.
+	 * Shared with the profile screen script, which is the only reason this button needs an id at all
+	 * (an id, unlike a name, never becomes part of the submitted form data). See render_fields().
+	 * プロフィールのフォームの既定ボタンになる、名前を持たない隠しの送信ボタンの HTML の id。
+	 * プロフィール画面のスクリプトと共有するためのもので、そもそもこのボタンに id が要るのはそれだけが理由
+	 * （name と違い、id は送信されるフォームの内容には一切入らない）。render_fields() を参照。
+	 *
+	 * @var string
+	 */
+	const DEFAULT_SUBMIT_ID = 'acgd-default-submit';
+
+	/**
+	 * Script handle of the profile screen script. / プロフィール画面のスクリプトのハンドル。
+	 *
+	 * @var string
+	 */
+	const PROFILE_SCRIPT_HANDLE = 'acgd-profile-default-submit';
+
+	/**
+	 * Path of the profile screen script, relative to the plugin folder.
+	 * プラグインフォルダから見た、プロフィール画面のスクリプトの相対パス。
+	 *
+	 * @var string
+	 */
+	const PROFILE_SCRIPT_PATH = 'inc/js/profile-default-submit.js';
+
+	/**
 	 * Users list column name. / ユーザー一覧の列名。
 	 *
 	 * @var string
@@ -141,6 +168,11 @@ class ACGD_User_Access {
 		// hooks above ran. / user_profile_update_errors は wp-admin/user-edit.php から「他人」「本人」どちらの
 		// ケースでも発火するため、この1回の登録だけで、上の2つのフックのどちらが動いた save_fields() もカバーする。
 		add_action( 'user_profile_update_errors', array( __CLASS__, 'append_pending_error' ) );
+		// The profile screen script that makes Enter behave like a click on the save button. Loaded on the
+		// same two screens this section is rendered on, and under the same capability.
+		// Enter を保存ボタンのクリックと同じ扱いにする、プロフィール画面のスクリプト。この区画を描画する
+		// のと同じ2画面・同じ権限でだけ読み込む。
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_profile_script' ) );
 
 		add_filter( 'manage_users_columns', array( __CLASS__, 'add_column' ) );
 		add_filter( 'manage_users_custom_column', array( __CLASS__, 'render_column' ), 10, 3 );
@@ -149,6 +181,76 @@ class ACGD_User_Access {
 	/*-------------------------------------------*/
 	/* User edit screen / ユーザー編集画面
 	/*-------------------------------------------*/
+
+	/**
+	 * Loads the profile screen script on the profile screens, for the people this section is shown to.
+	 * プロフィール画面のスクリプトを、この区画を見せる相手のプロフィール画面でだけ読み込む。
+	 *
+	 * The condition is deliberately the same pair of screens and the same capability that gate the section
+	 * itself (render_fields()): wp-admin/profile.php and wp-admin/user-edit.php, manage_options. The script
+	 * is not loaded anywhere else in wp-admin, and a user without manage_options never receives it — their
+	 * profile screen has no hidden default button either, so Enter there is core's own plain save.
+	 * The one case where it is loaded with nothing to do is someone else's user-edit.php, where the section
+	 * renders but the hidden button does not ($is_self). The alternative would be reading the target user id
+	 * out of the query string at admin_enqueue_scripts time to tell the two apart, and reading request data
+	 * to decide whether to load a display-only script is a worse trade than one tiny script that returns
+	 * immediately when its button is absent.
+	 * 条件は、区画そのものの条件（render_fields()）と意図的に同じ——同じ2画面（wp-admin/profile.php と
+	 * wp-admin/user-edit.php）と同じ権限（manage_options）。管理画面の他のどこでも読み込まないし、
+	 * manage_options を持たない人には決して届かない（その人の画面には隠しの既定ボタンも無いので、そこでの
+	 * Enter は本体そのままの素の保存になる）。読み込まれるのに仕事が無い唯一のケースは他人の user-edit.php で、
+	 * 区画は出るが隠しボタンは出ない（$is_self）。それを見分けるには admin_enqueue_scripts の時点で
+	 * クエリ文字列から対象ユーザー ID を読むことになるが、表示用途のスクリプトを読むかどうかの判断のために
+	 * リクエストの値を読むくらいなら、ボタンが無ければ即座に何もせず終わる小さなスクリプトを読み込むほうが良い。
+	 *
+	 * The cache-busting version is the script file's own modification time, on purpose: docs/spec.md 3.7 keeps
+	 * the number of places a version lives down to two (the plugin header and readme.txt), and a constant such
+	 * as ACGD_VERSION here would make it three, with one more place to forget on a release. A modification time
+	 * needs no maintenance and changes exactly when the file does.
+	 * キャッシュ用の版数にスクリプトファイル自身の更新時刻を使うのは意図的：docs/spec.md 3.7 は版数の置き場を
+	 * 2つ（本体ヘッダと readme.txt）に抑えており、ここで ACGD_VERSION のような定数を作ると3つ目になって、
+	 * リリースのたびに直し忘れる場所が1つ増える。更新時刻なら手入れが要らず、ファイルが変わったときだけ変わる。
+	 *
+	 * @param string $hook_suffix Current admin screen's hook suffix. / 現在の管理画面のフックサフィックス。
+	 * @return void
+	 */
+	public static function enqueue_profile_script( $hook_suffix ) {
+		// Only the two profile screens. / プロフィールの2画面だけ。
+		if ( 'profile.php' !== $hook_suffix && 'user-edit.php' !== $hook_suffix ) {
+			return;
+		}
+
+		// Same gate as the section itself. / 区画そのものと同じ条件。
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// ACGD_PLUGIN_FILE, not __FILE__: the plugin folder is a symlink in some setups, and the main plugin
+		// file is the one WordPress has registered a real path for, so plugins_url() resolves it correctly.
+		// __FILE__ ではなく ACGD_PLUGIN_FILE を使う：プラグインフォルダがシンボリックリンクである環境があり、
+		// WordPress が実体パスを登録しているのは本体ファイルのほうなので、plugins_url() が正しく解決できる。
+		$script_path = plugin_dir_path( ACGD_PLUGIN_FILE ) . self::PROFILE_SCRIPT_PATH;
+		$version     = file_exists( $script_path ) ? filemtime( $script_path ) : false;
+
+		/*
+		 * No dependency is declared. This script reads nothing out of core's wp-admin/js/user-profile.js —
+		 * it only dispatches a click on a button in the DOM — so it does not need to run after it, and
+		 * declaring the dependency would let this pull core's script onto a screen core itself had decided
+		 * not to put it on. It is printed in the footer (the last argument) so the button it looks for is
+		 * already in the document when it runs.
+		 * 依存は宣言しない。このスクリプトは本体の wp-admin/js/user-profile.js の中身を一切読まず、DOM 上の
+		 * ボタンにクリックを送るだけなので、その後に動く必要が無い。むしろ依存を宣言すると、本体自身が
+		 * 載せないと決めた画面にまで本体のスクリプトを引っぱり出しうる。探すボタンが実行時点で既に文書内に
+		 * あるよう、フッターで出力する（最後の引数）。
+		 */
+		wp_enqueue_script(
+			self::PROFILE_SCRIPT_HANDLE,
+			plugins_url( self::PROFILE_SCRIPT_PATH, ACGD_PLUGIN_FILE ),
+			array(),
+			$version,
+			true
+		);
+	}
 
 	/**
 	 * Prints the Access Restriction section of the user edit screen. / ユーザー編集画面の「アクセス制限」の区画を出力する。
@@ -200,9 +302,18 @@ class ACGD_User_Access {
 			 * action=update, and without ACGD_Basic_Auth::VERIFY_REQUEST_FIELD — so it performs the normal
 			 * save. The "Verify" round trip happens only on a real click of the "Verify" button, which is the
 			 * only control that puts that field into the request.
+			 * ★ One thing this button cannot do on its own is keep core quiet: core's own
+			 * wp-admin/js/user-profile.js lowers its "unsaved changes" guard only on a click of #submit /
+			 * #wp-submit, so an Enter submission through this button still drew core's beforeunload dialog
+			 * ("The changes you made will be lost...") on a submission that was in fact saving — and
+			 * "Cancel" there really did cancel the save. That is what the profile screen script
+			 * (enqueue_profile_script(), inc/js/profile-default-submit.js) settles, by handing this button's
+			 * click over to #submit. It is an improvement layered on top, never a precondition: with the
+			 * script absent (JavaScript off), this button still submits the form and saves exactly as
+			 * described above — core's dialog appears and "Leave this page" goes through.
 			 * This is a display/mis-click safeguard, not an authentication decision, so it does not run into
-			 * the "don't decide access with JavaScript" rule (CLAUDE.md) — and in fact it needs no
-			 * JavaScript at all.
+			 * the "don't decide access with JavaScript" rule (CLAUDE.md) — the saving itself never depends
+			 * on JavaScript.
 			 * 名前を持たない submit ボタンを、見た目には隠しつつ DOM には残したまま、この区画が何かを足すより
 			 * 前に出力する（UX レビュー・優先度高）。役割はただ1つ、このフォームの「既定ボタン」——テキスト欄で
 			 * Enter を押したときブラウザが起動する対象であり、HTML の定義では単に DOM 順で最初の送信系
@@ -223,11 +334,20 @@ class ACGD_User_Access {
 			 * ACGD_Basic_Auth::VERIFY_REQUEST_FIELD は伴わない——でこのフォームを送信し、通常の保存として動く。
 			 * 「確認」の往復が走るのは、そのフィールドを載せる唯一のコントロールである「確認」ボタンを実際に
 			 * クリックしたときだけ。
+			 * ★ このボタン単体ではどうにもならないことが1つある：本体を黙らせることはできない。本体自身の
+			 * wp-admin/js/user-profile.js は「変更が保存されていない」の見張りを #submit / #wp-submit の
+			 * クリックでしか下ろさないため、このボタン経由の Enter による送信では、実際には保存される送信に
+			 * 対して本体の beforeunload のダイアログ（「行った変更が失われます」）が出ていた——しかもそこで
+			 * 「キャンセル」を選ぶと本当に保存が取り消された。それを収めるのがプロフィール画面のスクリプト
+			 * （enqueue_profile_script()、inc/js/profile-default-submit.js）で、このボタンのクリックを
+			 * #submit へ委ねる。あくまで上乗せの改善であって前提ではない：スクリプトが無い状態
+			 * （JavaScript を切っている）でも、このボタンは上に書いたとおりフォームを送信して保存する——
+			 * 本体のダイアログが出て、「このページを離れる」で通る。
 			 * これは認証可否の判定ではなく表示・誤操作防止の用途なので、「JavaScript で判定しない」方針
-			 * （CLAUDE.md）には抵触しない——そのうえ、これは JavaScript を一切使わない。
+			 * （CLAUDE.md）には抵触しない——保存そのものが JavaScript に依存することは無い。
 			 */
 			?>
-			<button type="submit" aria-hidden="true" tabindex="-1" style="display:none;"></button>
+			<button type="submit" id="<?php echo esc_attr( self::DEFAULT_SUBMIT_ID ); ?>" aria-hidden="true" tabindex="-1" style="display:none;"></button>
 		<?php endif; ?>
 		<h2 id="<?php echo esc_attr( self::SECTION_ID ); ?>"><?php esc_html_e( 'Access Restriction', 'etbs-account-guard' ); ?></h2>
 		<?php if ( $is_self ) : ?>

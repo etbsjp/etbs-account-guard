@@ -102,8 +102,10 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 
 ### 3.7 版数の置き場
 
-本体ヘッダの `Version:` と `readme.txt` の `Stable tag:`。JS/CSS を読み込むなら `ACGD_VERSION` 定数も（使わないなら定数を作らない）。
+本体ヘッダの `Version:` と `readme.txt` の `Stable tag:`。**この2つだけ。**
 置き場を増やしたら `CLAUDE.md` の「版数」節も直す。
+
+- JS/CSS を読み込むときのキャッシュ用の版数は、**そのファイル自身の更新時刻**（`filemtime()`）を使う。`ACGD_VERSION` のような定数は**作らない**——作ると置き場が3つ目になり、リリースのたびに直し忘れる場所が増える。更新時刻なら手入れが要らず、ファイルが変わったときだけ変わる。
 
 ---
 

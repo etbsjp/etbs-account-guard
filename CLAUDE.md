@@ -25,6 +25,7 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 
 **版数の置き場**：本体ヘッダの `Version:` と `readme.txt` の `Stable tag:`。
 ★ 置き場を増やしたら（JS/CSS の読み込みで `ACGD_VERSION` を作るなど）この節を直すこと。
+★ JS/CSS のキャッシュ用の版数は **`filemtime()`（ファイルの更新時刻）** を使う（仕様書 3.7）。`ACGD_VERSION` は作らないので、置き場は上の2つのまま。
 
 ★★ **版数は実装の PR で上げない。** `dist` は利用者サイトへの配信元なので、版数を上げてマージした瞬間に配信される。
 版数上げは人が判断して行う（etbs-plugin-rules.md の運用）。
