@@ -238,7 +238,7 @@ class ACGD_Basic_Auth {
 	 *
 	 * @var string[]
 	 */
-	const CREDENTIAL_SERVER_KEYS = array( 'PHP_AUTH_USER', 'PHP_AUTH_PW', 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' );
+	private const CREDENTIAL_SERVER_KEYS = array( 'PHP_AUTH_USER', 'PHP_AUTH_PW', 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' );
 
 	/**
 	 * The subset of CREDENTIAL_SERVER_KEYS that carries a whole "Authorization: Basic <base64>" header, to be
@@ -250,7 +250,7 @@ class ACGD_Basic_Auth {
 	 *
 	 * @var string[]
 	 */
-	const AUTHORIZATION_HEADER_KEYS = array( 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' );
+	private const AUTHORIZATION_HEADER_KEYS = array( 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' );
 
 	/**
 	 * In-request cache of the user whose saved BASIC credentials match the credentials submitted with this
@@ -305,8 +305,11 @@ class ACGD_Basic_Auth {
 		 * admin (VERIFIED_TRANSIENT_PREFIX). Core resolves the wp-admin auth cookie on this very filter at
 		 * priority 10, so by 15 the id has already been handed to us as $input on every wp-admin request —
 		 * and 15 is still before core's application password callback at 20, which is the one thing this has
-		 * to get ahead of (docs/spec.md 5.3 ★★★, and the known trap that leaving the header in place makes
-		 * REST answer 401).
+		 * to get ahead of, on the general rule of docs/spec.md 5.3 ★★★: credentials this plugin recognizes
+		 * are not left in $_SERVER for core to interpret. Note that the trap which makes that rule urgent
+		 * for the priority 1 callback — leaving the header in place makes core answer REST with 401 — cannot
+		 * arise from this one: that 401 needs a request with no user resolved from the cookie, and on such a
+		 * request this callback has no $input to work from and does nothing at all.
 		 * 優先度15：確認は済んだがまだ保存していない資格情報について、同じ仕事をする。「確認」を押してから
 		 * 「プロフィールを更新」を押すまでの間、ブラウザはこのオリジンへ Authorization: Basic を送り続ける
 		 * のに、データベースにはまだ一致するものが無い——だから上の maybe_strip_own_header() は何も見つけず、
@@ -320,8 +323,11 @@ class ACGD_Basic_Auth {
 		 * VERIFIED_TRANSIENT_PREFIX で持っている）。本体はまさにこのフィルタの優先度10で wp-admin の
 		 * auth cookie を解決するので、15 の時点では管理画面のリクエストなら ID が $input として渡って
 		 * きている。しかも 15 は本体のアプリケーションパスワードのコールバック（20）よりは前であり、
-		 * 先回りしなければならないのはそれだけ（docs/spec.md 5.3 ★★★、および「ヘッダーを残すと REST が
-		 * 401 を返す」という既知の罠）。
+		 * 先回りしなければならないのはそれだけ。根拠は docs/spec.md 5.3 ★★★ の一般則——このプラグインが
+		 * 認識した資格情報を、本体が解釈できる形で $_SERVER に残さない——である。★ ただし、その一般則を
+		 * 優先度1のコールバックにとって切実にしている罠（ヘッダーを残すと本体が REST に 401 を返す）は、
+		 * こちらのコールバックからは起こり得ない：その 401 は cookie からユーザーを特定できないリクエスト
+		 * でしか起きず、そういうリクエストではこのコールバックは元にする $input を持たず何もしない。
 		 */
 		add_filter( 'determine_current_user', array( __CLASS__, 'maybe_strip_confirmed_header' ), 15 );
 
@@ -672,15 +678,18 @@ class ACGD_Basic_Auth {
 			 * code that decides whether to let someone in cannot run, the honest thing is to stop deciding
 			 * and say so loudly. This callback decides nothing — priority 15 only strips a header core would
 			 * otherwise pick up.
-			 * What a failure here actually costs (see init() for the mechanism and docs/spec.md 5.3 ★★★):
-			 * core's red "Basic Authentication ... not compatible with Application Passwords" notice sits
-			 * next to the green one on the profile screen, and — because the header then survives into
-			 * core's own wp_validate_application_password() at priority 20, whose failure answers through
-			 * rest_authentication_errors — that admin's REST requests come back 401 for as long as the
-			 * confirmation window lasts, which breaks their block editor between "Verify" and "Update
-			 * Profile". Real, and bounded to one admin for a few minutes. Recording it would instead cost
-			 * IP restriction and BASIC authentication for the whole site until somebody clears the fault by
-			 * hand. That trade is not worth making (code review, Medium).
+			 * What a failure here actually costs (see init() for the mechanism): for as long as the
+			 * confirmation window lasts, core's red "Basic Authentication ... not compatible with
+			 * Application Passwords" notice sits next to the green one on this admin's profile screen. That
+			 * is the whole cost — cosmetic, one admin, a few minutes.
+			 * ★ A REST 401 is NOT part of it, and an earlier revision of this comment claimed it was: 401
+			 * happens only on requests where no user could be resolved from the cookie (docs/spec.md 5.3
+			 * ★★★ — core's wp_validate_application_password() returns early on ! empty( $input_user )), and
+			 * on exactly those requests this callback returns without doing anything at all, because
+			 * $admin_id is 0. An exception here changes nothing about them.
+			 * Recording it would instead cost IP restriction and BASIC authentication for the whole site
+			 * until somebody clears the fault by hand. That trade is not worth making (code review,
+			 * Medium).
 			 * A fault here must still never break core's own authentication for this request, which is what
 			 * the catch guarantees. What it must not do is vanish without trace: a future TypeError or an
 			 * object-cache failure would otherwise switch off the 5.3 ★★★ protection in silence. So it is
@@ -696,12 +705,15 @@ class ACGD_Basic_Auth {
 			 * 「止めて通す」がまさに要点になる：入れてよいかを決めるコードが動けないなら、決めるのをやめて
 			 * 大きな声で知らせるのが誠実だから。このコールバックは何も決めていない——優先度15は、本体が
 			 * 拾ってしまうヘッダーを剥がすだけ。
-			 * ここでの失敗が実際に招く代償（仕組みは init()、docs/spec.md 5.3 ★★★ を参照）：プロフィール
-			 * 画面で本体の赤い通知「サイトでは Basic 認証が使われているようですが、現在、アプリケーション
-			 * パスワードとは互換性がありません」が緑の通知と並ぶ。そして——ヘッダーが残ったまま優先度20の
-			 * 本体の wp_validate_application_password() に届き、その失敗が rest_authentication_errors 経由で
-			 * 応答するため——確認の窓が続く間、その管理者の REST が 401 を返し、「確認」から「プロフィールを
-			 * 更新」までの間ブロックエディターが壊れる。実害はあるが、1人の管理者・数分に限られる。
+			 * ここでの失敗が実際に招く代償（仕組みは init() を参照）：確認の窓が続く間、その管理者の
+			 * プロフィール画面で本体の赤い通知「サイトでは Basic 認証が使われているようですが、現在、
+			 * アプリケーションパスワードとは互換性がありません」が緑の通知の隣に並ぶ。代償はそれだけ——
+			 * 見た目の話であり、1人の管理者・数分に限られる。
+			 * ★ REST の 401 はこれに含まれない。このコメントの以前の版はそう書いていたが誤り：401 になるのは
+			 * cookie からユーザーを特定できなかったリクエストだけ（docs/spec.md 5.3 ★★★。本体の
+			 * wp_validate_application_password() は ! empty( $input_user ) で先に戻る）で、まさにそういう
+			 * リクエストではこのコールバックは $admin_id が 0 になるため何もせず戻る。ここで例外が起きても
+			 * それらのリクエストについて何も変わらない。
 			 * 一方、記録してしまえば代償は、誰かが手で故障を解除するまでサイト全体の IP 制限と BASIC 認証に
 			 * なる。釣り合わない取引はしない（コードレビュー・Medium）。
 			 * ここでの故障がこのリクエストの本体側の認証を壊すことは絶対に無い、という点は catch が引き続き
