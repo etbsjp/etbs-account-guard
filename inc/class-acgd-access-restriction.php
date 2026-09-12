@@ -193,6 +193,24 @@ class ACGD_Access_Restriction {
 	const REST_AUTHENTICATION_PRIORITY = 200;
 
 	/**
+	 * Priority of the admin_init action that judges access on every admin-side request (check_access_on_request()).
+	 * 管理画面側の毎回のアクセスを判定する admin_init の優先度（check_access_on_request()）。
+	 *
+	 * Named rather than left implicit because another class hooks admin_init relative to this one:
+	 * ACGD_Basic_Auth::init() registers its "Verify" handler at this priority + 1, so that access to the
+	 * current request is still judged first, exactly as on every other admin screen. Both sides read this
+	 * constant, so the ordering cannot quietly break if this value is ever changed.
+	 *
+	 * 既定のままにせず名前を付けているのは、別のクラスがこれを基準に admin_init へ登録しているため：
+	 * ACGD_Basic_Auth::init() は「確認」のハンドラをこの優先度＋1で登録し、そのリクエストに対する
+	 * アクセス制限の判定が先に効くようにしている（他の管理画面と全く同じ順序）。両方がこの定数を読むので、
+	 * この値を変えても順序が黙って壊れることは無い。
+	 *
+	 * @var int
+	 */
+	const ADMIN_INIT_PRIORITY = 10;
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -218,7 +236,7 @@ class ACGD_Access_Restriction {
 		 * 担う。REST API はどちらにも来ない（parse_request の時点で抜け、テンプレートより前に終わる）ため、
 		 * 上の専用のフィルタで別に扱っている。
 		 */
-		add_action( 'admin_init', array( __CLASS__, 'check_access_on_request' ) );
+		add_action( 'admin_init', array( __CLASS__, 'check_access_on_request' ), self::ADMIN_INIT_PRIORITY );
 		add_action( 'template_redirect', array( __CLASS__, 'check_access_on_request' ) );
 	}
 

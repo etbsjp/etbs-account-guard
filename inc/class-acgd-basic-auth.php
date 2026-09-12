@@ -256,8 +256,9 @@ class ACGD_Basic_Auth {
 		 * admin_init at line 180 — long before user-edit.php reaches `switch ( $action ) { case 'update':`
 		 * (line 131), which is where core's own save (check_admin_referer() then edit_user()) happens. So this
 		 * handler gets the request first and redirects away before any profile field is written.
-		 * Priority 11, after ACGD_Access_Restriction::check_access_on_request() (registered at the default 10):
-		 * enforcing access on this request still comes first, exactly as on every other admin screen.
+		 * One step after ACGD_Access_Restriction::check_access_on_request(), whose own priority is read from
+		 * ACGD_Access_Restriction::ADMIN_INIT_PRIORITY rather than assumed here: enforcing access on this
+		 * request still comes first, exactly as on every other admin screen.
 		 * admin_post_* ではなく admin_init に掛ける：「確認」ボタンは本体自身のプロフィール用フォームを
 		 * プロフィール画面そのものへ送信し、自前の「action」フィールドを持たない（持てない理由は
 		 * VERIFY_REQUEST_FIELD を参照）。タイミングが成り立つのは、wp-admin/user-edit.php の最初の文が
@@ -265,10 +266,11 @@ class ACGD_Basic_Auth {
 		 * 180 行目で admin_init を発火するため——本体の保存（check_admin_referer() のあと edit_user()）を行う
 		 * `switch ( $action ) { case 'update':`（131 行目）に到達するよりはるかに前になる。よってこのハンドラが
 		 * 先にリクエストを受け取り、プロフィールの項目が1つも書き込まれないうちにリダイレクトで離脱できる。
-		 * 優先度 11＝ACGD_Access_Restriction::check_access_on_request()（既定の 10 で登録）より後：
-		 * このリクエストに対するアクセス制限の判定が先に効く点は、他の管理画面と全く同じにする。
+		 * ACGD_Access_Restriction::check_access_on_request() の1つ後ろ。その優先度はここで決め打ちにせず
+		 * ACGD_Access_Restriction::ADMIN_INIT_PRIORITY から読む：このリクエストに対するアクセス制限の判定が
+		 * 先に効く点は、他の管理画面と全く同じにする。
 		 */
-		add_action( 'admin_init', array( __CLASS__, 'maybe_handle_verify_request' ), 11 );
+		add_action( 'admin_init', array( __CLASS__, 'maybe_handle_verify_request' ), ACGD_Access_Restriction::ADMIN_INIT_PRIORITY + 1 );
 
 		// Receive diagnosis (docs/spec.md 5.3). / 受信の診断（docs/spec.md 5.3）。
 		add_action( 'admin_post_acgd_run_basic_diagnosis', array( __CLASS__, 'handle_run_diagnosis' ) );
@@ -656,8 +658,10 @@ class ACGD_Basic_Auth {
 	 * hidden field. Stashes the submitted form for redisplay and the (id, password) pair to confirm, then
 	 * sends the browser to VERIFY_ACTION.
 	 *
-	 * ★ Every path out of this method that acts on the button redirects and exits, so wp-admin/user-edit.php
-	 * never reaches its own `case 'update':` — clicking "Verify" must not also save the profile.
+	 * ★ No path out of this method leaves a request that carries VERIFY_REQUEST_FIELD able to save: every one
+	 * of them either redirects and exits, or drops core's own save trigger first (see the guards below), so
+	 * wp-admin/user-edit.php never reaches its own `case 'update':` — clicking "Verify" must not also save
+	 * the profile, not even when a guard here declines to handle the request.
 	 *
 	 * Only ever meaningful for an admin verifying their own account (docs/spec.md 5.3); a mismatched target is
 	 * bounced back without starting a confirmation.
@@ -668,9 +672,10 @@ class ACGD_Basic_Auth {
 	 * フィールドが一緒に乗っている。送信されたフォームを出し直し用に、(id, password) の組を確認用に
 	 * それぞれ保存してから、ブラウザを VERIFY_ACTION へ送る。
 	 *
-	 * ★ このボタンに反応する経路はすべてリダイレクトして exit する。そうすることで
-	 * wp-admin/user-edit.php は自身の `case 'update':` に到達しない——「確認」を押しただけで
-	 * プロフィールまで保存されてはならない。
+	 * ★ VERIFY_REQUEST_FIELD を載せたリクエストを「保存できる状態」のまま抜ける経路は1つも無い：
+	 * すべての経路が、リダイレクトして exit するか、その前に本体の保存トリガーを外すかのどちらかになる
+	 * （下のガードを参照）。そうすることで wp-admin/user-edit.php は自身の `case 'update':` に到達しない
+	 * ——「確認」を押しただけでプロフィールまで保存されてはならない。ここのガードが処理を降りるときも同じ。
 	 *
 	 * 意味を持つのは管理者が自分自身を確認するときだけ（docs/spec.md 5.3）。対象が食い違っていれば、
 	 * 確認を始めずに送り返す。
@@ -687,20 +692,48 @@ class ACGD_Basic_Auth {
 		}
 
 		/*
-		 * The guards below return instead of wp_die(): this runs on every admin request now, and the request
-		 * being inspected is core's own profile form. Declining to act simply leaves the request to
-		 * wp-admin/user-edit.php, which applies its own check_admin_referer( 'update-user_<ID>' ) and dies on
-		 * an expired nonce — the same outcome for the person, without this plugin replacing the whole admin
-		 * screen with an error page of its own. Both nonces below are printed into this one form and expire
-		 * together, so a legitimate click never fails one of them while core's own check would still pass.
-		 * 以下のガードは wp_die() ではなく return する：このメソッドは今やすべての管理画面リクエストで動き、
-		 * 見ている対象は本体自身のプロフィールのフォームであるため。反応しなければリクエストはそのまま
-		 * wp-admin/user-edit.php に渡り、そちらが自前の check_admin_referer( 'update-user_<ID>' ) を行って
-		 * 期限切れなら die する——利用者から見た結果は同じで、このプラグインが管理画面まるごとを自前の
-		 * エラーページに差し替えずに済む。下の2つの nonce はどちらもこの1つのフォームに出力され同時に
-		 * 期限切れになるため、正当なクリックで片方だけ落ちて本体側の検査は通る、という状態にはならない。
+		 * None of the guards below may simply return: a request that carries VERIFY_REQUEST_FIELD also
+		 * carries core's own action=update hidden field, so a bare return hands it straight on to
+		 * wp-admin/user-edit.php's `case 'update':` — and if core's own check_admin_referer() there happens
+		 * to pass, the profile is saved. Clicking "Verify" would then silently have become a save (LOW,
+		 * security-adjacent, PR #6 third review round). It is not enough that the two nonces this method
+		 * checks normally expire together with core's: they are separate fields, this method checks core's
+		 * against $_POST['acgd_user_id'] while core checks it against its own $_REQUEST['user_id'], and one
+		 * of them can be removed or replaced on its own by editing the page's DOM (confirmed by the UI test
+		 * as the one path that really did save).
+		 * So every guard below leaves the request unable to save before it stops handling it, in one of two
+		 * ways:
+		 * - The capability guard drops core's save trigger and returns, leaving the screen to render as
+		 *   usual. It does not redirect with a notice, because the notice
+		 *   (ACGD_User_Access::render_verify_notice()) is printed by a section that itself requires
+		 *   manage_options, so nothing this person can see would come of it.
+		 * - The nonce guards redirect to the screen the form came from with acgd_basic_verify=expired
+		 *   (decline_verify_request()), so the "verification has expired, enter them again" notice explains
+		 *   why nothing happened. This is the case a person actually reaches by leaving the screen open too
+		 *   long, and it restores the ★ invariant in this method's docblock: every path that acts on the
+		 *   button redirects and exits.
+		 * 以下のガードはどれも単に return してはならない：VERIFY_REQUEST_FIELD を載せたリクエストは本体自身の
+		 * action=update の隠しフィールドも一緒に載せているため、素の return ではそのまま
+		 * wp-admin/user-edit.php の `case 'update':` に渡ってしまい、そこで本体の check_admin_referer() が
+		 * たまたま通ればプロフィールが保存される。「確認」を押したつもりが保存になっていた、という事態になる
+		 * （LOW・セキュリティ隣接、PR #6 の3回目のレビュー）。このメソッドが確かめる2つの nonce が通常は
+		 * 本体のものと同時に期限切れになる、というだけでは足りない：別々のフィールドであり、しかも本体の
+		 * nonce をこのメソッドは $_POST['acgd_user_id'] に対して、本体は自身の $_REQUEST['user_id'] に対して
+		 * 検証する。さらにページの DOM を書き換えれば片方だけを消す・差し替えることもできる（UIテストで、
+		 * 実際に保存まで進む唯一の経路として確認済み）。
+		 * そこで以下のガードは、処理を降りる前に必ずリクエストを「保存できない状態」にしてから降りる。
+		 * 方法は2通り：
+		 * - 権限のガードは、本体の保存トリガーを外して return する。画面はそのまま表示される。通知を出す
+		 *   リダイレクトにしないのは、通知（ACGD_User_Access::render_verify_notice()）を出すのが
+		 *   manage_options を要求する区画自身であり、この人には何も見えないため。
+		 * - nonce のガードは、フォームが来た画面へ acgd_basic_verify=expired を付けてリダイレクトする
+		 *   （decline_verify_request()）。「確認の期限が切れました。入力し直してください」の通知で、
+		 *   何も起きなかった理由が伝わる。画面を開いたまま放置して実際に到達するのはこちらであり、
+		 *   このメソッドの docblock の ★（このボタンに反応する経路はすべてリダイレクトして exit する）も
+		 *   これで元どおり成り立つ。
 		 */
 		if ( ! current_user_can( 'manage_options' ) ) {
+			self::drop_core_save_trigger();
 			return;
 		}
 
@@ -730,16 +763,21 @@ class ACGD_Basic_Auth {
 		 *   こちらはリクエストをこの対象ユーザーの画面そのものに結び付ける。
 		 */
 		if ( ! isset( $_POST[ ACGD_User_Access::NONCE_NAME ] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ ACGD_User_Access::NONCE_NAME ] ) ), ACGD_User_Access::NONCE_ACTION ) ) {
-			return;
+			self::decline_verify_request();
 		}
 		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'update-user_' . $target_id ) ) {
-			return;
+			self::decline_verify_request();
 		}
 
-		// Land back on whichever screen this form was actually submitted from — "Profile" (profile.php)
-		// when an admin verifies their own account, "Edit User" (user-edit.php?user_id=...) when a
-		// manage_options admin verifies someone else's — instead of hardcoding user-edit.php (UX review
-		// HIGH fix, issue #4). wp_get_referer() reads the _wp_http_referer hidden field ACGD_User_Access::
+		// Land back on whichever screen this form was actually submitted from, instead of hardcoding
+		// user-edit.php (UX review HIGH fix, issue #4). "Verify" only ever confirms one's own account
+		// (docs/spec.md 5.3, and ACGD_User_Access::render_fields() only prints the button when $is_self), so
+		// the two screens to tell apart are the two ways one's own profile screen can be reached: "Profile"
+		// (profile.php) and "Edit User" with one's own ID (user-edit.php?user_id=<self>). A request whose
+		// acgd_user_id names somebody else does not belong to any button this plugin prints and is bounced
+		// back unhandled below ('not_self'); $edit_url is still what sends it back, which is why nothing here
+		// assumes the target is the current admin.
+		// wp_get_referer() reads the _wp_http_referer hidden field ACGD_User_Access::
 		// render_fields() prints for this purpose (core's own "your-profile" form prints one too, by way of
 		// wp_nonce_field(); the two carry the same value — see the comment on that call in render_fields()),
 		// and validates it stays on this site. Falls back to get_edit_user_link(), which is the core function
@@ -776,10 +814,15 @@ class ACGD_Basic_Auth {
 		//     REQUEST_URI と異なり、wp_get_referer() は user-edit.php?user_id=<自分> を返す——出発した画面
 		//     そのものへ戻る。
 		// どちらにせよ、この区画が描画される画面に着地する。HIGH 修正が目指していたのはそこ。
-		// このフォームが実際に送信された画面へ戻す——管理者が自分自身を確認するときは「プロフィール」
-		// （profile.php）、manage_options を持つ管理者が他人を確認するときは「ユーザーを編集」
-		// （user-edit.php?user_id=...）——user-edit.php に固定していた従来の書き方をやめる
-		// （UX レビューの HIGH 修正、issue #4）。wp_get_referer() は、この目的で
+		// このフォームが実際に送信された画面へ戻す。user-edit.php に固定していた従来の書き方をやめる
+		// （UX レビューの HIGH 修正、issue #4）。「確認」が対象にするのは常に自分自身の口座だけ
+		// （docs/spec.md 5.3。ACGD_User_Access::render_fields() は $is_self のときにしかボタンを出さない）
+		// なので、区別すべきなのは「自分自身のプロフィール画面に至る2通りの入口」——「プロフィール」
+		// （profile.php）と、自分自身の ID を指す「ユーザーを編集」（user-edit.php?user_id=<自分>）——になる。
+		// acgd_user_id が他人を指すリクエストは、このプラグインが出すどのボタンにも対応せず、下で
+		// 受け付けずに送り返す（'not_self'）。その送り返しに使うのもこの $edit_url であるため、ここでは
+		// 対象が今の管理者自身であることを前提にしていない。
+		// wp_get_referer() は、この目的で
 		// ACGD_User_Access::render_fields() が出す _wp_http_referer の隠しフィールドを読み（本体自身の
 		// 「your-profile」フォームも wp_nonce_field() 経由で同じものを出しており、値は同一。render_fields()
 		// のその呼び出しに付けたコメントを参照）、サイト内に留まっているか検証する。無い稀なケースでは
@@ -815,12 +858,17 @@ class ACGD_Basic_Auth {
 			// The "Verify" button only makes sense for one's own account (docs/spec.md 5.3): confirming
 			// satisfies save-time check 2 for the person saving, which is only ever the current admin.
 			// This is reported through a query flag, not the WP_Error queue used by save_fields()/
-			// append_pending_error(): that mechanism only fires during core's own profile save (POST to
-			// user-edit.php itself), which this admin-post redirect is not.
+			// append_pending_error(): those hang off personal_options_update / user_profile_update_errors,
+			// which wp-admin/user-edit.php only fires from inside its own `case 'update':`. This handler runs
+			// earlier, on admin_init, and exits here, so that case is never reached and neither hook ever
+			// fires on this request — there is no WP_Error queue to add to.
 			// 「確認」ボタンが意味を持つのは自分自身の口座だけ（docs/spec.md 5.3）：確認が満たすのは
 			// 保存する本人（＝常に今の管理者）の保存時チェック2であるため。ここではクエリの目印で伝える。
-			// save_fields()/append_pending_error() の WP_Error の仕組みは、本体自身のプロフィール保存
-			// （user-edit.php 自身への POST）のときにしか発火せず、この admin-post のリダイレクトはそれに当たらない。
+			// save_fields()/append_pending_error() の WP_Error の仕組みを使わないのは、それらが
+			// personal_options_update / user_profile_update_errors にぶら下がっており、wp-admin/user-edit.php が
+			// それらを発火するのは自身の `case 'update':` の中だけだから。このハンドラはそれより前の admin_init で
+			// 動いてここで exit するため、その case には到達せず、このリクエストではどちらのフックも発火しない
+			// ——積むべき WP_Error の列がそもそも存在しない。
 			wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'not_self', $edit_url ) );
 			exit;
 		}
@@ -839,6 +887,60 @@ class ACGD_Basic_Auth {
 		);
 
 		wp_safe_redirect( self::verify_url( $edit_url ) );
+		exit;
+	}
+
+	/**
+	 * Removes core's own profile-save trigger from the current request, so that wp-admin/user-edit.php
+	 * renders the screen instead of reaching its `case 'update':` (see maybe_handle_verify_request()'s
+	 * guards for why a declined "Verify" request must never be left able to save).
+	 * 現在のリクエストから本体自身のプロフィール保存のトリガーを取り除き、wp-admin/user-edit.php が
+	 * `case 'update':` に到達せず画面の描画だけを行うようにする（受け付けなかった「確認」リクエストを
+	 * 保存できる状態のまま残してはならない理由は maybe_handle_verify_request() のガードを参照）。
+	 *
+	 * Both superglobals are cleared because core reads this key from $_REQUEST (wp-admin/user-edit.php's
+	 * `$action = isset( $_REQUEST['action'] ) ? ... : '';`), while the value itself arrives in $_POST; PHP
+	 * populates $_REQUEST as a copy at startup, so removing it from one does not remove it from the other.
+	 * Nothing else in the request is touched: the screen still renders with whatever the person had typed.
+	 * 両方のスーパーグローバルから消すのは、本体がこのキーを読むのは $_REQUEST
+	 * （wp-admin/user-edit.php の `$action = isset( $_REQUEST['action'] ) ? ... : '';`）である一方、値自体は
+	 * $_POST で届くため。PHP は起動時に $_REQUEST を複製として作るので、片方から消してももう片方には残る。
+	 * リクエストの他の部分には手を付けない：画面は入力された内容のまま描画される。
+	 *
+	 * @return void
+	 */
+	private static function drop_core_save_trigger() {
+		// Removing a key, not reading one, so there is no value here to verify a nonce for.
+		// 読み取りではなくキーの削除なので、nonce を検証すべき値はここには無い。
+		unset( $_POST['action'], $_REQUEST['action'] );
+	}
+
+	/**
+	 * Stops handling a "Verify" request that failed one of maybe_handle_verify_request()'s nonce guards, and
+	 * sends the browser back to the screen the form came from with the "verification has expired" notice
+	 * (ACGD_User_Access::render_verify_notice()), so that nothing is saved and the person is told why nothing
+	 * happened. Always exits.
+	 * maybe_handle_verify_request() の nonce のガードに落ちた「確認」リクエストの処理をやめ、フォームが来た
+	 * 画面へ「確認の期限が切れました」の通知（ACGD_User_Access::render_verify_notice()）付きで送り返す。
+	 * 何も保存されず、なぜ何も起きなかったのかも伝わる。必ず exit する。
+	 *
+	 * The nonce has not been verified at this point, so nothing is read out of the form and nothing is
+	 * written anywhere — not even the resubmit stash. wp_get_referer() is still safe to use for the
+	 * destination: core runs it through wp_validate_redirect(), which keeps it on this site. It falls back to
+	 * one's own profile screen, which is where this notice is meant to be read.
+	 * この時点で nonce は未検証なので、フォームの内容は一切読まず、どこにも書き込まない（入力内容の
+	 * 保管すらしない）。行き先に wp_get_referer() を使うこと自体は安全：本体が wp_validate_redirect() に
+	 * 通しており、サイト内に留まる。無ければ本人のプロフィール画面に倒す。この通知を読む場所はそこであるため。
+	 *
+	 * @return void
+	 */
+	private static function decline_verify_request() {
+		$back = wp_get_referer();
+		if ( ! $back ) {
+			$back = admin_url( 'profile.php' );
+		}
+
+		wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'expired', $back ) );
 		exit;
 	}
 

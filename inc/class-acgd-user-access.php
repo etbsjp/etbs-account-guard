@@ -179,40 +179,55 @@ class ACGD_User_Access {
 		<?php if ( $is_self ) : ?>
 			<?php
 			/*
-			 * A disabled submit button, hidden but still part of the DOM, printed before anything else this
-			 * section adds (UX review, high priority). wp-admin/user-edit.php has no <button>/<input
-			 * type="submit"> of its own before this hook point (this block only runs when $is_self, so the
-			 * hook that leads here is show_user_profile, which fires after every text, password and email
-			 * field — name, nickname, email, website, biography, the "New Password" pair — and the only
-			 * submit control below it is this screen's own save button, labelled "Update Profile" on one's
-			 * own profile screen), so without this, the "Verify" button further down would become the form's
-			 * *default button*: the one a browser activates when Enter is pressed in an earlier field, which
-			 * would silently send the admin to the "Verify" round trip (discarding whatever else they had
-			 * just typed) instead of saving. A form's default button is simply the first submit-type control
-			 * in tree order, disabled or not; putting a disabled one first makes *it* the default button, and
-			 * a disabled default button cannot be activated, so implicit (Enter-key) submission of this form
-			 * does nothing from here on — this screen's own save button ("Update Profile") still works
-			 * normally when clicked directly. This is a display/mis-click safeguard, not an authentication
-			 * decision, so it does not run into the "don't decide access with JavaScript" rule (CLAUDE.md) —
-			 * and in fact it needs no JavaScript at all.
-			 * 無効化した submit ボタンを、見た目には隠しつつ DOM には残したまま、この区画が何かを足すより
-			 * 前に出力する（UX レビュー・優先度高）。wp-admin/user-edit.php は、このフックが発火する時点
-			 * （この区画が動くのは $is_self のときだけなので、ここに至るフックは show_user_profile。氏名・
-			 * ニックネーム・メール・ウェブサイト・自己紹介・「新しいパスワード」の組など、あらゆる
-			 * テキスト/パスワード/メール欄より後に発火し、以降で唯一の送信系コントロールは、この画面自身の
-			 * 送信ボタン——本人のプロフィール画面では「プロフィールを更新」——だけ）より前に
-			 * <button>/<input type="submit"> を1つも持たない。そのためこれが無いと、下の「確認」ボタンが
-			 * このフォームの「既定ボタン」——早い段階の欄で Enter を押したときブラウザが起動する対象——に
-			 * なってしまい、直前まで入力していた他の変更を保存せず「確認」の往復へ静かに送ってしまう。
-			 * フォームの既定ボタンは、無効・有効を問わず単に DOM 順で最初の送信系コントロールなので、
-			 * 無効化したものを先に置けばそれ自身が既定ボタンになり、無効な既定ボタンは起動できないため、
-			 * 以降このフォームの Enter キーによる暗黙送信は何もしなくなる（この画面自身の送信ボタン
-			 * 「プロフィールを更新」を直接クリックする通常の保存は今までどおり動く）。これは認証可否の
-			 * 判定ではなく表示・誤操作防止の用途なので、「JavaScript で判定しない」方針（CLAUDE.md）には
-			 * 抵触しない——そのうえ、これは JavaScript を一切使わない。
+			 * A nameless submit button, hidden but still part of the DOM, printed before anything else this
+			 * section adds (UX review, high priority). Its only job is to be this form's *default button*:
+			 * the control a browser activates when Enter is pressed in a text field, which HTML defines as
+			 * simply the first submit-type control in tree order. wp-admin/user-edit.php has no
+			 * <button>/<input type="submit"> of its own before this hook point (this block only runs when
+			 * $is_self, so the hook that leads here is show_user_profile, which fires after every text,
+			 * password and email field — name, nickname, email, website, biography, the "New Password" pair —
+			 * and the only submit control below it is this screen's own save button, labelled "Update
+			 * Profile" on one's own profile screen), so without this, the "Verify" button further down would
+			 * take that role and Enter would silently send the admin to the "Verify" round trip (discarding
+			 * whatever else they had just typed) instead of saving.
+			 * ★ It must NOT be disabled, which is what it was: HTML says implicit submission does nothing at
+			 * all when the form's default button is disabled, so a disabled one here took the role away from
+			 * every other control and left Enter dead on this screen for anyone with manage_options — the
+			 * profile could then only be saved by clicking (issue #4, UI test finding).
+			 * It carries no name and no value, so it contributes nothing to the submitted form data (a submit
+			 * button only appears there when it has a non-empty name and is the submitter). Enter therefore
+			 * submits this form exactly as the "Update Profile" button would — with core's own
+			 * action=update, and without ACGD_Basic_Auth::VERIFY_REQUEST_FIELD — so it performs the normal
+			 * save. The "Verify" round trip happens only on a real click of the "Verify" button, which is the
+			 * only control that puts that field into the request.
+			 * This is a display/mis-click safeguard, not an authentication decision, so it does not run into
+			 * the "don't decide access with JavaScript" rule (CLAUDE.md) — and in fact it needs no
+			 * JavaScript at all.
+			 * 名前を持たない submit ボタンを、見た目には隠しつつ DOM には残したまま、この区画が何かを足すより
+			 * 前に出力する（UX レビュー・優先度高）。役割はただ1つ、このフォームの「既定ボタン」——テキスト欄で
+			 * Enter を押したときブラウザが起動する対象であり、HTML の定義では単に DOM 順で最初の送信系
+			 * コントロール——になること。wp-admin/user-edit.php は、このフックが発火する時点（この区画が動くのは
+			 * $is_self のときだけなので、ここに至るフックは show_user_profile。氏名・ニックネーム・メール・
+			 * ウェブサイト・自己紹介・「新しいパスワード」の組など、あらゆるテキスト/パスワード/メール欄より後に
+			 * 発火し、以降で唯一の送信系コントロールは、この画面自身の送信ボタン——本人のプロフィール画面では
+			 * 「プロフィールを更新」——だけ）より前に <button>/<input type="submit"> を1つも持たない。
+			 * そのためこれが無いと、下の「確認」ボタンがその座に就いてしまい、直前まで入力していた他の変更を
+			 * 保存せず「確認」の往復へ静かに送ってしまう。
+			 * ★ 従来のように disabled を付けてはならない：HTML は、フォームの既定ボタンが無効のとき暗黙送信は
+			 * 何も行わないと定めている。そのため無効なものをここに置くと、他のどのコントロールからも既定ボタンの
+			 * 座を奪ったうえで Enter 自体を殺してしまい、manage_options を持つ人の画面では Enter で保存できず
+			 * クリックするしかなくなっていた（issue #4、UIテストで判明）。
+			 * name も value も持たせないため、送信されるフォームの内容には一切現れない（送信ボタンが
+			 * フォームの内容に入るのは、空でない name を持ち、かつ送信者になったときだけ）。よって Enter は
+			 * 「プロフィールを更新」を押したときと全く同じ内容——本体自身の action=update を伴い、
+			 * ACGD_Basic_Auth::VERIFY_REQUEST_FIELD は伴わない——でこのフォームを送信し、通常の保存として動く。
+			 * 「確認」の往復が走るのは、そのフィールドを載せる唯一のコントロールである「確認」ボタンを実際に
+			 * クリックしたときだけ。
+			 * これは認証可否の判定ではなく表示・誤操作防止の用途なので、「JavaScript で判定しない」方針
+			 * （CLAUDE.md）には抵触しない——そのうえ、これは JavaScript を一切使わない。
 			 */
 			?>
-			<button type="submit" disabled="disabled" aria-hidden="true" tabindex="-1" style="display:none;"></button>
+			<button type="submit" aria-hidden="true" tabindex="-1" style="display:none;"></button>
 		<?php endif; ?>
 		<h2 id="<?php echo esc_attr( self::SECTION_ID ); ?>"><?php esc_html_e( 'Access Restriction', 'etbs-account-guard' ); ?></h2>
 		<?php if ( $is_self ) : ?>
@@ -282,13 +297,17 @@ class ACGD_User_Access {
 						<input type="hidden" name="acgd_user_id" value="<?php echo esc_attr( $user->ID ); ?>" />
 						<?php
 						/*
-						 * The _wp_http_referer hidden field. It rides along with this same <form> to the "Verify"
-						 * admin-post handler, which reads it back with wp_get_referer() to return to the exact
-						 * screen the admin started from — "Profile" (profile.php) when verifying one's own
-						 * account, or "Edit User" (user-edit.php?user_id=...) when a manage_options admin is
-						 * verifying someone else's (UX review HIGH fix, issue #4: this previously always
-						 * hardcoded user-edit.php, so confirming from one's own "Profile" screen landed back on
-						 * "Edit User" instead).
+						 * The _wp_http_referer hidden field. It rides along with this same <form> to
+						 * ACGD_Basic_Auth::maybe_handle_verify_request(), which picks the submission up on
+						 * admin_init and reads this back with wp_get_referer() to return to the exact screen the
+						 * admin started from. "Verify" only ever confirms one's own account (this whole block is
+						 * inside `if ( $is_self )`, and there is no UI anywhere for confirming someone else's),
+						 * so the two screens it has to tell apart are the two ways one's own profile screen can
+						 * be reached: "Profile" (profile.php) and "Edit User" with one's own ID
+						 * (user-edit.php?user_id=<self>) — see maybe_handle_verify_request() for which of the
+						 * two sources actually supplies the URL in each case (UX review HIGH fix, issue #4: this
+						 * previously always hardcoded user-edit.php, so confirming from one's own "Profile"
+						 * screen landed back on "Edit User" instead).
 						 * Core's own "your-profile" form prints the very same field already, by way of
 						 * wp_nonce_field(): wp-admin/user-edit.php calls wp_nonce_field( 'update-user_' .
 						 * $user_id ) with no third argument, and wp_nonce_field()'s $referer parameter defaults
@@ -299,13 +318,17 @@ class ACGD_User_Access {
 						 * same name do no harm here: both come from wp_referer_field(), whose value is
 						 * remove_query_arg( '_wp_http_referer' ) for this one request, so the two values are
 						 * identical, and PHP keeps the last one posted in any case.
-						 * _wp_http_referer の隠しフィールド。この同じ <form> に乗って「確認」の admin-post
-						 * ハンドラへ届き、そちらが wp_get_referer() で読み戻すことで、管理者が出発した画面
-						 * そのもの——自分自身を確認するときは「プロフィール」（profile.php）、manage_options を
-						 * 持つ管理者が他人を確認するときは「ユーザーを編集」（user-edit.php?user_id=...）——へ
-						 * 正しく戻せる（UX レビューの HIGH 修正、issue #4：以前は常に user-edit.php を固定で
-						 * 使っていたため、自分自身の「プロフィール」画面から確認しても「ユーザーを編集」に
-						 * 着地していた）。
+						 * _wp_http_referer の隠しフィールド。この同じ <form> に乗って
+						 * ACGD_Basic_Auth::maybe_handle_verify_request() へ届き、そちらが admin_init で送信を
+						 * 受け取って wp_get_referer() で読み戻すことで、管理者が出発した画面そのものへ正しく
+						 * 戻せる。「確認」が対象にするのは常に自分自身の口座だけ（このブロックはまるごと
+						 * `if ( $is_self )` の内側にあり、他人を確認する UI はどこにも無い）なので、
+						 * 区別すべきなのは「自分自身のプロフィール画面に至る2通りの入口」——「プロフィール」
+						 * （profile.php）と、自分自身の ID を指す「ユーザーを編集」
+						 * （user-edit.php?user_id=<自分>）——になる。どちらの場合に何が URL を供給するかは
+						 * maybe_handle_verify_request() を参照（UX レビューの HIGH 修正、issue #4：以前は常に
+						 * user-edit.php を固定で使っていたため、自分自身の「プロフィール」画面から確認しても
+						 * 「ユーザーを編集」に着地していた）。
 						 * 本体自身の「your-profile」フォームも、wp_nonce_field() 経由で全く同じフィールドを
 						 * 既に出している：wp-admin/user-edit.php は wp_nonce_field( 'update-user_' . $user_id )
 						 * を第3引数なしで呼び、wp_nonce_field() の $referer は既定が true なので
