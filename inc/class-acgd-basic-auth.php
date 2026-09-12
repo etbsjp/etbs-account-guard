@@ -76,8 +76,9 @@ class ACGD_Basic_Auth {
 	 * see handle_verify()), and a one-time token (MEDIUM fix, PR #6 second review round) so find_verified_hash()
 	 * can hand that same hash straight to save_fields() even when the password field comes back blank on the
 	 * profile screen (MEDIUM-1 fix, PR #6 first review round): render_fields() never redisplays a password, so
-	 * requiring it to be retyped before the hash could be looked up meant a blank field on the "Update User"
-	 * click right after a successful Verify silently kept the old password.
+	 * requiring it to be retyped before the hash could be looked up meant a blank field on the save click
+	 * ("Update Profile" on one's own profile screen) right after a successful Verify silently kept the old
+	 * password.
 	 * The token exists to bind the hash to one specific rendering of the profile screen — the one printed
 	 * immediately after this successful confirmation (see render_verify_token_field() in ACGD_User_Access) —
 	 * rather than to "any save within VERIFY_TTL". Without it, a save unrelated to BASIC credentials (changing
@@ -96,8 +97,8 @@ class ACGD_Basic_Auth {
 	 * ワンタイムトークン（MEDIUM の修正。PR #6 の2回目のレビュー）を持つ。これにより、プロフィール画面で
 	 * パスワード欄が空のまま出し直されても（MEDIUM-1 の修正。PR #6 の1回目のレビュー：render_fields() は
 	 * パスワードを一切出し直さないため、ハッシュを引くのに再入力を必須にすると、「確認」成功直後に空欄のまま
-	 * 「ユーザーを更新」を押した場合に古いパスワードが無言で残ってしまっていた）、find_verified_hash() が
-	 * 同じハッシュをそのまま save_fields() へ渡せる。
+	 * 保存ボタン（本人のプロフィール画面では「プロフィールを更新」）を押した場合に古いパスワードが無言で
+	 * 残ってしまっていた）、find_verified_hash() が同じハッシュをそのまま save_fields() へ渡せる。
 	 * トークンの役割は、このハッシュを「確認の直後に出し直されたプロフィール画面（その1回の表示。
 	 * ACGD_User_Access の render_verify_token_field() を参照）」に結び付けることであり、「VERIFY_TTL の間の
 	 * どの保存でも使える」にしないためにある。トークンが無いと、BASIC の資格情報とは無関係な保存
@@ -635,8 +636,9 @@ class ACGD_Basic_Auth {
 		// when an admin verifies their own account, "Edit User" (user-edit.php?user_id=...) when a
 		// manage_options admin verifies someone else's — instead of hardcoding user-edit.php (UX review
 		// HIGH fix, issue #4). wp_get_referer() reads the _wp_http_referer hidden field ACGD_User_Access::
-		// render_fields() prints for this purpose (core's own "your-profile" form does not print one), and
-		// validates it stays on this site. Falls back to get_edit_user_link(), which is the core function
+		// render_fields() prints for this purpose (core's own "your-profile" form prints one too, by way of
+		// wp_nonce_field(); the two carry the same value — see the comment on that call in render_fields()),
+		// and validates it stays on this site. Falls back to get_edit_user_link(), which is the core function
 		// that actually branches on this: profile.php for one's own account, user-edit.php?user_id=... for
 		// anyone else's (get_edit_profile_url() does NOT do this — it always points at the CURRENT user's
 		// own profile.php no matter what ID is passed to it; verified against wp-includes/link-template.php,
@@ -650,7 +652,8 @@ class ACGD_Basic_Auth {
 		// （user-edit.php?user_id=...）——user-edit.php に固定していた従来の書き方をやめる
 		// （UX レビューの HIGH 修正、issue #4）。wp_get_referer() は、この目的で
 		// ACGD_User_Access::render_fields() が出す _wp_http_referer の隠しフィールドを読み（本体自身の
-		// 「your-profile」フォームはこれを出さない）、サイト内に留まっているか検証する。無い稀なケースでは
+		// 「your-profile」フォームも wp_nonce_field() 経由で同じものを出しており、値は同一。render_fields()
+		// のその呼び出しに付けたコメントを参照）、サイト内に留まっているか検証する。無い稀なケースでは
 		// get_edit_user_link() にフォールバックする：本人なら profile.php、他人なら
 		// user-edit.php?user_id=... を実際に出し分けるのはこちらの本体関数（get_edit_profile_url() では
 		// ない——引数に何を渡しても常に「今の」ユーザー自身の profile.php を返す。
