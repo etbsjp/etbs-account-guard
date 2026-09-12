@@ -692,6 +692,49 @@ class ACGD_Basic_Auth {
 		}
 
 		/*
+		 * ★ The two profile screens are the only place this button exists, and this guard is what keeps this
+		 * handler off every other admin entry point. admin_init does not fire on a screen — it fires on every
+		 * request that loads wp-admin/admin.php, and that includes admin-post.php and admin-ajax.php. Both of
+		 * those read $_REQUEST['action'] to pick their own destination *after* admin_init has run, so a POST
+		 * carrying VERIFY_REQUEST_FIELD aimed at either of them used to reach the guards below and take the
+		 * request away from whatever was supposed to handle it: drop_core_save_trigger() unsets the action
+		 * field the request is dispatched on (so an AJAX call would lose its destination, and PHP 8 turns
+		 * core's own read of the missing value into a warning), and the nonce guards answer with a redirect
+		 * and exit, which turns an AJAX response into a 302 (PR #6, code review round, Medium).
+		 * $GLOBALS['pagenow'] is the right thing to test here, and it is already settled at this point:
+		 * wp-settings.php requires wp-includes/vars.php during bootstrap (line 561 in WP 7.1), long before
+		 * wp-admin/admin.php fires admin_init (line 180 there), and vars.php derives $pagenow from
+		 * $_SERVER['PHP_SELF'] for every is_admin() request — so it reads 'admin-ajax.php' and
+		 * 'admin-post.php' on exactly the two entry points this has to keep out (both define WP_ADMIN before
+		 * loading WordPress, so is_admin() is true there and $pagenow is set for them too). Verified against
+		 * the running WordPress 7.1 on the test site, not assumed.
+		 * get_current_screen() would be the tidier-looking test and is not usable: the screen object is not
+		 * built until wp-admin/admin.php has already fired admin_init.
+		 * ★ このボタンが存在する画面はプロフィールの2画面だけであり、このハンドラを他のすべての管理画面の
+		 * 入口から遠ざけているのがこのガード。admin_init は「画面」で発火するのではなく、
+		 * wp-admin/admin.php を読み込むあらゆるリクエストで発火する——admin-post.php と admin-ajax.php を
+		 * 含めて。どちらも自分の行き先を決めるために $_REQUEST['action'] を読むのが admin_init の**後**なので、
+		 * VERIFY_REQUEST_FIELD を載せた POST をそこへ撃たれると、以前は下のガードまで到達して、本来の
+		 * 処理先からリクエストを奪っていた：drop_core_save_trigger() はディスパッチに使われる action の
+		 * フィールドを削るため AJAX は行き先を失い（PHP 8 では本体側がその欠けた値を読んで Warning になる）、
+		 * nonce のガードはリダイレクトして exit するため AJAX の応答が 302 に化ける
+		 * （PR #6・コードレビュー回・Medium）。
+		 * ここで見るべきは $GLOBALS['pagenow'] であり、この時点で既に確定している：wp-settings.php が
+		 * 起動処理の中で wp-includes/vars.php を読み（WP 7.1 では 561 行目）、wp-admin/admin.php が
+		 * admin_init を発火する（同 180 行目）のはそれよりずっと後。vars.php は is_admin() のリクエスト
+		 * すべてについて $_SERVER['PHP_SELF'] から $pagenow を決めるので、まさに締め出したい2つの入口では
+		 * 'admin-ajax.php' / 'admin-post.php' になる（どちらも WordPress を読み込む前に WP_ADMIN を定義
+		 * するため is_admin() は真で、$pagenow も設定される）。検証サイトで動いている WordPress 7.1 の
+		 * 実ファイルで確かめた（推測ではない）。
+		 * get_current_screen() は見た目には綺麗だが使えない：画面オブジェクトが作られるのは、
+		 * wp-admin/admin.php が admin_init を発火した後だから。
+		 */
+		$pagenow = isset( $GLOBALS['pagenow'] ) ? $GLOBALS['pagenow'] : '';
+		if ( ! in_array( $pagenow, array( 'profile.php', 'user-edit.php' ), true ) ) {
+			return;
+		}
+
+		/*
 		 * None of the guards below may simply return: a request that carries VERIFY_REQUEST_FIELD also
 		 * carries core's own action=update hidden field, so a bare return hands it straight on to
 		 * wp-admin/user-edit.php's `case 'update':` — and if core's own check_admin_referer() there happens
@@ -703,10 +746,14 @@ class ACGD_Basic_Auth {
 		 * as the one path that really did save).
 		 * So every guard below leaves the request unable to save before it stops handling it, in one of two
 		 * ways:
-		 * - The capability guard drops core's save trigger and returns, leaving the screen to render as
-		 *   usual. It does not redirect with a notice, because the notice
-		 *   (ACGD_User_Access::render_verify_notice()) is printed by a section that itself requires
-		 *   manage_options, so nothing this person can see would come of it.
+		 * - The capability guard stops the request outright with wp_die() and 403. It used to drop core's
+		 *   save trigger and return, which did keep the request from saving but let the screen render as if
+		 *   nothing had happened: a submission was thrown away in silence, with no notice anywhere (the
+		 *   notice, ACGD_User_Access::render_verify_notice(), is printed by a section that itself requires
+		 *   manage_options, so nothing this person could see would ever have come of it — which is exactly
+		 *   why saying so out loud is the honest answer; PR #6, code review round, Low). Now that the screen
+		 *   guard above keeps admin-ajax.php and admin-post.php out entirely, the only way to arrive here is
+		 *   a real profile screen, where a 403 page is a sensible thing to land on.
 		 * - The nonce guards redirect to the screen the form came from with acgd_basic_verify=expired
 		 *   (decline_verify_request()), so the "verification has expired, enter them again" notice explains
 		 *   why nothing happened. This is the case a person actually reaches by leaving the screen open too
@@ -723,9 +770,13 @@ class ACGD_Basic_Auth {
 		 * 実際に保存まで進む唯一の経路として確認済み）。
 		 * そこで以下のガードは、処理を降りる前に必ずリクエストを「保存できない状態」にしてから降りる。
 		 * 方法は2通り：
-		 * - 権限のガードは、本体の保存トリガーを外して return する。画面はそのまま表示される。通知を出す
-		 *   リダイレクトにしないのは、通知（ACGD_User_Access::render_verify_notice()）を出すのが
-		 *   manage_options を要求する区画自身であり、この人には何も見えないため。
+		 * - 権限のガードは、wp_die() と 403 でリクエストをその場で止める。以前は本体の保存トリガーを外して
+		 *   return していた。それでも保存はされないが、画面は何事も無かったかのように表示されるため、
+		 *   送信が通知も無く黙って捨てられていた（通知を出す ACGD_User_Access::render_verify_notice() は
+		 *   manage_options を要求する区画自身が出しているので、この人には元々何も見えない——だからこそ
+		 *   はっきり断る方が誠実である。PR #6・コードレビュー回・Low）。上の画面ガードで
+		 *   admin-ajax.php・admin-post.php を完全に締め出した今、ここに来られるのは本物のプロフィール画面
+		 *   だけなので、403 のページに着地するのは筋が通る。
 		 * - nonce のガードは、フォームが来た画面へ acgd_basic_verify=expired を付けてリダイレクトする
 		 *   （decline_verify_request()）。「確認の期限が切れました。入力し直してください」の通知で、
 		 *   何も起きなかった理由が伝わる。画面を開いたまま放置して実際に到達するのはこちらであり、
@@ -733,12 +784,41 @@ class ACGD_Basic_Auth {
 		 *   これで元どおり成り立つ。
 		 */
 		if ( ! current_user_can( 'manage_options' ) ) {
-			self::drop_core_save_trigger();
-			return;
+			// wp_die() ends the request, so core's `case 'update':` is never reached and nothing can be
+			// saved on the way out — dropping the save trigger first would add nothing. The wording and the
+			// call itself are the same ones the other two capability guards in this class already use, so
+			// no new string enters languages/.
+			// wp_die() はリクエストを終わらせるので、本体の `case 'update':` には到達せず、降り際に何かが
+			// 保存されることもない。先に保存トリガーを外しても足しにならない。文言と呼び方は、このクラスの
+			// 他の2つの権限ガードが既に使っているものと同じにしてあるので、languages/ に新しい文言は増えない。
+			wp_die( esc_html__( 'You do not have permission to do this.', 'etbs-account-guard' ), '', array( 'response' => 403 ) );
 		}
 
 		$admin_id  = get_current_user_id();
 		$target_id = isset( $_POST['acgd_user_id'] ) ? (int) $_POST['acgd_user_id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified immediately below; the value is needed to build the nonce action itself. / 直後に検証する。nonce のアクション文字列を組み立てるのにこの値が要るため先に読む。
+
+		/*
+		 * acgd_user_id is a field of the form, so whoever submits chooses it — on its own it names nobody in
+		 * particular. wp-admin/user-edit.php carries core's own user_id for the same person in the query
+		 * string, and core itself uses that one; wp-admin/profile.php carries no user_id at all, because
+		 * core takes the current user there. So: when core's user_id is present, the two must agree, and a
+		 * mismatch is declined. That is what actually ties this request to the screen it claims to come
+		 * from, which the nonce alone does not do (the nonce is built from acgd_user_id, so it agrees with
+		 * whatever that field says — an admin can pass their own screen's nonce while naming their own ID,
+		 * which is harmless, but the comment below used to promise more than the code delivered; PR #6,
+		 * code review round, Low).
+		 * acgd_user_id はフォームのフィールドなので送信する側が選べる値であり、それ単体では誰も特定しない。
+		 * wp-admin/user-edit.php は同じ人物を指す本体自身の user_id をクエリ文字列に持ち、本体はそちらを使う。
+		 * wp-admin/profile.php には user_id が無い（本体がそこでは現在のユーザーを対象にするため）。よって、
+		 * 本体の user_id があるときは両者が一致していなければならず、食い違えば拒否する。リクエストを
+		 * 「それが名乗る画面」に実際に結び付けているのはこの突き合わせであり、nonce だけでは結び付かない
+		 * （nonce は acgd_user_id から組み立てるので、そのフィールドの言うことに必ず同意する。管理者が自分の
+		 * 画面の nonce を自分の ID で通すことはできるが、それ自体は無害。ただし下のコメントは実装より強い
+		 * 約束をしていた。PR #6・コードレビュー回・Low）。
+		 */
+		if ( isset( $_REQUEST['user_id'] ) && (int) $_REQUEST['user_id'] !== $target_id ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Compared against the posted target before any nonce is built or any value is used; the nonces are verified immediately below. / nonce を組み立てる前・値を使う前の突き合わせのみ。nonce は直後に検証する。
+			self::decline_verify_request();
+		}
 
 		/*
 		 * Two nonces, both already present in this one form:
@@ -748,9 +828,11 @@ class ACGD_Basic_Auth {
 		 * - Core's own "update-user_<ID>", in _wpnonce, printed by wp-admin/user-edit.php's
 		 *   wp_nonce_field( 'update-user_' . $user_id ). This handler now intercepts a submission that core
 		 *   itself would have validated with check_admin_referer( 'update-user_' . $user_id ), so checking the
-		 *   very same nonce keeps the interception no more permissive than the save it takes the place of —
-		 *   and, unlike the plugin's own (a single site-wide action string), it binds the request to this
-		 *   exact target user's screen.
+		 *   very same nonce keeps the interception no more permissive than the save it takes the place of.
+		 *   Note what this nonce does and does not prove: it is built from acgd_user_id, a field of the form,
+		 *   so it confirms that whoever submitted holds a valid nonce for the ID they named — not that they
+		 *   are on that person's screen. The check just above, against core's own $_REQUEST['user_id'], is
+		 *   what ties the request to the screen when core supplies one.
 		 * この1つのフォームに元から入っている2つの nonce を、両方とも確かめる：
 		 * - このプラグイン自身のもの（NONCE_NAME / NONCE_ACTION）。ACGD_User_Access::render_fields() の末尾で
 		 *   出力している。従来の admin-post ハンドラが確かめていたのと同じもので、受け口を移したことで
@@ -758,9 +840,11 @@ class ACGD_Basic_Auth {
 		 * - 本体自身の「update-user_<ID>」（_wpnonce）。wp-admin/user-edit.php の
 		 *   wp_nonce_field( 'update-user_' . $user_id ) が出力している。このハンドラは、本体が
 		 *   check_admin_referer( 'update-user_' . $user_id ) で検証したはずの送信を横取りするのだから、
-		 *   まさに同じ nonce を確かめることで、置き換えた保存処理より緩くならないようにする。加えて、
-		 *   サイト内で1つのアクション文字列でしかないプラグイン側の nonce と違い、
-		 *   こちらはリクエストをこの対象ユーザーの画面そのものに結び付ける。
+		 *   まさに同じ nonce を確かめることで、置き換えた保存処理より緩くならないようにする。
+		 *   この nonce が何を証明し、何を証明しないかに注意：組み立ての材料はフォームのフィールドである
+		 *   acgd_user_id なので、証明できるのは「送信者が、自分の名乗った ID について有効な nonce を
+		 *   持っている」ことであって、「その人物の画面にいる」ことではない。リクエストを画面に結び付けて
+		 *   いるのは、本体が user_id を供給するときに効く、すぐ上の突き合わせのほう。
 		 */
 		if ( ! isset( $_POST[ ACGD_User_Access::NONCE_NAME ] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ ACGD_User_Access::NONCE_NAME ] ) ), ACGD_User_Access::NONCE_ACTION ) ) {
 			self::decline_verify_request();

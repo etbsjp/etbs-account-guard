@@ -79,11 +79,25 @@ class ACGD_User_Access {
 
 	/**
 	 * HTML id of the nameless hidden submit button that acts as the profile form's default button.
-	 * Shared with the profile screen script, which is the only reason this button needs an id at all
-	 * (an id, unlike a name, never becomes part of the submitted form data). See render_fields().
+	 * The only reason this button needs an id at all is that the profile screen script looks it up by that
+	 * id (an id, unlike a name, never becomes part of the submitted form data). See render_fields().
+	 * ★ The script does NOT read this constant — it cannot; it holds the same string as a literal
+	 * ('acgd-default-submit' in inc/js/profile-default-submit.js). The two are kept in step by hand, so
+	 * changing this value means changing the literal in that file in the same commit. Nothing breaks loudly
+	 * if they drift apart: the script simply finds no button, returns, and Enter goes back to raising core's
+	 * "the changes you made will be lost" dialog on a submission that is in fact saving (PR #6, code review
+	 * round, Low — the docblock here used to claim the id was "shared with" the script, which read as if the
+	 * script took it from this constant).
 	 * プロフィールのフォームの既定ボタンになる、名前を持たない隠しの送信ボタンの HTML の id。
-	 * プロフィール画面のスクリプトと共有するためのもので、そもそもこのボタンに id が要るのはそれだけが理由
+	 * そもそもこのボタンに id が要るのは、プロフィール画面のスクリプトがこの id で引くからというだけの理由
 	 * （name と違い、id は送信されるフォームの内容には一切入らない）。render_fields() を参照。
+	 * ★ スクリプトはこの定数を読んでいない——読めない。同じ文字列をリテラルとして持っている
+	 * （inc/js/profile-default-submit.js の 'acgd-default-submit'）。両者は人の手で揃えるものなので、
+	 * この値を変えるときは同じコミットであちらのリテラルも変えること。ずれても派手には壊れない：
+	 * スクリプトがボタンを見つけられずに何もせず終わり、実際には保存される送信に対して本体の
+	 * 「行った変更が失われます」のダイアログがまた出るようになるだけ（PR #6・コードレビュー回・Low。
+	 * ここの docblock は以前「スクリプトと共有する」と書いており、スクリプトがこの定数から値を取っている
+	 * ように読めてしまっていた）。
 	 *
 	 * @var string
 	 */
