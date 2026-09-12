@@ -243,6 +243,39 @@ class ACGD_Basic_Auth {
 		 * 解釈する前に $_SERVER から消すため（docs/spec.md 5.3 ★★★）。
 		 */
 		add_filter( 'determine_current_user', array( __CLASS__, 'maybe_strip_own_header' ), 1 );
+		/*
+		 * Priority 15: the same job for credentials that are confirmed but not saved yet — the window between
+		 * clicking "Verify" and clicking "Update Profile", during which the browser keeps sending
+		 * Authorization: Basic to this origin while nothing in the database matches it yet, so
+		 * maybe_strip_own_header() above finds nothing and leaves the header in place. What that left behind
+		 * was core's own red notice on the very screen the admin lands back on — "Your website appears to use
+		 * Basic Authentication, which is not currently compatible with Application Passwords", printed by
+		 * wp-admin/user-edit.php from wp_is_site_protected_by_basic_auth(), which is nothing but
+		 * ! empty( $_SERVER['PHP_AUTH_USER'] ) || ! empty( $_SERVER['PHP_AUTH_PW'] )
+		 * (wp-includes/load.php) — sitting next to the green "Verified" one (UI test finding, issue #4).
+		 * 15 and not 1: this needs to know WHOSE confirmation to look for, and the confirmation is held per
+		 * admin (VERIFIED_TRANSIENT_PREFIX). Core resolves the wp-admin auth cookie on this very filter at
+		 * priority 10, so by 15 the id has already been handed to us as $input on every wp-admin request —
+		 * and 15 is still before core's application password callback at 20, which is the one thing this has
+		 * to get ahead of (docs/spec.md 5.3 ★★★, and the known trap that leaving the header in place makes
+		 * REST answer 401).
+		 * 優先度15：確認は済んだがまだ保存していない資格情報について、同じ仕事をする。「確認」を押してから
+		 * 「プロフィールを更新」を押すまでの間、ブラウザはこのオリジンへ Authorization: Basic を送り続ける
+		 * のに、データベースにはまだ一致するものが無い——だから上の maybe_strip_own_header() は何も見つけず、
+		 * ヘッダーを残したままにしていた。その結果、管理者が戻ってくるまさにその画面に本体の赤い通知
+		 * 「サイトでは Basic 認証が使われているようですが、現在、アプリケーションパスワードとは互換性が
+		 * ありません」が、緑の「確認できました」の隣に並んでいた（UIテストでの指摘、issue #4）。この通知は
+		 * wp-admin/user-edit.php が wp_is_site_protected_by_basic_auth() を見て出しており、その中身は
+		 * ! empty( $_SERVER['PHP_AUTH_USER'] ) || ! empty( $_SERVER['PHP_AUTH_PW'] ) だけ
+		 * （wp-includes/load.php）。
+		 * 1 ではなく 15 なのは、「誰の確認を探すのか」を知る必要があるため（確認は管理者ごとに
+		 * VERIFIED_TRANSIENT_PREFIX で持っている）。本体はまさにこのフィルタの優先度10で wp-admin の
+		 * auth cookie を解決するので、15 の時点では管理画面のリクエストなら ID が $input として渡って
+		 * きている。しかも 15 は本体のアプリケーションパスワードのコールバック（20）よりは前であり、
+		 * 先回りしなければならないのはそれだけ（docs/spec.md 5.3 ★★★、および「ヘッダーを残すと REST が
+		 * 401 を返す」という既知の罠）。
+		 */
+		add_filter( 'determine_current_user', array( __CLASS__, 'maybe_strip_confirmed_header' ), 15 );
 
 		// The confirmation screen and the "Verify" round trip, both at the wp-login.php level (docs/spec.md 5.3).
 		// 確認画面と「確認」ボタンの往復。どちらも wp-login.php の階層（docs/spec.md 5.3）。
@@ -428,6 +461,85 @@ class ACGD_Basic_Auth {
 			// PR #6 レビュー）。これにより、他の4箇所の Throwable の catch と同じ「アクセス制限は停止中」の
 			// 警告が manage_options の人に出るようになる。それを書き込む唯一のメソッドが record_fault()。
 			self::$matched_user = null;
+			ACGD_Access_Restriction::record_fault( $e->getMessage() );
+		}
+
+		return $input;
+	}
+
+	/**
+	 * Same as maybe_strip_own_header(), for the one case it cannot cover: credentials this plugin has just
+	 * confirmed through the "Verify" round trip but which are not saved anywhere yet (see init() for the
+	 * symptom this removes and why this runs at priority 15). Never changes $input.
+	 * maybe_strip_own_header() と同じことを、あちらでは扱えない1つのケースについて行う：「確認」の往復で
+	 * このプラグイン自身が確認したばかりで、まだどこにも保存されていない資格情報（この修正が消している症状と、
+	 * 優先度15で動かす理由は init() を参照）。$input は一切変えない。
+	 *
+	 * ★ Recognizing them is NOT the same as accepting them, and this method deliberately does not touch
+	 * $matched_user: a confirmation is not a saved credential, so nothing here may let this request satisfy
+	 * BASIC authentication for anybody (is_request_authenticated_for() must keep answering from saved
+	 * credentials alone — docs/spec.md 5.3). The only effect is the one side effect: clearing $_SERVER.
+	 * ★ 「認識する」ことは「受け入れる」ことではない。このメソッドは意図的に $matched_user に触らない：
+	 * 確認済みであることは保存済みであることではないので、ここで誰かについて BASIC 認証を満たしたことに
+	 * なってはならない（is_request_authenticated_for() は保存済みの資格情報だけで答え続けること
+	 * ——docs/spec.md 5.3）。効果は副作用ひとつ、$_SERVER を消すことだけ。
+	 *
+	 * ★ It also stays within "never touch credentials that are not this person's own": the confirmation it
+	 * compares against is the one held for THIS request's own admin, and the comparison is the confirmed
+	 * id plus password_verify() against the confirmed hash. Someone else's credentials, and any unrelated
+	 * Authorization header, match nothing here and are left exactly as they arrived.
+	 * ★ 「自分のもの以外には手を出さない」も崩していない：突き合わせる相手はこのリクエスト自身の管理者に
+	 * ついて保持されている確認であり、比較は確認済みの ID と、確認済みハッシュに対する password_verify()。
+	 * 他人の資格情報や無関係な Authorization ヘッダーはここでは何とも一致せず、届いたそのままで残る。
+	 *
+	 * @param int|false $input Result of the earlier determine_current_user callbacks; on a wp-admin request
+	 *                          core has already resolved it to the current user's ID by this priority.
+	 *                          / それまでのコールバックの結果。管理画面のリクエストでは、この優先度の時点で
+	 *                          本体が既に現在のユーザー ID に解決している。
+	 * @return int|false The result, unchanged. / 結果（変更しない）。
+	 */
+	public static function maybe_strip_confirmed_header( $input ) {
+		try {
+			if ( ACGD_Access_Restriction::is_disabled() ) {
+				return $input;
+			}
+
+			// Nothing arrived to strip. Cached from the first call, so reading it here costs nothing extra
+			// and still returns what was originally submitted even after $_SERVER has been cleared.
+			// 消す対象が届いていない。最初の呼び出しでキャッシュされるので、ここで読んでも追加の負荷は無く、
+			// $_SERVER を消した後でも元々送られてきた内容が返る。
+			$submitted = self::get_submitted_credentials();
+			if ( null === $submitted ) {
+				return $input;
+			}
+
+			// Whose confirmation to look for. $input carries it on wp-admin requests (see init()); anywhere
+			// else nobody is resolved yet at this priority, and there is then no confirmation to consult.
+			// 誰の確認を探すか。管理画面のリクエストでは $input が持っている（init() を参照）。それ以外では
+			// この優先度の時点で誰も解決されておらず、そのとき参照すべき確認も無い。
+			$admin_id = is_numeric( $input ) ? (int) $input : 0;
+			if ( $admin_id <= 0 ) {
+				return $input;
+			}
+
+			$confirmed = get_transient( self::VERIFIED_TRANSIENT_PREFIX . $admin_id );
+			if ( ! is_array( $confirmed ) || ! isset( $confirmed['id'], $confirmed['hash'] ) ) {
+				return $input;
+			}
+
+			if ( ! hash_equals( (string) $confirmed['id'], $submitted['username'] ) ) {
+				return $input;
+			}
+			if ( ! password_verify( $submitted['password'], (string) $confirmed['hash'] ) ) {
+				return $input;
+			}
+
+			self::clear_submitted_credentials_from_server();
+		} catch ( Throwable $e ) {
+			// Fail open, and record it the same way the other Throwable catches in this class do
+			// (docs/spec.md 5.5). A fault here must never break core's own authentication for this request.
+			// 止めて通し、このクラスの他の Throwable の catch と同じ形で記録する（docs/spec.md 5.5）。
+			// ここでの故障が、このリクエストの本体側の認証を壊すことは絶対に無いようにする。
 			ACGD_Access_Restriction::record_fault( $e->getMessage() );
 		}
 
@@ -659,9 +771,14 @@ class ACGD_Basic_Auth {
 	 * sends the browser to VERIFY_ACTION.
 	 *
 	 * ★ No path out of this method leaves a request that carries VERIFY_REQUEST_FIELD able to save: every one
-	 * of them either redirects and exits, or drops core's own save trigger first (see the guards below), so
+	 * of them ends the request outright — wp_die() with 403, or a redirect followed by exit — so
 	 * wp-admin/user-edit.php never reaches its own `case 'update':` — clicking "Verify" must not also save
-	 * the profile, not even when a guard here declines to handle the request.
+	 * the profile, not even when a guard here declines to handle the request. The one exception is the screen
+	 * guard at the very top, which returns without doing anything at all: it fires on requests that are not
+	 * this button (a POST to some other admin entry point), and on those there is nothing to keep from
+	 * saving. Earlier revisions had a third shape, a guard that unset core's own action field and then
+	 * returned so the screen would still render; nothing does that any more (code audit, Medium: the helper
+	 * it used had lost its last caller while this docblock still presented it as a live path).
 	 *
 	 * Only ever meaningful for an admin verifying their own account (docs/spec.md 5.3); a mismatched target is
 	 * bounced back without starting a confirmation.
@@ -673,9 +790,14 @@ class ACGD_Basic_Auth {
 	 * それぞれ保存してから、ブラウザを VERIFY_ACTION へ送る。
 	 *
 	 * ★ VERIFY_REQUEST_FIELD を載せたリクエストを「保存できる状態」のまま抜ける経路は1つも無い：
-	 * すべての経路が、リダイレクトして exit するか、その前に本体の保存トリガーを外すかのどちらかになる
-	 * （下のガードを参照）。そうすることで wp-admin/user-edit.php は自身の `case 'update':` に到達しない
-	 * ——「確認」を押しただけでプロフィールまで保存されてはならない。ここのガードが処理を降りるときも同じ。
+	 * すべての経路がリクエストをその場で終わらせる——403 の wp_die()、またはリダイレクトして exit。
+	 * そうすることで wp-admin/user-edit.php は自身の `case 'update':` に到達しない——「確認」を押しただけで
+	 * プロフィールまで保存されてはならない。ここのガードが処理を降りるときも同じ。例外は先頭の画面ガードで、
+	 * そこは何もせずに return する：発火しているのがこのボタンではないリクエスト（別の管理画面の入口への
+	 * POST）だからで、そこには「保存させてはならないもの」が無い。以前の版には3つ目の形——本体の action の
+	 * フィールドを外してから return し、画面はそのまま描画させるガード——があったが、今はどこにも無い
+	 * （コード監査・Medium：そのヘルパーは最後の呼び出し元を失っていたのに、この docblock はまだ現役の
+	 * 経路として説明していた）。
 	 *
 	 * 意味を持つのは管理者が自分自身を確認するときだけ（docs/spec.md 5.3）。対象が食い違っていれば、
 	 * 確認を始めずに送り返す。
@@ -697,10 +819,10 @@ class ACGD_Basic_Auth {
 		 * request that loads wp-admin/admin.php, and that includes admin-post.php and admin-ajax.php. Both of
 		 * those read $_REQUEST['action'] to pick their own destination *after* admin_init has run, so a POST
 		 * carrying VERIFY_REQUEST_FIELD aimed at either of them used to reach the guards below and take the
-		 * request away from whatever was supposed to handle it: drop_core_save_trigger() unsets the action
-		 * field the request is dispatched on (so an AJAX call would lose its destination, and PHP 8 turns
-		 * core's own read of the missing value into a warning), and the nonce guards answer with a redirect
-		 * and exit, which turns an AJAX response into a 302 (PR #6, code review round, Medium).
+		 * request away from whatever was supposed to handle it: the capability guard of the day unset the
+		 * action field the request is dispatched on (so an AJAX call would lose its destination, and PHP 8
+		 * turns core's own read of the missing value into a warning), and the nonce guards answer with a
+		 * redirect and exit, which turns an AJAX response into a 302 (PR #6, code review round, Medium).
 		 * $GLOBALS['pagenow'] is the right thing to test here, and it is already settled at this point:
 		 * wp-settings.php requires wp-includes/vars.php during bootstrap (line 561 in WP 7.1), long before
 		 * wp-admin/admin.php fires admin_init (line 180 there), and vars.php derives $pagenow from
@@ -715,8 +837,8 @@ class ACGD_Basic_Auth {
 		 * wp-admin/admin.php を読み込むあらゆるリクエストで発火する——admin-post.php と admin-ajax.php を
 		 * 含めて。どちらも自分の行き先を決めるために $_REQUEST['action'] を読むのが admin_init の**後**なので、
 		 * VERIFY_REQUEST_FIELD を載せた POST をそこへ撃たれると、以前は下のガードまで到達して、本来の
-		 * 処理先からリクエストを奪っていた：drop_core_save_trigger() はディスパッチに使われる action の
-		 * フィールドを削るため AJAX は行き先を失い（PHP 8 では本体側がその欠けた値を読んで Warning になる）、
+		 * 処理先からリクエストを奪っていた：当時の権限ガードはディスパッチに使われる action の
+		 * フィールドを削っていたため AJAX は行き先を失い（PHP 8 では本体側がその欠けた値を読んで Warning）、
 		 * nonce のガードはリダイレクトして exit するため AJAX の応答が 302 に化ける
 		 * （PR #6・コードレビュー回・Medium）。
 		 * ここで見るべきは $GLOBALS['pagenow'] であり、この時点で既に確定している：wp-settings.php が
@@ -744,21 +866,19 @@ class ACGD_Basic_Auth {
 		 * against $_POST['acgd_user_id'] while core checks it against its own $_REQUEST['user_id'], and one
 		 * of them can be removed or replaced on its own by editing the page's DOM (confirmed by the UI test
 		 * as the one path that really did save).
-		 * So every guard below leaves the request unable to save before it stops handling it, in one of two
-		 * ways:
-		 * - The capability guard stops the request outright with wp_die() and 403. It used to drop core's
-		 *   save trigger and return, which did keep the request from saving but let the screen render as if
-		 *   nothing had happened: a submission was thrown away in silence, with no notice anywhere (the
-		 *   notice, ACGD_User_Access::render_verify_notice(), is printed by a section that itself requires
+		 * So no guard below returns; each one ends the request, in one of two ways:
+		 * - The capability guard stops it outright with wp_die() and 403. It used to unset core's own action
+		 *   field and return, which did keep the request from saving but let the screen render as if nothing
+		 *   had happened: a submission was thrown away in silence, with no notice anywhere (the notice,
+		 *   ACGD_User_Access::render_verify_notice(), is printed by a section that itself requires
 		 *   manage_options, so nothing this person could see would ever have come of it — which is exactly
 		 *   why saying so out loud is the honest answer; PR #6, code review round, Low). Now that the screen
 		 *   guard above keeps admin-ajax.php and admin-post.php out entirely, the only way to arrive here is
 		 *   a real profile screen, where a 403 page is a sensible thing to land on.
-		 * - The nonce guards redirect to the screen the form came from with acgd_basic_verify=expired
-		 *   (decline_verify_request()), so the "verification has expired, enter them again" notice explains
-		 *   why nothing happened. This is the case a person actually reaches by leaving the screen open too
-		 *   long, and it restores the ★ invariant in this method's docblock: every path that acts on the
-		 *   button redirects and exits.
+		 * - The target and nonce guards redirect to the screen the form came from and exit
+		 *   (decline_verify_request(), with the notice key that says which of the two it was), so the person
+		 *   is told why nothing happened. Leaving the screen open too long is the case actually reached in
+		 *   practice, and this keeps the ★ invariant in this method's docblock intact.
 		 * 以下のガードはどれも単に return してはならない：VERIFY_REQUEST_FIELD を載せたリクエストは本体自身の
 		 * action=update の隠しフィールドも一緒に載せているため、素の return ではそのまま
 		 * wp-admin/user-edit.php の `case 'update':` に渡ってしまい、そこで本体の check_admin_referer() が
@@ -768,29 +888,28 @@ class ACGD_Basic_Auth {
 		 * nonce をこのメソッドは $_POST['acgd_user_id'] に対して、本体は自身の $_REQUEST['user_id'] に対して
 		 * 検証する。さらにページの DOM を書き換えれば片方だけを消す・差し替えることもできる（UIテストで、
 		 * 実際に保存まで進む唯一の経路として確認済み）。
-		 * そこで以下のガードは、処理を降りる前に必ずリクエストを「保存できない状態」にしてから降りる。
-		 * 方法は2通り：
-		 * - 権限のガードは、wp_die() と 403 でリクエストをその場で止める。以前は本体の保存トリガーを外して
-		 *   return していた。それでも保存はされないが、画面は何事も無かったかのように表示されるため、
+		 * そこで以下のガードはどれも return せず、それぞれリクエストを終わらせる。方法は2通り：
+		 * - 権限のガードは、wp_die() と 403 でリクエストをその場で止める。以前は本体の action のフィールドを
+		 *   外して return していた。それでも保存はされないが、画面は何事も無かったかのように表示されるため、
 		 *   送信が通知も無く黙って捨てられていた（通知を出す ACGD_User_Access::render_verify_notice() は
 		 *   manage_options を要求する区画自身が出しているので、この人には元々何も見えない——だからこそ
 		 *   はっきり断る方が誠実である。PR #6・コードレビュー回・Low）。上の画面ガードで
 		 *   admin-ajax.php・admin-post.php を完全に締め出した今、ここに来られるのは本物のプロフィール画面
 		 *   だけなので、403 のページに着地するのは筋が通る。
-		 * - nonce のガードは、フォームが来た画面へ acgd_basic_verify=expired を付けてリダイレクトする
-		 *   （decline_verify_request()）。「確認の期限が切れました。入力し直してください」の通知で、
-		 *   何も起きなかった理由が伝わる。画面を開いたまま放置して実際に到達するのはこちらであり、
-		 *   このメソッドの docblock の ★（このボタンに反応する経路はすべてリダイレクトして exit する）も
-		 *   これで元どおり成り立つ。
+		 * - 対象と nonce のガードは、フォームが来た画面へリダイレクトして exit する
+		 *   （decline_verify_request()。どちらのガードだったかを表す通知キーを渡す）。これで何も起きなかった
+		 *   理由が本人に伝わる。実運用で実際に到達するのは「画面を開いたまま放置した」ケースであり、
+		 *   このメソッドの docblock の ★ もこれで保たれる。
 		 */
 		if ( ! current_user_can( 'manage_options' ) ) {
 			// wp_die() ends the request, so core's `case 'update':` is never reached and nothing can be
-			// saved on the way out — dropping the save trigger first would add nothing. The wording and the
-			// call itself are the same ones the other two capability guards in this class already use, so
-			// no new string enters languages/.
+			// saved on the way out — unsetting core's action field first would add nothing. The wording and
+			// the call itself are the same ones the other two capability guards in this class already use,
+			// so no new string enters languages/.
 			// wp_die() はリクエストを終わらせるので、本体の `case 'update':` には到達せず、降り際に何かが
-			// 保存されることもない。先に保存トリガーを外しても足しにならない。文言と呼び方は、このクラスの
-			// 他の2つの権限ガードが既に使っているものと同じにしてあるので、languages/ に新しい文言は増えない。
+			// 保存されることもない。先に本体の action のフィールドを外しても足しにならない。文言と呼び方は、
+			// このクラスの他の2つの権限ガードが既に使っているものと同じにしてあるので、languages/ に
+			// 新しい文言は増えない。
 			wp_die( esc_html__( 'You do not have permission to do this.', 'etbs-account-guard' ), '', array( 'response' => 403 ) );
 		}
 
@@ -828,7 +947,7 @@ class ACGD_Basic_Auth {
 		 * すべて弾き始めてはならないため。
 		 */
 		if ( isset( $_REQUEST['user_id'] ) && (int) $_REQUEST['user_id'] !== $target_id ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Compared against the posted target before any nonce is built or any value is used; the nonces are verified immediately below. / nonce を組み立てる前・値を使う前の突き合わせのみ。nonce は直後に検証する。
-			self::decline_verify_request();
+			self::decline_verify_request( 'mismatch' );
 		}
 
 		/*
@@ -986,38 +1105,28 @@ class ACGD_Basic_Auth {
 	}
 
 	/**
-	 * Removes core's own profile-save trigger from the current request, so that wp-admin/user-edit.php
-	 * renders the screen instead of reaching its `case 'update':` (see maybe_handle_verify_request()'s
-	 * guards for why a declined "Verify" request must never be left able to save).
-	 * 現在のリクエストから本体自身のプロフィール保存のトリガーを取り除き、wp-admin/user-edit.php が
-	 * `case 'update':` に到達せず画面の描画だけを行うようにする（受け付けなかった「確認」リクエストを
-	 * 保存できる状態のまま残してはならない理由は maybe_handle_verify_request() のガードを参照）。
-	 *
-	 * Both superglobals are cleared because core reads this key from $_REQUEST (wp-admin/user-edit.php's
-	 * `$action = isset( $_REQUEST['action'] ) ? ... : '';`), while the value itself arrives in $_POST; PHP
-	 * populates $_REQUEST as a copy at startup, so removing it from one does not remove it from the other.
-	 * Nothing else in the request is touched: the screen still renders with whatever the person had typed.
-	 * 両方のスーパーグローバルから消すのは、本体がこのキーを読むのは $_REQUEST
-	 * （wp-admin/user-edit.php の `$action = isset( $_REQUEST['action'] ) ? ... : '';`）である一方、値自体は
-	 * $_POST で届くため。PHP は起動時に $_REQUEST を複製として作るので、片方から消してももう片方には残る。
-	 * リクエストの他の部分には手を付けない：画面は入力された内容のまま描画される。
-	 *
-	 * @return void
-	 */
-	private static function drop_core_save_trigger() {
-		// Removing a key, not reading one, so there is no value here to verify a nonce for.
-		// 読み取りではなくキーの削除なので、nonce を検証すべき値はここには無い。
-		unset( $_POST['action'], $_REQUEST['action'] );
-	}
-
-	/**
-	 * Stops handling a "Verify" request that failed one of maybe_handle_verify_request()'s nonce guards, and
-	 * sends the browser back to the screen the form came from with the "verification has expired" notice
+	 * Stops handling a "Verify" request that one of maybe_handle_verify_request()'s guards turned down, and
+	 * sends the browser back to the screen the form came from with a notice
 	 * (ACGD_User_Access::render_verify_notice()), so that nothing is saved and the person is told why nothing
 	 * happened. Always exits.
-	 * maybe_handle_verify_request() の nonce のガードに落ちた「確認」リクエストの処理をやめ、フォームが来た
-	 * 画面へ「確認の期限が切れました」の通知（ACGD_User_Access::render_verify_notice()）付きで送り返す。
-	 * 何も保存されず、なぜ何も起きなかったのかも伝わる。必ず exit する。
+	 * Two guards call this, and they are turning down different things, so each passes its own notice key
+	 * (code audit, Low: this used to hardcode 'expired', which told someone whose request did not match the
+	 * screen that their confirmation had timed out — an answer that does not fit the question):
+	 * - 'expired' for the two nonce guards. The case actually reached in practice: the screen sat open past
+	 *   the nonce's lifetime, and retyping the pair is exactly the right thing to do next.
+	 * - 'mismatch' for the target guard, where the form's own acgd_user_id and core's user_id name two
+	 *   different people. Nothing has timed out there and retyping changes nothing; reloading the screen
+	 *   does.
+	 * maybe_handle_verify_request() のガードが受け付けなかった「確認」リクエストの処理をやめ、フォームが来た
+	 * 画面へ通知（ACGD_User_Access::render_verify_notice()）付きで送り返す。何も保存されず、なぜ何も
+	 * 起きなかったのかも伝わる。必ず exit する。
+	 * 呼び出し元は2つのガードで、断っている対象が別物なので、それぞれが自分の通知キーを渡す
+	 * （コード監査・Low：以前は 'expired' を固定で使っていたため、画面と食い違うリクエストを送った人に
+	 * 「確認の期限が切れました」と答えていた——問いに対して噛み合わない答えだった）：
+	 * - nonce の2つのガードは 'expired'。実運用で実際に到達するのはこちら：画面を nonce の寿命より長く
+	 *   開いたままにしていた場合で、次にすべきことはまさに ID とパスワードの再入力。
+	 * - 対象のガードは 'mismatch'。フォーム自身の acgd_user_id と本体の user_id が別人を指している状態。
+	 *   ここでは何も期限切れになっていないし、入力し直しても何も変わらない。画面を読み込み直せば変わる。
 	 *
 	 * The nonce has not been verified at this point, so nothing is read out of the form and nothing is
 	 * written anywhere — not even the resubmit stash. wp_get_referer() is still safe to use for the
@@ -1027,15 +1136,26 @@ class ACGD_Basic_Auth {
 	 * 保管すらしない）。行き先に wp_get_referer() を使うこと自体は安全：本体が wp_validate_redirect() に
 	 * 通しており、サイト内に留まる。無ければ本人のプロフィール画面に倒す。この通知を読む場所はそこであるため。
 	 *
+	 * @param string $reason Notice key for ACGD_User_Access::render_verify_notice(): 'expired' or 'mismatch'.
+	 *                       / ACGD_User_Access::render_verify_notice() の通知キー。'expired' か 'mismatch'。
 	 * @return void
 	 */
-	private static function decline_verify_request() {
+	private static function decline_verify_request( $reason = 'expired' ) {
 		$back = wp_get_referer();
 		if ( ! $back ) {
 			$back = admin_url( 'profile.php' );
 		}
 
-		wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'expired', $back ) );
+		// Anything other than the two known keys would print no notice at all (render_verify_notice() only
+		// prints for keys it has a sentence for), so fall back to the one that is always true of a declined
+		// request rather than redirecting silently.
+		// この2つ以外のキーだと通知が一切出ない（render_verify_notice() は文言を持つキーのときだけ出力する）
+		// ため、無言でリダイレクトするのではなく、断られたリクエストについて常に言える方へ倒す。
+		if ( ! in_array( $reason, array( 'expired', 'mismatch' ), true ) ) {
+			$reason = 'expired';
+		}
+
+		wp_safe_redirect( add_query_arg( 'acgd_basic_verify', $reason, $back ) );
 		exit;
 	}
 

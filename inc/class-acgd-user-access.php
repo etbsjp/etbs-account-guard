@@ -589,6 +589,13 @@ class ACGD_User_Access {
 				) . ' ' . __( 'The password field below will stay blank; the confirmed password is saved anyway.', 'etbs-account-guard' ),
 			),
 			'expired'    => array( 'warning', __( 'The verification has expired. Enter the ID and password again and click Verify.', 'etbs-account-guard' ) ),
+			// Separate from 'expired' because nothing has timed out in this case: the request named a user
+			// other than the one this screen is editing, so retyping the pair would change nothing while
+			// reloading the screen does (code audit, Low — see ACGD_Basic_Auth::decline_verify_request()).
+			// 'expired' と分けているのは、この場合は何も期限切れになっていないため：リクエストがこの画面の
+			// 編集対象とは別のユーザーを名乗っていたのであって、入力し直しても何も変わらず、画面を読み込み
+			// 直せば変わる（コード監査・Low。ACGD_Basic_Auth::decline_verify_request() を参照）。
+			'mismatch'   => array( 'error', __( 'That verification did not match this screen. Reload this page and click Verify again.', 'etbs-account-guard' ) ),
 			'not_self'   => array( 'error', __( 'The "Verify" button only works for your own account.', 'etbs-account-guard' ) ),
 			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password, and set the mode to "BASIC authentication" before verifying.', 'etbs-account-guard' ) ),
 		);

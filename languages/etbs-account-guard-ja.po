@@ -296,9 +296,6 @@ msgstr "制限なし"
 msgid "IP restriction"
 msgstr "IP 制限"
 
-msgid "BASIC authentication will be added by a later update and cannot be chosen yet."
-msgstr "BASIC 認証は今後の更新で追加予定で、まだ選べません。"
-
 msgid "IP addresses added for this user"
 msgstr "このユーザーに追加した IP アドレス"
 
@@ -384,9 +381,6 @@ msgstr "administrator は権限単位では常に制限なしです。特定の�
 #. translators: %s: link to the current admin's own standard WordPress "Profile" screen
 msgid "To restrict your own account, use the Access Restriction section on your own <a href=\"%s\">Profile</a> screen."
 msgstr "ご自身のアカウントを制限する場合は、ご自身の<a href=\"%s\">プロフィール</a>画面にある「アクセス制限」の区画をお使いください。"
-
-msgid "BASIC authentication will be added by a later update; only \"No restriction\" and \"IP restriction\" can be chosen here for now."
-msgstr "BASIC 認証は今後の更新で追加予定です。現時点ではここで選べるのは「制限なし」と「IP 制限」だけです。"
 
 msgid "Role"
 msgstr "権限"
@@ -559,14 +553,14 @@ msgstr "ユーザー名またはパスワードが受け付けられませんで
 msgid "The verification has expired. Enter the ID and password again and click Verify."
 msgstr "確認が期限切れになりました。ID とパスワードをもう一度入力し、「確認」をクリックしてください。"
 
+msgid "That verification did not match this screen. Reload this page and click Verify again."
+msgstr "その確認はこの画面と一致しませんでした。このページを読み込み直して、もう一度「確認」をクリックしてください。"
+
 msgid "This BASIC authentication ID is already used by another user on this site. Choose a different one. Not saved."
 msgstr "この BASIC 認証の ID は、このサイトの別のユーザーが既に使っています。別の ID を選んでください。保存されませんでした。"
 
 msgid "This connection is not HTTPS. BASIC authentication sends the username and password with every request; using HTTPS is strongly recommended (this does not block saving)."
 msgstr "この接続は HTTPS ではありません。BASIC 認証は毎回のリクエストでユーザー名とパスワードを送るため、HTTPS の利用を強く推奨します（保存は止めません）。"
-
-msgid "This link has expired. Please try again."
-msgstr "このリンクは期限切れです。もう一度お試しください。"
 
 msgid "This plugin never edits .htaccess automatically. Review it and add it yourself."
 msgstr "このプラグインが .htaccess を自動で書き換えることはありません。内容を確認のうえ、ご自身で追記してください。"
