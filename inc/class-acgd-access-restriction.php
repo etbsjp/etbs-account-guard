@@ -1,13 +1,18 @@
 <?php
 /**
- * Access Restriction: IP restriction and the shared foundation (docs/spec.md 5.1, 5.2, 5.4, 5.5).
- * アクセス制限：IP 制限と共通の土台（docs/spec.md 5.1・5.2・5.4・5.5）。
+ * Access Restriction: IP restriction, BASIC authentication and the shared foundation
+ * (docs/spec.md 5.1, 5.2, 5.3, 5.4, 5.5).
+ * アクセス制限：IP 制限・BASIC 認証と共通の土台（docs/spec.md 5.1・5.2・5.3・5.4・5.5）。
  *
- * BASIC authentication itself (docs/spec.md 5.3) is a later issue (#4, "C"). The data this class stores
- * already has room for a 'basic' mode everywhere a mode is stored, so that #4 does not need to migrate
- * anything; only the enforcement and the settings screen fields for it are missing here.
- * BASIC 認証そのもの（docs/spec.md 5.3）は後続の issue（#4・「C」）で作る。モードを保存するすべての場所に
- * 'basic' を持てる形にしてあるので、#4 で移し替えは要らない。ここに無いのは、実際の判定と設定画面の項目だけ。
+ * BASIC authentication's own credential storage and request-time verification (matching submitted
+ * PHP_AUTH_* / Authorization headers against a user, and stripping them from $_SERVER once matched) live
+ * in ACGD_Basic_Auth; this class only stores the id/password-hash user meta and calls into that class from
+ * its own enforcement hooks (check_access_on_request(), filter_rest_authentication_errors()), the same way
+ * it already enforces IP restriction.
+ * BASIC 認証自身の資格情報の保存と、リクエスト時の照合（送信された PHP_AUTH_* / Authorization ヘッダーを
+ * ユーザーと突き合わせ、一致したら $_SERVER から消す処理）は ACGD_Basic_Auth に置く。このクラスは
+ * ID・パスワードハッシュのユーザーメタだけを持ち、既存の IP 制限の判定と同じ場所（check_access_on_request()・
+ * filter_rest_authentication_errors()）から ACGD_Basic_Auth を呼び出す。
  *
  * @package etbs-account-guard
  */
@@ -74,6 +79,57 @@ class ACGD_Access_Restriction {
 	 */
 	const USER_IPS_META = 'acgd_user_ips';
 
+	/**
+	 * User meta that stores one user's BASIC authentication ID (docs/spec.md 5.3). Not a secret by itself
+	 * (comparable to a login name), so it is stored as plain text and may be redisplayed on the user edit
+	 * screen, unlike the password.
+	 * 1人のユーザーの BASIC 認証の ID を持つユーザーメタ（docs/spec.md 5.3）。それ自体は秘密ではない
+	 * （ログイン名に近い）ため平文で保存し、パスワードとは違いユーザー編集画面での再表示もしてよい。
+	 *
+	 * @var string
+	 */
+	const USER_BASIC_ID_META = 'acgd_basic_id';
+
+	/**
+	 * User meta that stores the password_hash() of one user's BASIC authentication password. Never read back
+	 * for display; only password_verify() against a submitted password.
+	 * 1人のユーザーの BASIC 認証パスワードの password_hash() を持つユーザーメタ。表示用に読み出すことは無く、
+	 * 送信されたパスワードとの password_verify() にだけ使う。
+	 *
+	 * @var string
+	 */
+	const USER_BASIC_HASH_META = 'acgd_basic_password_hash';
+
+	/**
+	 * Option that caches how many users currently have a non-empty BASIC authentication ID saved (security
+	 * review, MEDIUM/performance, 2026-09-11: without this, maybe_strip_own_header() — a determine_current_user
+	 * filter at priority 1, so it runs on every request that carries an Authorization header, including
+	 * Application Passwords — ran a get_users( meta_key EXISTS ) query even on sites with nobody in BASIC
+	 * mode). Kept in sync at the single place that writes USER_BASIC_ID_META
+	 * (ACGD_User_Access::save_fields(), via update_basic_id_count()), which recomputes the true count from
+	 * usermeta on that rare, manual save so it always reflects reality. Read on the hot path without a query
+	 * of its own. Autoloaded on purpose: it is read on that same hot path, so keeping it in
+	 * the autoloaded options cache (loaded once per request regardless) costs nothing extra, unlike a
+	 * dedicated get_option() call for a non-autoloaded value. This is a derived cache, not something a user
+	 * configured, so it belongs with the "temporary state" that uninstall.php deletes (docs/spec.md 3.6),
+	 * the same as the denial log and the diagnosis result.
+	 * BASIC 認証の ID を現在いくつのユーザーが持っているか（空文字でないもの）をキャッシュするオプション
+	 * （セキュリティレビュー・MEDIUM／性能、2026-09-11：これが無いと maybe_strip_own_header()——
+	 * determine_current_user フィルタの優先度1で、Authorization ヘッダーを持つリクエストすべて
+	 * （アプリケーションパスワードを含む）で動く——が、BASIC モードの利用者が1人もいないサイトでも
+	 * get_users( meta_key EXISTS ) を毎回実行していた）。USER_BASIC_ID_META を書き込む唯一の場所
+	 * （ACGD_User_Access::save_fields()。update_basic_id_count() 経由）でだけ、その稀な手動保存のたびに
+	 * usermeta から真の値を再計算するため常に実態と一致する。読み取り側の高頻度経路では自前のクエリ無しで
+	 * 読める。autoload するのは意図的：同じ高頻度の経路で読むため、どのみち1リクエストに
+	 * 1回読み込まれる autoload オプションのキャッシュに乗せれば追加コストが無い（autoload しない値の
+	 * 専用 get_option() はそのぶんの問い合わせが増える）。これは利用者が設定した値ではなく派生的な
+	 * キャッシュなので、uninstall.php が消す「一時状態」（docs/spec.md 3.6）に属する。拒否の記録・
+	 * 診断結果と同じ扱い。
+	 *
+	 * @var string
+	 */
+	const BASIC_ID_COUNT_OPTION = 'acgd_basic_id_count';
+
 	const MODE_FOLLOW = 'follow';
 	const MODE_NONE   = 'none';
 	const MODE_IP     = 'ip';
@@ -137,6 +193,24 @@ class ACGD_Access_Restriction {
 	const REST_AUTHENTICATION_PRIORITY = 200;
 
 	/**
+	 * Priority of the admin_init action that judges access on every admin-side request (check_access_on_request()).
+	 * 管理画面側の毎回のアクセスを判定する admin_init の優先度（check_access_on_request()）。
+	 *
+	 * Named rather than left implicit because another class hooks admin_init relative to this one:
+	 * ACGD_Basic_Auth::init() registers its "Verify" handler at this priority + 1, so that access to the
+	 * current request is still judged first, exactly as on every other admin screen. Both sides read this
+	 * constant, so the ordering cannot quietly break if this value is ever changed.
+	 *
+	 * 既定のままにせず名前を付けているのは、別のクラスがこれを基準に admin_init へ登録しているため：
+	 * ACGD_Basic_Auth::init() は「確認」のハンドラをこの優先度＋1で登録し、そのリクエストに対する
+	 * アクセス制限の判定が先に効くようにしている（他の管理画面と全く同じ順序）。両方がこの定数を読むので、
+	 * この値を変えても順序が黙って壊れることは無い。
+	 *
+	 * @var int
+	 */
+	const ADMIN_INIT_PRIORITY = 10;
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -162,7 +236,7 @@ class ACGD_Access_Restriction {
 		 * 担う。REST API はどちらにも来ない（parse_request の時点で抜け、テンプレートより前に終わる）ため、
 		 * 上の専用のフィルタで別に扱っている。
 		 */
-		add_action( 'admin_init', array( __CLASS__, 'check_access_on_request' ) );
+		add_action( 'admin_init', array( __CLASS__, 'check_access_on_request' ), self::ADMIN_INIT_PRIORITY );
 		add_action( 'template_redirect', array( __CLASS__, 'check_access_on_request' ) );
 	}
 
@@ -231,6 +305,256 @@ class ACGD_Access_Restriction {
 		$text = get_user_meta( (int) $user_id, self::USER_IPS_META, true );
 
 		return is_string( $text ) ? $text : '';
+	}
+
+	/*-------------------------------------------*/
+	/* BASIC authentication credentials (docs/spec.md 5.3) / BASIC 認証の資格情報（docs/spec.md 5.3）
+	/*-------------------------------------------*/
+
+	/**
+	 * Returns one user's BASIC authentication ID, or an empty string when none is set.
+	 * 1ユーザーの BASIC 認証の ID を返す。未設定なら空文字。
+	 *
+	 * @param int $user_id User ID. / ユーザー ID。
+	 * @return string ID, as stored (not a secret; safe to redisplay). / 保存されている ID（秘密ではなく再表示してよい）。
+	 */
+	public static function get_basic_id( $user_id ) {
+		$id = get_user_meta( (int) $user_id, self::USER_BASIC_ID_META, true );
+
+		return is_string( $id ) ? $id : '';
+	}
+
+	/**
+	 * Tells whether one user has both a BASIC authentication ID and a password hash saved. Used by save-time
+	 * check 3 (docs/spec.md 5.1, "BASIC モードになるユーザーは全員が資格情報を設定済み").
+	 * 1ユーザーが BASIC 認証の ID とパスワードハッシュの両方を保存済みかを返す。保存時のチェック3
+	 * （docs/spec.md 5.1「BASIC モードになるユーザーは全員が資格情報を設定済み」）に使う。
+	 *
+	 * @param int $user_id User ID. / ユーザー ID。
+	 * @return bool Whether both are set. / 両方とも設定済みか。
+	 */
+	public static function has_basic_credentials( $user_id ) {
+		if ( '' === self::get_basic_id( $user_id ) ) {
+			return false;
+		}
+
+		$hash = get_user_meta( (int) $user_id, self::USER_BASIC_HASH_META, true );
+
+		return is_string( $hash ) && '' !== $hash;
+	}
+
+	/**
+	 * Returns every user of the current site who has a BASIC authentication ID saved (candidates for
+	 * basic_id_taken_by_other() and find_basic_user_by_credentials()).
+	 * 現在のサイトで BASIC 認証の ID を保存済みの全ユーザーを返す（basic_id_taken_by_other() と
+	 * find_basic_user_by_credentials() の候補）。
+	 *
+	 * Checks BASIC_ID_COUNT_OPTION first and returns an empty array without a query at all when it is zero
+	 * (security review, MEDIUM/performance, 2026-09-11) — the common case on a site where nobody uses BASIC
+	 * mode, including every request that reaches find_basic_user_by_credentials() through
+	 * ACGD_Basic_Auth::maybe_strip_own_header().
+	 * まず BASIC_ID_COUNT_OPTION を見て、0件ならクエリすら実行せず空配列を返す（セキュリティレビュー・
+	 * MEDIUM／性能、2026-09-11）。BASIC モードの利用者が1人もいないサイトでの通常の場合に当たり、
+	 * ACGD_Basic_Auth::maybe_strip_own_header() 経由で find_basic_user_by_credentials() に届くリクエスト
+	 * すべてがこれに該当する。
+	 *
+	 * @return WP_User[] Users with a BASIC ID saved. / BASIC ID を保存済みのユーザー。
+	 */
+	private static function get_users_with_basic_id() {
+		if ( (int) get_option( self::BASIC_ID_COUNT_OPTION, 0 ) < 1 ) {
+			return array();
+		}
+
+		return get_users(
+			array(
+				'meta_key'     => self::USER_BASIC_ID_META, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Settings/profile screens only; the number of users with a BASIC ID is small by nature (one credential per person, set up by hand), and BASIC_ID_COUNT_OPTION above already skips this entirely when nobody has one.
+				'meta_compare' => 'EXISTS',
+				'fields'       => 'all',
+			)
+		);
+	}
+
+	/**
+	 * Keeps BASIC_ID_COUNT_OPTION in sync after a save that may have changed whether one user's BASIC
+	 * authentication ID is non-empty. Called from the single place that writes USER_BASIC_ID_META
+	 * (ACGD_User_Access::save_fields()), right after that write. A no-op unless presence actually flipped
+	 * (someone's ID field going from blank to set, or set to blank), so repeated saves that leave BASIC
+	 * credentials untouched — the overwhelming majority, since most saves are of the IP or "no restriction"
+	 * modes — never touch this option at all.
+	 *
+	 * Recomputes the true count from the usermeta table rather than adjusting the cached value by +1/-1
+	 * (security review, MEDIUM/race condition, 2026-09-11): two admins saving different users' BASIC settings
+	 * at nearly the same time would otherwise race on the same read-modify-write of this option, and one
+	 * increment/decrement would be lost. Because the value was never a re-derivation but a running diff, a
+	 * loss here does not self-heal — it persists until someone happens to flip presence again. If the drift
+	 * lands on 0 while at least one user still has an ID, get_users_with_basic_id() would start returning an
+	 * empty array and lock out every existing, legitimately-configured BASIC user. A save here is a rare,
+	 * manual admin action (docs/spec.md 5.6, only reachable from the user edit screen's own section), so
+	 * recomputing with a direct COUNT query on every flip costs nothing that matters — unlike
+	 * get_users_with_basic_id() above, which stays a cached-count-guarded read because that path runs on
+	 * every request carrying an Authorization header.
+	 * BASIC_ID_COUNT_OPTION を、1人のユーザーの BASIC 認証 ID の有無が保存で変わったかもしれないことに
+	 * 合わせて更新する。USER_BASIC_ID_META を書き込む唯一の場所（ACGD_User_Access::save_fields()）から、
+	 * その書き込み直後に呼ぶ。ID の有無が実際に変わったとき（空→設定、設定→空）以外は何もしない。BASIC の
+	 * 資格情報に触れない保存（大多数を占める IP や「制限なし」モードの保存）では、このオプションに一切触れない。
+	 *
+	 * 算術的な +1/-1 でキャッシュ値を調整するのではなく、usermeta テーブルから真の値を再計算する
+	 * （セキュリティレビュー・中／レースコンディション、2026-09-11）：そうしないと、2人の管理者がほぼ
+	 * 同時に別々のユーザーの BASIC 設定を保存したとき、同じオプションへの read-modify-write が競合し、
+	 * 片方の増減が失われる。この値はもともと再計算ではなく差分の積み上げだったため、一度失われても
+	 * 自己修復せず、次に誰かが偶然また有無を変えるまでズレたままになる。実際には1人以上 BASIC ID を
+	 * 持つのにズレが0まで下がると、get_users_with_basic_id() が空配列を返すようになり、既存の正当な
+	 * BASIC 利用者が全員ロックアウトされる。ここでの保存はレアな手動の管理操作（docs/spec.md 5.6、
+	 * ユーザー編集画面のこの区画からしか届かない）なので、有無が変わるたびに直接の COUNT クエリで
+	 * 再計算しても実害のあるコストにはならない——高頻度な読み取り経路（Authorization ヘッダーを持つ
+	 * リクエストすべてで動く）である上の get_users_with_basic_id() をキャッシュされた件数で早期リターン
+	 * させ続けているのとは目的が異なる。
+	 *
+	 * @param bool $had_id Whether the user had a non-empty BASIC authentication ID before this save. / 保存前に BASIC 認証 ID を持っていたか。
+	 * @param bool $has_id Whether the user has a non-empty BASIC authentication ID after this save. / 保存後に BASIC 認証 ID を持っているか。
+	 * @return void
+	 */
+	public static function update_basic_id_count( $had_id, $has_id ) {
+		if ( (bool) $had_id === (bool) $has_id ) {
+			return;
+		}
+
+		global $wpdb;
+
+		// Only the meta key goes through a placeholder; the empty-string comparison is a literal, not user
+		// input. No cache is warmed for this (WordPress core has none for a raw aggregate like this), matching
+		// the same direct-query pattern used by ACGD_Login_Name::count_users_with_login_as_public_name().
+		// プレースホルダに通すのは meta_key だけで、空文字との比較はリテラル（利用者入力ではない）。
+		// この種の集約に対する WordPress 本体のキャッシュは無く、ACGD_Login_Name::count_users_with_login_as_public_name()
+		// と同じ直接クエリの型に揃えている。
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- No core API aggregates "how many users have a non-empty value for this meta key". Rare admin-save path only.
+		$count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value != ''",
+				self::USER_BASIC_ID_META
+			)
+		);
+		// phpcs:enable
+
+		update_option( self::BASIC_ID_COUNT_OPTION, $count, true ); // Autoloaded on purpose; see BASIC_ID_COUNT_OPTION. / 意図的に autoload する。理由は BASIC_ID_COUNT_OPTION を参照。
+	}
+
+	/**
+	 * Tells whether a BASIC authentication ID is already used by a different user (docs/spec.md 5.3,
+	 * "ID はサイト内で重複させない"). The ID is not a secret, so a plain, non-constant-time comparison would
+	 * be fine on its own merits; hash_equals() is used anyway for the same string-comparison discipline as
+	 * the rest of this feature (docs/spec.md 5.3, "文字列比較は hash_equals").
+	 * ある BASIC 認証の ID が、別のユーザーに既に使われているかを返す（docs/spec.md 5.3「ID はサイト内で
+	 * 重複させない」）。ID 自体は秘密ではないので、比較そのものは通常の等値比較でも安全上は問題ないが、
+	 * この機能全体の文字列比較の作法（docs/spec.md 5.3「文字列比較は hash_equals」）に揃えて hash_equals() を使う。
+	 *
+	 * @param string $id               ID to check. / 確かめる ID。
+	 * @param int    $exclude_user_id  User allowed to already have this ID (the one being saved). / この ID を既に持っていてよいユーザー（保存対象本人）。
+	 * @return bool Whether another user already has it. / 別のユーザーが既に持っているか。
+	 */
+	public static function basic_id_taken_by_other( $id, $exclude_user_id ) {
+		if ( '' === $id ) {
+			return false;
+		}
+
+		foreach ( self::get_users_with_basic_id() as $user ) {
+			if ( (int) $user->ID === (int) $exclude_user_id ) {
+				continue;
+			}
+			if ( hash_equals( self::get_basic_id( $user->ID ), (string) $id ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Finds the user whose BASIC authentication credentials match the given ID and password, if any.
+	 * 与えた ID とパスワードに一致する BASIC 認証の資格情報を持つユーザーを返す（無ければ null）。
+	 *
+	 * @param string $id       Submitted ID. / 送信された ID。
+	 * @param string $password Submitted password (plain text). / 送信されたパスワード（平文）。
+	 * @return WP_User|null Matching user, or null. / 一致するユーザー。無ければ null。
+	 */
+	public static function find_basic_user_by_credentials( $id, $password ) {
+		if ( '' === $id || '' === $password ) {
+			return null;
+		}
+
+		foreach ( self::get_users_with_basic_id() as $user ) {
+			if ( ! hash_equals( self::get_basic_id( $user->ID ), (string) $id ) ) {
+				continue;
+			}
+
+			$hash = get_user_meta( $user->ID, self::USER_BASIC_HASH_META, true );
+			if ( is_string( $hash ) && '' !== $hash && password_verify( (string) $password, $hash ) ) {
+				return $user;
+			}
+
+			// The ID matched but the password did not (or no hash is saved): this ID is unique
+			// (basic_id_taken_by_other() is enforced at save time), so no other user can match either.
+			// ID は一致したがパスワードが違う（またはハッシュ未保存）：ID は一意にしてある
+			// （保存時に basic_id_taken_by_other() で強制）ので、他のユーザーが一致することもない。
+			return null;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Finds up to $limit users who end up in BASIC mode under the given (possibly prospective) role modes
+	 * but have not saved their own BASIC credentials yet. Used by save-time check 3 (docs/spec.md 5.1).
+	 * 与えた（保存前かもしれない）権限モードのもとで BASIC モードになるが、まだ自分の BASIC 資格情報を
+	 * 保存していないユーザーを、最大 $limit 人まで探す。保存時のチェック3（docs/spec.md 5.1）に使う。
+	 *
+	 * Mirrors find_restricted_users(): only candidates that can end up restricted at all are loaded (the same
+	 * meta query), narrowing what to look at without changing which users are actually judged restricted.
+	 * find_restricted_users() と同じ作り。制限されうる候補だけを読み込み（同じメタクエリ）、
+	 * 見る範囲を絞るだけで、実際に制限と判定されるユーザーの範囲は変えない。
+	 *
+	 * @param string[] $role_modes         Role => mode to test. / 判定する 権限 => モード。
+	 * @param array    $forced_user_modes  User ID => mode, for users whose own setting is about to change. / ユーザー ID => モード（変更しようとしている分だけ）。
+	 * @param int      $limit              Maximum number of users to return. / 返す最大人数。
+	 * @return WP_User[] Users missing BASIC credentials. / BASIC 資格情報が未設定のユーザー。
+	 */
+	public static function find_basic_users_without_credentials( $role_modes, $forced_user_modes = array(), $limit = 5 ) {
+		$limit   = (int) $limit;
+		$missing = array();
+		if ( $limit < 1 ) {
+			return $missing;
+		}
+
+		$ids = get_users(
+			array(
+				'fields'     => 'ID',
+				'orderby'    => 'login',
+				'order'      => 'ASC',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
+				'meta_query' => self::restricted_candidates_meta_query( $role_modes ),
+			)
+		);
+
+		foreach ( array_chunk( array_map( 'intval', $ids ), self::RESTRICTED_USERS_BATCH ) as $batch ) {
+			cache_users( $batch );
+
+			foreach ( $batch as $user_id ) {
+				$user = get_userdata( $user_id );
+				if ( ! $user ) {
+					continue;
+				}
+				$forced = array_key_exists( $user_id, $forced_user_modes ) ? $forced_user_modes[ $user_id ] : null;
+				$modes  = self::compute_effective_modes( $user, $role_modes, $forced );
+				if ( in_array( self::MODE_BASIC, $modes, true ) && ! self::has_basic_credentials( $user_id ) ) {
+					$missing[] = $user;
+					if ( count( $missing ) >= $limit ) {
+						return $missing;
+					}
+				}
+			}
+		}
+
+		return $missing;
 	}
 
 	/*-------------------------------------------*/
@@ -522,35 +846,61 @@ class ACGD_Access_Restriction {
 
 	/**
 	 * Tells whether the current user's own access would still be allowed under prospective role modes and
-	 * site IP list. Used by save-time check 2 (docs/spec.md 5.1) when saving the Access Restriction tab,
-	 * which can change both at once.
+	 * site IP list. Used by save-time check 2 (docs/spec.md 5.1) when saving the Access Restriction tab
+	 * (which can change both at once) and, with $forced_user_mode / $forced_user_ip_entries, when saving the
+	 * current user's own row on the user edit screen (docs/spec.md 5.1, 5.6): that screen changes the
+	 * current user's own mode and per-user IP list, neither of which is yet written to the database when
+	 * this is called, so the prospective values have to be passed in rather than re-read from storage.
 	 * 現在のユーザー自身のアクセスが、保存前の権限モードとサイトの IP 一覧のもとでも成り立つかを返す。
-	 * 「アクセス制限」タブの保存時のチェック2（docs/spec.md 5.1）に使う。このタブは両方を同時に変えうる。
+	 * 「アクセス制限」タブの保存時のチェック2（docs/spec.md 5.1）に使うほか、$forced_user_mode /
+	 * $forced_user_ip_entries を渡せば、ユーザー編集画面で現在のユーザー自身の行を保存するとき
+	 * （docs/spec.md 5.1・5.6）にも使える：あの画面は現在のユーザー自身のモードとユーザーごとの IP 一覧を
+	 * 変えるが、この呼び出しの時点ではどちらもまだ DB に書き込まれていないため、保存しようとしている値を
+	 * 引数で渡す必要がある（DB から読み直せない）。
 	 *
-	 * A 'basic' requirement always fails this check: BASIC authentication is not enforced yet (issue #4), so
-	 * there is no way to confirm the current request carries the right credentials, and failing safe means
-	 * refusing the save rather than accepting an unverifiable one.
-	 * 'basic' が求められる場合はこのチェックを必ず不成立にする。BASIC 認証はまだ判定していない（issue #4）ため、
-	 * 今のリクエストが正しい資格情報を持っているかを確かめる手段が無く、安全側に倒して
-	 * 確認できない設定は保存させない。
+	 * A 'basic' requirement is satisfied only when the current request itself already carries BASIC
+	 * credentials that match the current user's own saved ones (ACGD_Basic_Auth::request_satisfies()) — the
+	 * same live check enforce_for_request() uses to grant access, not a re-derivation of it. A brand new
+	 * BASIC setup (no saved credentials yet, or credentials about to change) can never satisfy this from the
+	 * role tab: docs/spec.md 5.3 requires going through the user edit screen's own "Verify" round trip first,
+	 * which is a separate, per-user path (see ACGD_User_Access), not this tab's check 2.
+	 * 'basic' が求められる場合は、今のリクエスト自体が「現在のユーザー自身の保存済み資格情報」と一致する
+	 * BASIC 認証を既に伴っているときだけ成立する（ACGD_Basic_Auth::request_satisfies()。
+	 * enforce_for_request() がアクセスを許可するのと同じ生の判定を再利用するだけで、別ロジックにはしない）。
+	 * まだ資格情報が無い・変えようとしている新規の BASIC 設定は、このタブからは絶対に成立しない
+	 * （docs/spec.md 5.3 はユーザー編集画面の「確認」の往復を先に通すことを求めており、それはこのタブの
+	 * チェック2ではなくユーザーごとの別経路。ACGD_User_Access を参照）。
 	 *
-	 * @param string[] $role_modes       Prospective role => mode. / 保存しようとしている 権限 => モード。
-	 * @param string[] $site_ip_entries  Prospective site-wide IP entries, already parsed (parse_ip_list()). / 保存しようとしているサイトの IP 一覧（parse_ip_list() 済み）。
+	 * @param string[]    $role_modes             Prospective role => mode. / 保存しようとしている 権限 => モード。
+	 * @param string[]    $site_ip_entries        Prospective site-wide IP entries, already parsed (parse_ip_list()). / 保存しようとしているサイトの IP 一覧（parse_ip_list() 済み）。
+	 * @param string|null $forced_user_mode       When given, used instead of the current user's saved mode
+	 *                                            (the user edit screen's own prospective mode, not yet saved).
+	 *                                            Null (default) reads the current user's saved mode, unchanged.
+	 *                                            与えたときは、現在のユーザーの保存済みモードの代わりに使う
+	 *                                            （ユーザー編集画面で保存しようとしているモード。まだ未保存）。
+	 *                                            既定の null は、現在のユーザーの保存済みモードをそのまま使う。
+	 * @param string[]|null $forced_user_ip_entries When given, used instead of the current user's saved
+	 *                                              per-user IP entries (already parsed). Null (default) reads
+	 *                                              them from storage, unchanged.
+	 *                                              与えたときは、現在のユーザーの保存済みのユーザーごとの
+	 *                                              IP 一覧（解析済み）の代わりに使う。既定の null は、
+	 *                                              保存済みの値をそのまま読む。
 	 * @return bool Whether the current user would still get in. / 現在のユーザーがなお入れるか。
 	 */
-	public static function current_user_still_allowed( $role_modes, $site_ip_entries ) {
+	public static function current_user_still_allowed( $role_modes, $site_ip_entries, $forced_user_mode = null, $forced_user_ip_entries = null ) {
 		$current = wp_get_current_user();
 		if ( ! $current instanceof WP_User || 0 === $current->ID ) {
 			return true; // No authenticated context; nothing of "oneself" to check. / 認証されたユーザーが無く、確かめる「本人」がいない。
 		}
 
-		$modes = self::compute_effective_modes( $current, $role_modes );
-		if ( in_array( self::MODE_BASIC, $modes, true ) ) {
+		$modes = self::compute_effective_modes( $current, $role_modes, $forced_user_mode );
+		if ( in_array( self::MODE_BASIC, $modes, true ) && ! ACGD_Basic_Auth::request_satisfies( $current ) ) {
 			return false;
 		}
 		if ( in_array( self::MODE_IP, $modes, true ) ) {
-			$remote  = self::get_remote_addr();
-			$entries = array_merge( $site_ip_entries, self::parse_ip_list( self::get_user_ip_text( $current->ID ) ) );
+			$remote          = self::get_remote_addr();
+			$user_ip_entries = null !== $forced_user_ip_entries ? $forced_user_ip_entries : self::parse_ip_list( self::get_user_ip_text( $current->ID ) );
+			$entries         = array_merge( $site_ip_entries, $user_ip_entries );
 
 			return null !== $remote && self::ip_in_list( $remote, $entries );
 		}
@@ -875,13 +1225,19 @@ class ACGD_Access_Restriction {
 	}
 
 	/**
-	 * Records a fault of this feature (docs/spec.md 5.5: "アクセス制限を止めて通す").
-	 * この機能の故障を記録する（docs/spec.md 5.5「アクセス制限を止めて通す」）。
+	 * Records a fault of this feature (docs/spec.md 5.5: "アクセス制限を止めて通す"). Public: this is the one
+	 * shared recording point for every `catch ( Throwable $e )` that fails this feature open, including
+	 * ACGD_Basic_Auth::maybe_strip_own_header() (MEDIUM-2 fix, PR #6 review — it fails open the same way but,
+	 * before this fix, had no way to reach this method and so never raised the 5.5 warning).
+	 * この機能の故障を記録する（docs/spec.md 5.5「アクセス制限を止めて通す」）。public にしているのは、
+	 * この機能を止めて通すあらゆる `catch ( Throwable $e )` が使う、共通の記録先がここだけであるため。
+	 * ACGD_Basic_Auth::maybe_strip_own_header() も含む（MEDIUM-2 の修正。PR #6 レビュー：同じように止めて
+	 * 通してはいたが、修正前はここへ到達する手段が無く、5.5 の警告が一度も出なかった）。
 	 *
 	 * @param string $message Exception message. / 例外のメッセージ。
 	 * @return void
 	 */
-	private static function record_fault( $message ) {
+	public static function record_fault( $message ) {
 		update_option(
 			self::FAULT_OPTION,
 			array(
@@ -1022,7 +1378,17 @@ class ACGD_Access_Restriction {
 				}
 			}
 
-			// MODE_BASIC is not enforced here yet; see the class docblock. / MODE_BASIC はまだここで判定しない（クラスの docblock を参照）。
+			/*
+			 * MODE_BASIC is never judged here, on purpose (docs/spec.md 5.3): unlike IP restriction, BASIC
+			 * authentication does not gate the WordPress login form itself. It is enforced afterwards, on the
+			 * next access, by check_access_on_request() / filter_rest_authentication_errors(); a BASIC-mode
+			 * user's login succeeds normally here and is challenged for their BASIC credentials on the next
+			 * admin request instead.
+			 * MODE_BASIC はここでは意図的に判定しない（docs/spec.md 5.3）。IP 制限と違い、BASIC 認証は
+			 * WordPress のログインフォーム自体を関門にしない。判定は次のアクセスで
+			 * check_access_on_request() / filter_rest_authentication_errors() が行う。BASIC モードの
+			 * ユーザーのログインはここでは普通に成功し、次の管理画面アクセスで BASIC の確認を求められる。
+			 */
 			return $user;
 		} catch ( Throwable $e ) {
 			self::record_fault( $e->getMessage() );
@@ -1058,12 +1424,24 @@ class ACGD_Access_Restriction {
 	}
 
 	/**
-	 * Judges IP restriction on every REST API request whose current user is already determined (docs/spec.md 5.2).
-	 * See REST_AUTHENTICATION_PRIORITY for why this priority. Denies by discarding the session and letting the
-	 * request continue as anonymous, exactly like check_access_on_request(); it does not itself return a 403.
-	 * 現在のユーザーが確定している REST API のリクエストで、IP 制限を判定する（docs/spec.md 5.2）。
-	 * この優先度の理由は REST_AUTHENTICATION_PRIORITY を参照。拒否するときは check_access_on_request() と
-	 * 同じくセッションを破棄して未ログインとして続けさせるだけで、このフィルタ自身は 403 を返さない。
+	 * Judges IP restriction and BASIC authentication on every REST API request whose current user is already
+	 * determined (docs/spec.md 5.2, 5.3). See REST_AUTHENTICATION_PRIORITY for why this priority.
+	 *
+	 * An IP denial discards the whole session and lets the request continue as anonymous
+	 * (destroy_current_session_and_continue()), exactly as on any other access (docs/spec.md 5.2). A BASIC
+	 * denial only sets the current user to 0 for this request (docs/spec.md 5.3, "セッションは消さない"):
+	 * the cookie and session stay valid, so a REST call made without the BASIC header attached (a public
+	 * endpoint a logged-out visitor could also reach) is simply treated as anonymous, not signed out. Neither
+	 * branch returns a WP_Error; this filter never itself produces a 403/401 for REST.
+	 * REST API のリクエストで、現在のユーザーが確定している場合に IP 制限と BASIC 認証を判定する
+	 * （docs/spec.md 5.2・5.3）。この優先度の理由は REST_AUTHENTICATION_PRIORITY を参照。
+	 *
+	 * IP の拒否はセッションごと破棄し未ログインとして続行する（destroy_current_session_and_continue()。
+	 * 他のアクセスと同じ、docs/spec.md 5.2）。BASIC の拒否は、このリクエストだけ現在のユーザーを 0 にする
+	 * （docs/spec.md 5.3「セッションは消さない」）。cookie・セッションはそのままなので、BASIC ヘッダーを
+	 * 付けていない REST 呼び出し（ログアウト中の訪問者も届く公開エンドポイントへのもの）は、
+	 * サインアウトさせるのではなく単に未ログイン扱いにするだけで済む。どちらの分岐も WP_Error を返さない。
+	 * このフィルタ自身が REST に 403/401 を作ることは無い。
 	 *
 	 * @param WP_Error|null|true|mixed $result Result of the earlier rest_authentication_errors callbacks. / それまでのコールバックの結果。
 	 * @return WP_Error|null|true|mixed The result. / 結果。
@@ -1083,17 +1461,43 @@ class ACGD_Access_Restriction {
 				return $result;
 			}
 			$user = get_userdata( $user_id );
-			if ( ! $user || ! in_array( self::MODE_IP, self::get_effective_modes( $user ), true ) ) {
+			if ( ! $user ) {
+				return $result;
+			}
+			$modes = self::get_effective_modes( $user );
+			if ( empty( $modes ) ) {
 				return $result;
 			}
 
 			$remote = self::get_remote_addr();
-			if ( self::is_ip_allowed_for_user( $user_id, $remote ) ) {
+
+			if ( in_array( self::MODE_IP, $modes, true ) && ! self::is_ip_allowed_for_user( $user->ID, $remote ) ) {
+				self::log_denial( $user->ID, $remote, 'rest' );
+				self::destroy_current_session_and_continue();
+
 				return $result;
 			}
 
-			self::log_denial( $user_id, $remote, 'rest' );
-			self::destroy_current_session_and_continue();
+			if ( in_array( self::MODE_BASIC, $modes, true ) && ! ACGD_Basic_Auth::request_satisfies( $user ) ) {
+				// MEDIUM-3 fix (PR #6 review): log only an actual failed attempt (credentials were submitted
+				// and did not satisfy this user), not the ordinary case of no BASIC header at all. BASIC keeps
+				// the session alive (docs/spec.md 5.3), so unlike an IP denial just above (which discards the
+				// session and so is only ever logged once), this "not satisfied" outcome repeats on every
+				// single REST call this plugin's own realm has not yet challenged the browser for. Logging it
+				// unconditionally would flood the 100-entry log (docs/spec.md 5.4) with ordinary browsing
+				// instead of signal. See the matching comment in check_access_on_request().
+				// MEDIUM-3 の修正（PR #6 レビュー）：実際に失敗した試行（資格情報が送られてきて、このユーザーを
+				// 満たさなかった）だけを記録する。BASIC ヘッダーが一切無い、というだけの通常のケースは記録しない。
+				// BASIC はセッションを温存する（docs/spec.md 5.3）ため、すぐ上の IP の拒否（セッションを破棄
+				// するので一度しか記録されない）と違い、このプラグインの realm でまだ一度もブラウザに確認を
+				// 求めていない REST 呼び出しでは、この「満たしていない」という結果が毎回のリクエストで
+				// 繰り返される。無条件に記録すると、直近100件の記録（docs/spec.md 5.4）が通常の閲覧だけで
+				// 埋まり、兆候として使えなくなる。check_access_on_request() の同じ内容のコメントも参照。
+				if ( null !== ACGD_Basic_Auth::get_submitted_credentials() ) {
+					self::log_denial( $user->ID, $remote, 'basic' );
+				}
+				wp_set_current_user( 0 ); // This request only; cookie and session are kept (docs/spec.md 5.3). / このリクエストだけ。cookie・セッションは残す（docs/spec.md 5.3）。
+			}
 
 			return $result;
 		} catch ( Throwable $e ) {
@@ -1104,12 +1508,29 @@ class ACGD_Access_Restriction {
 	}
 
 	/**
-	 * Judges IP restriction on every access after login, outside the REST API (docs/spec.md 5.2). Hooked to
-	 * admin_init and template_redirect; see init() for why those two cover the front end, admin screens,
-	 * admin-ajax.php and admin-post.php.
-	 * ログイン後の毎回のアクセスで、REST API 以外を対象に IP 制限を判定する（docs/spec.md 5.2）。
-	 * admin_init と template_redirect に掛ける。この2つがフロント・管理画面・admin-ajax.php・
-	 * admin-post.php をなぜ覆うかは init() を参照。
+	 * Judges IP restriction and BASIC authentication on every access after login, outside the REST API
+	 * (docs/spec.md 5.2, 5.3). Hooked to admin_init and template_redirect; see init() for why those two cover
+	 * the front end, admin screens, admin-ajax.php and admin-post.php.
+	 * ログイン後の毎回のアクセスで、REST API 以外を対象に IP 制限と BASIC 認証を判定する
+	 * （docs/spec.md 5.2・5.3）。admin_init と template_redirect に掛ける。この2つがフロント・管理画面・
+	 * admin-ajax.php・admin-post.php をなぜ覆うかは init() を参照。
+	 *
+	 * An IP denial discards the whole session, exactly as before (docs/spec.md 5.2), and stops here: once
+	 * anonymous, there is nothing left of "this user's BASIC requirement" to check. A BASIC denial keeps the
+	 * session and, only when this is a plain navigation to an admin screen — not admin-ajax.php (excluded by
+	 * wp_doing_ajax()) and not admin-post.php (excluded by name: is_admin() and wp_doing_ajax() alone do not
+	 * tell it apart from a screen load, since DOING_AJAX is never defined for it either) — sends the visitor
+	 * to the confirmation screen instead of quietly rendering the page as anonymous (docs/spec.md 5.3,
+	 * "管理画面のときだけ確認画面へ送る"). Both excluded endpoints are driven by a script (an XHR call, a form
+	 * POST expecting its own redirect), not a person free to interact with a browser's native BASIC dialog.
+	 * IP の拒否は今までどおりセッションごと破棄し（docs/spec.md 5.2）、ここで終える：未ログインになった時点で、
+	 * もう「このユーザーの BASIC 要件」として確かめるものが無いため。BASIC の拒否はセッションを残し、
+	 * 素の管理画面ナビゲーションのとき——admin-ajax.php は wp_doing_ajax() で除外、admin-post.php は
+	 * 名前で除外（DOING_AJAX がこちらでも定義されないため、is_admin() と wp_doing_ajax() だけでは
+	 * 画面表示と区別できない）——だけ、黙って未ログインの画面を出す代わりに確認画面へ送る
+	 * （docs/spec.md 5.3「管理画面のときだけ確認画面へ送る」）。除外する2つはどちらもスクリプト駆動
+	 * （XHR 呼び出し・自前のリダイレクトを期待するフォーム POST）で、ブラウザのネイティブな BASIC
+	 * ダイアログを操作できる人がその場にいるとは限らない。
 	 *
 	 * @return void
 	 */
@@ -1124,17 +1545,55 @@ class ACGD_Access_Restriction {
 				return;
 			}
 			$user = get_userdata( $user_id );
-			if ( ! $user || ! in_array( self::MODE_IP, self::get_effective_modes( $user ), true ) ) {
+			if ( ! $user ) {
+				return;
+			}
+			$modes = self::get_effective_modes( $user );
+			if ( empty( $modes ) ) {
 				return;
 			}
 
 			$remote = self::get_remote_addr();
-			if ( self::is_ip_allowed_for_user( $user_id, $remote ) ) {
+
+			if ( in_array( self::MODE_IP, $modes, true ) && ! self::is_ip_allowed_for_user( $user->ID, $remote ) ) {
+				self::log_denial( $user->ID, $remote, 'session' );
+				self::destroy_current_session_and_continue();
 				return;
 			}
 
-			self::log_denial( $user_id, $remote, 'session' );
-			self::destroy_current_session_and_continue();
+			if ( in_array( self::MODE_BASIC, $modes, true ) && ! ACGD_Basic_Auth::request_satisfies( $user ) ) {
+				// MEDIUM-3 fix (PR #6 review): log only an actual failed attempt (credentials were submitted
+				// and did not satisfy this user), not the ordinary case of no BASIC header at all. The
+				// confirmation screen this method redirects to below is limited to admin-screen navigation
+				// (its own docblock), but this "not satisfied" branch itself runs on every access after login,
+				// including the front end and admin-ajax/admin-post, where the browser is never challenged and
+				// so never attaches the header. Because BASIC keeps the session alive (docs/spec.md 5.3, unlike
+				// an IP denial just above, which discards the session and so is only ever logged once), a
+				// BASIC-mode user's ordinary browsing would otherwise re-log this exact "no header" outcome on
+				// every single such request, flooding the 100-entry log (docs/spec.md 5.4) with normal use
+				// instead of signal.
+				// MEDIUM-3 の修正（PR #6 レビュー）：実際に失敗した試行（資格情報が送られてきて、このユーザーを
+				// 満たさなかった）だけを記録する。BASIC ヘッダーが一切無い、というだけの通常のケースは記録しない。
+				// このメソッドが下でリダイレクトする確認画面は管理画面ナビゲーションに限定している（メソッド
+				// 自身の docblock）が、この「満たしていない」分岐自体はログイン後の毎回のアクセス——フロント・
+				// admin-ajax・admin-post を含む——で走り、そこではブラウザは一度も確認を求められておらず
+				// ヘッダーを一切付けない。BASIC はセッションを温存する（docs/spec.md 5.3。すぐ上の IP の拒否は
+				// セッションを破棄するので一度しか記録されないのと対照的）ため、記録しなければ BASIC モードの
+				// 通常の閲覧だけで、この「ヘッダー無し」という同じ結果を毎回のアクセスのたびに記録し、
+				// 直近100件の記録（docs/spec.md 5.4）を通常の利用で埋め尽くしてしまう。
+				if ( null !== ACGD_Basic_Auth::get_submitted_credentials() ) {
+					self::log_denial( $user->ID, $remote, 'basic' );
+				}
+				wp_set_current_user( 0 ); // This request only; cookie and session are kept (docs/spec.md 5.3). / このリクエストだけ。cookie・セッションは残す（docs/spec.md 5.3）。
+
+				// See the method docblock for why admin-ajax.php and admin-post.php are excluded.
+				// admin-ajax.php・admin-post.php を除く理由はメソッドの docblock を参照。
+				$script = isset( $_SERVER['SCRIPT_NAME'] ) ? basename( sanitize_text_field( wp_unslash( $_SERVER['SCRIPT_NAME'] ) ) ) : '';
+				if ( is_admin() && ! wp_doing_ajax() && 'admin-post.php' !== $script ) {
+					ACGD_Basic_Auth::redirect_to_challenge();
+					// redirect_to_challenge() always exits; nothing after this line runs.
+				}
+			}
 		} catch ( Throwable $e ) {
 			self::record_fault( $e->getMessage() );
 			// Fail open: nothing to undo, restriction is simply not applied this request (docs/spec.md 5.5). / 止めて通す。何も取り消さず、この回は制限を適用しないだけ（docs/spec.md 5.5）。
