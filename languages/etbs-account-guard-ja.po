@@ -553,8 +553,8 @@ msgstr "ユーザー名またはパスワードが受け付けられませんで
 msgid "The verification has expired. Enter the ID and password again and click Verify."
 msgstr "確認が期限切れになりました。ID とパスワードをもう一度入力し、「確認」をクリックしてください。"
 
-msgid "That verification did not match this screen. Reload this page and click Verify again."
-msgstr "その確認はこの画面と一致しませんでした。このページを読み込み直して、もう一度「確認」をクリックしてください。"
+msgid "That \"Verify\" request did not belong to this screen. Reload this page and click Verify again."
+msgstr "この「確認」の要求は、この画面のものではありませんでした。ページを読み込み直してから、もう一度「確認」をクリックしてください。"
 
 msgid "This BASIC authentication ID is already used by another user on this site. Choose a different one. Not saved."
 msgstr "この BASIC 認証の ID は、このサイトの別のユーザーが既に使っています。別の ID を選んでください。保存されませんでした。"

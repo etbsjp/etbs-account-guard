@@ -595,7 +595,13 @@ class ACGD_User_Access {
 			// 'expired' と分けているのは、この場合は何も期限切れになっていないため：リクエストがこの画面の
 			// 編集対象とは別のユーザーを名乗っていたのであって、入力し直しても何も変わらず、画面を読み込み
 			// 直せば変わる（コード監査・Low。ACGD_Basic_Auth::decline_verify_request() を参照）。
-			'mismatch'   => array( 'error', __( 'That verification did not match this screen. Reload this page and click Verify again.', 'etbs-account-guard' ) ),
+			// Worded around the request, not around "the verification": nothing was verified in this case —
+			// the click was turned down before any confirmation ran, so a sentence whose subject is the
+			// verification has no referent (code review, Low).
+			// 主語を「確認」ではなく「要求」にしているのは、この場合は何も確認されていないため：確認が
+			// 走る前にクリックが断られているので、「その確認は」で始まる文には指すものが無い
+			// （コードレビュー・Low）。
+			'mismatch'   => array( 'error', __( 'That "Verify" request did not belong to this screen. Reload this page and click Verify again.', 'etbs-account-guard' ) ),
 			'not_self'   => array( 'error', __( 'The "Verify" button only works for your own account.', 'etbs-account-guard' ) ),
 			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password, and set the mode to "BASIC authentication" before verifying.', 'etbs-account-guard' ) ),
 		);

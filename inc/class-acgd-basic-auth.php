@@ -227,6 +227,18 @@ class ACGD_Basic_Auth {
 	private static $matched_user = false;
 
 	/**
+	 * Whether maybe_strip_confirmed_header() has already consulted this request's confirmation. Its own
+	 * re-entry guard, the counterpart of $matched_user's role for the priority 1 callback: determine_current_user
+	 * fires again on every re-resolution of the current user, and the answer cannot change within a request.
+	 * maybe_strip_confirmed_header() が、このリクエストの確認を既に参照したかどうか。あちらの再入ガードで、
+	 * 優先度1のコールバックにとっての $matched_user と同じ役割を果たす：determine_current_user は現在の
+	 * ユーザーが再解決されるたびに再発火するが、1リクエストの中で答えは変わりようがない。
+	 *
+	 * @var bool
+	 */
+	private static $confirmed_header_checked = false;
+
+	/**
 	 * Registers the hooks. / フックを登録する。
 	 *
 	 * @return void
@@ -409,6 +421,29 @@ class ACGD_Basic_Auth {
 		unset( $_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW'], $_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] );
 	}
 
+	/**
+	 * Tells whether any of those same keys is still present in $_SERVER — that is, whether there is still
+	 * anything for clear_submitted_credentials_from_server() to remove. Deliberately reads $_SERVER on every
+	 * call and caches nothing: this is the state of the request right now, which is a different question from
+	 * "what did this request originally submit" (get_submitted_credentials(), which caches and keeps
+	 * answering after the header has been cleared). Kept next to its counterpart so the list of keys lives in
+	 * one place (code review, Low).
+	 * 同じキーのどれかが $_SERVER にまだ残っているか——つまり
+	 * clear_submitted_credentials_from_server() に消す対象がまだ残っているか——を返す。毎回 $_SERVER を読み、
+	 * 何もキャッシュしないのは意図的：これは「今このリクエストがどういう状態か」であって、
+	 * 「このリクエストが元々何を送ってきたか」（get_submitted_credentials()。あちらはキャッシュし、
+	 * ヘッダーを消した後も答え続ける）とは別の問いだから。キーの一覧を1箇所に保つため、対になるメソッドの
+	 * 隣に置く（コードレビュー・Low）。
+	 *
+	 * @return bool True while any BASIC credential key remains in $_SERVER. / BASIC の資格情報のキーが $_SERVER に残っていれば true。
+	 */
+	private static function has_credentials_in_server() {
+		return isset( $_SERVER['PHP_AUTH_USER'] )
+			|| isset( $_SERVER['PHP_AUTH_PW'] )
+			|| isset( $_SERVER['HTTP_AUTHORIZATION'] )
+			|| isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] );
+	}
+
 	/*-------------------------------------------*/
 	/* Matching against a user / ユーザーとの照合
 	/*-------------------------------------------*/
@@ -500,14 +535,50 @@ class ACGD_Basic_Auth {
 	 */
 	public static function maybe_strip_confirmed_header( $input ) {
 		try {
+			/*
+			 * ★ Read $_SERVER itself, not get_submitted_credentials(): the question here is "is there still
+			 * anything in $_SERVER to remove", and that method deliberately answers a different one. It
+			 * parses once per request and caches, so it keeps answering "yes, these credentials" after the
+			 * header has already been cleared — which is exactly what a later save-time comparison needs,
+			 * and exactly the wrong thing for a gate whose only purpose is to do nothing when there is
+			 * nothing left to do. Using it here meant that on a site with saved BASIC credentials (the
+			 * steady state, where priority 1 clears $_SERVER on every request) this went on to run a
+			 * get_transient() on every single admin request, and a password_verify() on every one of them
+			 * for as long as a confirmation was alive (code review, Low).
+			 * ★ ここで読むのは $_SERVER 自身であって get_submitted_credentials() ではない：ここでの問いは
+			 * 「$_SERVER にまだ消すものが残っているか」であり、あのメソッドは意図的に別の問いに答える。
+			 * リクエストにつき1回解析してキャッシュするので、ヘッダーを消した後も「ある。この資格情報だ」と
+			 * 答え続ける——それは後で保存時に突き合わせるために必要な性質であり、「もう何も無いなら何もしない」
+			 * ためだけの門にとっては、まさに間違った性質。ここであれを使うと、BASIC 認証を保存済みのサイト
+			 * （＝優先度1が毎リクエストで $_SERVER を消す定常状態）で、管理画面の全リクエストで
+			 * get_transient() が走り、確認が生きている間は password_verify() まで毎回走っていた
+			 * （コードレビュー・Low）。
+			 */
+			if ( ! self::has_credentials_in_server() ) {
+				return $input;
+			}
+
+			/*
+			 * Re-entry guard, the counterpart of priority 1's own ( false !== $matched_user ) check.
+			 * determine_current_user fires again whenever something re-resolves the current user (any
+			 * wp_set_current_user() call does), and the answer here cannot change within one request: the
+			 * id $input carries at this priority comes from core's auth cookie, which is the same on every
+			 * pass. So consult the confirmation at most once (code review, Low).
+			 * 再入ガード。優先度1が持っている ( false !== $matched_user ) の判定に相当するもの。
+			 * determine_current_user は、現在のユーザーを再解決する何か（wp_set_current_user() の呼び出しなど）
+			 * があるたびに再発火するが、ここでの答えは1リクエストの中で変わりようがない：この優先度で $input が
+			 * 運んでくる ID は本体の auth cookie 由来で、何度発火しても同じ。よって確認の参照は多くても1回に
+			 * 留める（コードレビュー・Low）。
+			 */
+			if ( self::$confirmed_header_checked ) {
+				return $input;
+			}
+
 			if ( ACGD_Access_Restriction::is_disabled() ) {
 				return $input;
 			}
 
-			// Nothing arrived to strip. Cached from the first call, so reading it here costs nothing extra
-			// and still returns what was originally submitted even after $_SERVER has been cleared.
-			// 消す対象が届いていない。最初の呼び出しでキャッシュされるので、ここで読んでも追加の負荷は無く、
-			// $_SERVER を消した後でも元々送られてきた内容が返る。
+			// What arrived, as originally submitted. / 届いた内容（元々送信されたまま）。
 			$submitted = self::get_submitted_credentials();
 			if ( null === $submitted ) {
 				return $input;
@@ -521,6 +592,10 @@ class ACGD_Basic_Auth {
 			if ( $admin_id <= 0 ) {
 				return $input;
 			}
+
+			// From here on the answer is settled for this request, whatever it turns out to be.
+			// ここから先は、結果がどうであれこのリクエストについては答えが確定する。
+			self::$confirmed_header_checked = true;
 
 			$confirmed = get_transient( self::VERIFIED_TRANSIENT_PREFIX . $admin_id );
 			if ( ! is_array( $confirmed ) || ! isset( $confirmed['id'], $confirmed['hash'] ) ) {
@@ -536,11 +611,38 @@ class ACGD_Basic_Auth {
 
 			self::clear_submitted_credentials_from_server();
 		} catch ( Throwable $e ) {
-			// Fail open, and record it the same way the other Throwable catches in this class do
-			// (docs/spec.md 5.5). A fault here must never break core's own authentication for this request.
-			// 止めて通し、このクラスの他の Throwable の catch と同じ形で記録する（docs/spec.md 5.5）。
-			// ここでの故障が、このリクエストの本体側の認証を壊すことは絶対に無いようにする。
-			ACGD_Access_Restriction::record_fault( $e->getMessage() );
+			/*
+			 * Fail open, and — unlike the other Throwable catches in this class — do NOT call
+			 * ACGD_Access_Restriction::record_fault() here.
+			 * ★ record_fault() is not a log, it is the kill switch: is_disabled() is
+			 * is_switch_disabled() || has_fault(), so one exception recorded from here would stop IP
+			 * restriction and BASIC authentication for the whole site, permanently, until somebody saves
+			 * the Access Restriction tab again and clear_fault() runs. The other four call sites are all on
+			 * the deciding path, where docs/spec.md 5.5's "stop and let through" is the whole point: if the
+			 * code that decides whether to let someone in cannot run, the honest thing is to stop deciding
+			 * and say so loudly. This callback decides nothing — priority 15 only tidies a header away so
+			 * core does not print a notice about it — so a failure here costs a cosmetic notice, while
+			 * recording it would cost the entire feature. That trade is not worth making (code review,
+			 * Medium).
+			 * A fault here must still never break core's own authentication for this request, which is what
+			 * the bare catch guarantees. If a place to record non-stopping faults is wanted later, that is
+			 * its own piece of work, not something to bolt on here.
+			 * 止めて通す。そして——このクラスの他の Throwable の catch と違い——ここでは
+			 * ACGD_Access_Restriction::record_fault() を呼ばない。
+			 * ★ record_fault() はログではなく機能停止スイッチである：is_disabled() は
+			 * is_switch_disabled() || has_fault() なので、ここから例外を1回記録するだけで、IP 制限と
+			 * BASIC 認証がサイト全体で止まり、しかも誰かがアクセス制限タブを保存し直して clear_fault() が
+			 * 走るまで永続する。他の4箇所はすべて判定の経路にあり、そこでは docs/spec.md 5.5 の
+			 * 「止めて通す」がまさに要点になる：入れてよいかを決めるコードが動けないなら、決めるのをやめて
+			 * 大きな声で知らせるのが誠実だから。このコールバックは何も決めていない——優先度15は、本体が
+			 * それについて通知を出さないようヘッダーを片付けるだけ——なので、ここでの失敗の代償は見た目の
+			 * 通知1つであり、記録してしまえば代償は機能全体になる。釣り合わない取引はしない
+			 * （コードレビュー・Medium）。
+			 * ここでの故障がこのリクエストの本体側の認証を壊すことは絶対に無い、という点は素の catch が
+			 * 引き続き保証する。停止を伴わない記録先が欲しくなったら、それはそれ自体が別の作業であって、
+			 * ここに後付けするものではない。
+			 */
+			unset( $e );
 		}
 
 		return $input;
@@ -1109,9 +1211,10 @@ class ACGD_Basic_Auth {
 	 * sends the browser back to the screen the form came from with a notice
 	 * (ACGD_User_Access::render_verify_notice()), so that nothing is saved and the person is told why nothing
 	 * happened. Always exits.
-	 * Two guards call this, and they are turning down different things, so each passes its own notice key
-	 * (code audit, Low: this used to hardcode 'expired', which told someone whose request did not match the
-	 * screen that their confirmation had timed out — an answer that does not fit the question):
+	 * Three guards call this — the target guard and the two nonce guards — for two different reasons, so each
+	 * passes the notice key that fits its own reason (code audit, Low: this used to hardcode 'expired', which
+	 * told someone whose request did not match the screen that their confirmation had timed out — an answer
+	 * that does not fit the question):
 	 * - 'expired' for the two nonce guards. The case actually reached in practice: the screen sat open past
 	 *   the nonce's lifetime, and retyping the pair is exactly the right thing to do next.
 	 * - 'mismatch' for the target guard, where the form's own acgd_user_id and core's user_id name two
@@ -1120,9 +1223,9 @@ class ACGD_Basic_Auth {
 	 * maybe_handle_verify_request() のガードが受け付けなかった「確認」リクエストの処理をやめ、フォームが来た
 	 * 画面へ通知（ACGD_User_Access::render_verify_notice()）付きで送り返す。何も保存されず、なぜ何も
 	 * 起きなかったのかも伝わる。必ず exit する。
-	 * 呼び出し元は2つのガードで、断っている対象が別物なので、それぞれが自分の通知キーを渡す
-	 * （コード監査・Low：以前は 'expired' を固定で使っていたため、画面と食い違うリクエストを送った人に
-	 * 「確認の期限が切れました」と答えていた——問いに対して噛み合わない答えだった）：
+	 * 呼び出し元は3箇所のガード——対象のガードと、nonce のガード2つ——で、理由は2種類。それぞれが自分の
+	 * 理由に合う通知キーを渡す（コード監査・Low：以前は 'expired' を固定で使っていたため、画面と食い違う
+	 * リクエストを送った人に「確認の期限が切れました」と答えていた——問いに対して噛み合わない答えだった）：
 	 * - nonce の2つのガードは 'expired'。実運用で実際に到達するのはこちら：画面を nonce の寿命より長く
 	 *   開いたままにしていた場合で、次にすべきことはまさに ID とパスワードの再入力。
 	 * - 対象のガードは 'mismatch'。フォーム自身の acgd_user_id と本体の user_id が別人を指している状態。
