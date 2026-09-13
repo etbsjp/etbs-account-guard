@@ -489,6 +489,12 @@ msgstr "編集する前に、今の .htaccess を必ず控えてください。�
 msgid "Set the ID and password above, click Verify to confirm they work, and you will be returned here to save them."
 msgstr "上の ID とパスワードを入力し、「確認」をクリックして正しく動くことを確かめてください。確認が終わるとこの画面に戻り、保存できます。"
 
+msgid "Your browser may ask you to confirm leaving this page when you click Verify."
+msgstr "「確認」をクリックすると、ブラウザがこのページから離れてよいか確認してくることがあります。"
+
+msgid "It is safe to leave: the ID and password entered above are not lost."
+msgstr "離れても問題ありません。上で入力した ID とパスワードは失われません。"
+
 msgid "Click \"Verify\" and confirm your new BASIC authentication ID and password before saving them for your own account. Not saved."
 msgstr "自分自身のアカウントに保存する前に、「確認」をクリックして新しい BASIC 認証の ID とパスワードを確かめてください。保存されませんでした。"
 
