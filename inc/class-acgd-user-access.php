@@ -603,7 +603,7 @@ class ACGD_User_Access {
 			// （コードレビュー・Low）。
 			'mismatch'   => array( 'error', __( 'That "Verify" request did not belong to this screen. Reload this page and click Verify again.', 'etbs-account-guard' ) ),
 			'not_self'   => array( 'error', __( 'The "Verify" button only works for your own account.', 'etbs-account-guard' ) ),
-			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password, and set the mode to "BASIC authentication" before verifying.', 'etbs-account-guard' ) ),
+			'incomplete' => array( 'error', __( 'Enter a BASIC authentication ID and password before verifying.', 'etbs-account-guard' ) ),
 		);
 		if ( ! isset( $messages[ $flag ] ) ) {
 			return;

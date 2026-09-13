@@ -498,8 +498,8 @@ msgstr "ユーザー名とパスワードが WordPress まで届くかどうか�
 msgid "Depending on your server, one of the snippets below may fix this."
 msgstr "サーバーによっては、以下のいずれかの記述で解決できる場合があります。"
 
-msgid "Enter a BASIC authentication ID and password, and set the mode to \"BASIC authentication\" before verifying."
-msgstr "確認する前に、BASIC 認証の ID とパスワードを入力し、モードを「BASIC 認証」にしてください。"
+msgid "Enter a BASIC authentication ID and password before verifying."
+msgstr "確認する前に、BASIC 認証の ID とパスワードを入力してください。"
 
 msgid "Enter both a BASIC authentication ID and a password before choosing \"BASIC authentication\" mode. Not saved."
 msgstr "「BASIC 認証」モードを選ぶ前に、BASIC 認証の ID とパスワードの両方を入力してください。保存されませんでした。"

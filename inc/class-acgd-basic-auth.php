@@ -1366,7 +1366,17 @@ class ACGD_Basic_Auth {
 			wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'not_self', $edit_url ) );
 			exit;
 		}
-		if ( 'basic' !== $mode || '' === $basic_id || '' === $password ) {
+		// "Verify" only checks whether this ID and password round-trip through a BASIC challenge — it is not
+		// itself a save, so it does not need $mode to already be 'basic' (issue #8). The mode still gets
+		// checked at save time (see ACGD_User_Access::save_fields()'s save-time check 2, unchanged by this
+		// fix): an admin can verify credentials while the mode is still "No restriction" or "IP restriction",
+		// then switch to "BASIC authentication" and save, and save_fields() will pick up this confirmation.
+		// 「確認」は、この ID とパスワードが BASIC の認証ヘッダを実際に通るかどうかだけを見る検査であり、
+		// それ自体は保存ではないため、$mode が既に 'basic' である必要はない（issue #8）。モードの確認は
+		// 保存時のチェック2（ACGD_User_Access::save_fields()。このバグ修正では変えない）でこれまでどおり行う：
+		// 管理者は「制限なし」「IP 制限」のままでも資格情報を確認してから「BASIC 認証」に切り替えて保存でき、
+		// save_fields() はこの確認結果をそのまま拾う。
+		if ( '' === $basic_id || '' === $password ) {
 			wp_safe_redirect( add_query_arg( 'acgd_basic_verify', 'incomplete', $edit_url ) );
 			exit;
 		}
