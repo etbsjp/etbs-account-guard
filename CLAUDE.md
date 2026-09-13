@@ -98,7 +98,6 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 
 - 定義は `.github/workflows/ci.yml`（原本 widget-shortcode-tools と byte 一致）。PR ごとに `php -l`（PHP 7.4 / 8.3）と
   `PHPCS (WordPress-Extra, changed lines)` が走る。`dist` への直 push では `php -l` の2つだけ走る
-- **既存指摘の基準値: 0 ERROR / 0 WARNING**（新規 repo のため。1.0.0 のマージ後に
-  `vendor/bin/phpcs --standard=./.phpcs.xml.dist --report=summary $(git ls-files '*.php')` で測り直してここに書く）
+- **既存指摘の基準値: 0 ERROR / 0 WARNING**（`3be6059` で `vendor/bin/phpcs --standard=./.phpcs.xml.dist --report=summary $(git ls-files '*.php')` を実測、11ファイル）
 - `composer.json` / `composer.lock` は原本のまま（`name` は `etbsjp/widget-shortcode-tools`。**lock だけ差し替えない**）
 - **`Requires PHP` は無宣言。** CI の matrix は `['7.4','8.3']` なので **7.3 は CI では守られていない**。7.3 の `php -l` は手元で通す

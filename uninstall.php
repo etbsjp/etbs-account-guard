@@ -76,6 +76,16 @@
  *   リクエストごとの BASIC 認証判定が、誰も使っていないサイトで get_users() クエリを省けるようにする
  *   ためだけに持つ。誰かが BASIC モードに/から保存されるたびに、実際のユーザーメタから作り直される
  *   派生的な集計であり、利用者が設定したものではない。
+ * - `acgd_basic_confirmed_count` (1.1.0, BASIC authentication, issue #9, option) … a cached count of how many
+ *   admins currently hold a live "Verify" confirmation (ACGD_Basic_Auth::CONFIRMED_COUNT_OPTION; code review,
+ *   Low), kept only so the per-request check for one can skip a get_transient() query on sites where nobody
+ *   has confirmed anything. Rebuilt from real confirmations the next time anyone confirms or saves; documents
+ *   nothing the user configured, only a derived tally — same shape as acgd_basic_id_count above.
+ *   （1.1.0・BASIC 認証・issue #9・オプション）現在「確認」を生きたまま持つ管理者の人数のキャッシュ
+ *   （ACGD_Basic_Auth::CONFIRMED_COUNT_OPTION。コードレビュー・Low）。リクエストごとの確認済みチェックが、
+ *   誰も確認していないサイトで get_transient() クエリを省けるようにするためだけに持つ。誰かが確認する・
+ *   保存するたびに実際の確認の有無から作り直される派生的な集計であり、利用者が設定したものではない
+ *   （上の acgd_basic_id_count と同じ性質）。
  * - Several transients exist in 1.1.0 that are not deleted here, on purpose: the "resubmit" transients
  *   (ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' and
  *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'), which briefly hold a rejected
@@ -128,3 +138,4 @@ delete_option( 'acgd_access_restriction_fault' );
 // BASIC 認証自身の一時状態（1.1.0・issue #4。上の docblock を参照）。
 delete_option( 'acgd_basic_diagnosis' );
 delete_option( 'acgd_basic_id_count' );
+delete_option( 'acgd_basic_confirmed_count' );
