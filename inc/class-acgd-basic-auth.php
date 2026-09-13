@@ -784,7 +784,9 @@ class ACGD_Basic_Auth {
 			 * A fault here must still never break core's own authentication for this request, which is what
 			 * the catch guarantees. What it must not do is vanish without trace: a future TypeError or an
 			 * object-cache failure would otherwise switch off the 5.3 ★★★ protection in silence. So it is
-			 * written to the debug log when WP_DEBUG is on — class and message only, never the credentials.
+			 * written to the debug log when WP_DEBUG is on — class and message only; this code itself never
+			 * puts credentials into that call (the message text is whatever the thrown exception already
+			 * carries, not something authored here — docs/spec.md 5.5).
 			 * A stopping-free fault log for production is its own piece of work, not something to bolt on
 			 * here (docs/spec.md 5.5).
 			 * 止めて通す。そして——このクラスの他の Throwable の catch と違い——ここでは
@@ -810,12 +812,13 @@ class ACGD_Basic_Auth {
 			 * ここでの故障がこのリクエストの本体側の認証を壊すことは絶対に無い、という点は catch が引き続き
 			 * 保証する。ただし痕跡も無く消えてはならない：そのままでは、将来の TypeError やオブジェクト
 			 * キャッシュの障害で 5.3 ★★★ の保護が黙って効かなくなる。そこで WP_DEBUG が真のときだけ
-			 * デバッグログに書く——クラス名とメッセージだけで、資格情報は決して載せない。本番でも止めずに
-			 * 記録する仕組みは、それ自体が別の作業であって、ここに後付けするものではない
-			 * （docs/spec.md 5.5）。
+			 * デバッグログに書く——クラス名とメッセージだけで、こちらから資格情報を載せることはしない
+			 * （メッセージの文面自体は投げられた例外が既に持っているものであり、ここで作るものではない
+			 * ——docs/spec.md 5.5）。本番でも止めずに記録する仕組みは、それ自体が別の作業であって、
+			 * ここに後付けするものではない（docs/spec.md 5.5）。
 			 */
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostic for a protection that otherwise fails silently (docs/spec.md 5.5); logs the exception class and message only, never the submitted credentials. / 黙って効かなくなりうる保護のための、デバッグ時限定の診断（docs/spec.md 5.5）。載せるのは例外のクラス名とメッセージだけで、送信された資格情報は決して載せない。
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostic for a protection that otherwise fails silently (docs/spec.md 5.5); logs only the exception's class and message — this code itself never puts the submitted credentials into that call. / 黙って効かなくなりうる保護のための、デバッグ時限定の診断（docs/spec.md 5.5）。載せるのは例外のクラス名とメッセージだけで、こちらから送信された資格情報を載せることはしない。
 				error_log( 'ETBS Account Guard: maybe_strip_confirmed_header() failed: ' . get_class( $e ) . ': ' . $e->getMessage() );
 			}
 		}
