@@ -492,8 +492,8 @@ msgstr "上の ID とパスワードを入力し、「確認」をクリック�
 msgid "Your browser may ask you to confirm leaving this page when you click Verify."
 msgstr "「確認」をクリックすると、ブラウザがこのページから離れてよいか確認してくることがあります。"
 
-msgid "It is safe to leave: the ID and password entered above are not lost."
-msgstr "離れても問題ありません。上で入力した ID とパスワードは失われません。"
+msgid "It is safe to leave: unless the confirmation has expired, the ID and password entered above are not lost."
+msgstr "離れても問題ありません。確認の有効期限が切れていない限り、上で入力した ID とパスワードは失われません。"
 
 msgid "Click \"Verify\" and confirm your new BASIC authentication ID and password before saving them for your own account. Not saved."
 msgstr "自分自身のアカウントに保存する前に、「確認」をクリックして新しい BASIC 認証の ID とパスワードを確かめてください。保存されませんでした。"

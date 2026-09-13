@@ -533,13 +533,19 @@ class ACGD_User_Access {
 						 * safely or don't suppress at all" note on issue #7 warns against, and it is the same
 						 * "don't decide access — or, here, safety — with JavaScript" caution CLAUDE.md already
 						 * applies to this plugin's actual access checks. So this section does not try to predict
-						 * whether core's warning is real; it removes the practical cost of it firing at all,
-						 * because when it does fire here, it is always a false alarm for what this button itself
-						 * submits: the ID and password just typed above are not lost regardless of which way the
-						 * dialog is answered (this section's own fields, unlike core's, are always stashed and
-						 * redisplayed by ACGD_User_Access::stash_resubmit(), called from
-						 * ACGD_Basic_Auth::maybe_handle_verify_request() before it redirects to the confirmation
-						 * screen).
+						 * whether core's warning is real; it removes the practical cost of it firing at all in the
+						 * ordinary case, because when it does fire here, it is usually a false alarm for what this
+						 * button itself submits: the ID and password just typed above are stashed and redisplayed
+						 * by ACGD_User_Access::stash_resubmit(), called from ACGD_Basic_Auth::
+						 * maybe_handle_verify_request() before it redirects to the confirmation screen — but only
+						 * once that method's target and nonce guards let the request through. When either guard
+						 * turns the click down instead (ACGD_Basic_Auth::decline_verify_request(), reached before
+						 * stash_resubmit() runs — in practice this is mostly the screen having been left open past
+						 * the nonce's lifetime; see that method's own docblock), nothing was stashed and the fields
+						 * really do come back empty (code review round, PR #12, Medium: this note used to promise
+						 * the fields are kept no matter what, which this path contradicts). The notice shown on
+						 * return (render_verify_notice()) already says so for that case ('expired' / 'mismatch'),
+						 * so the wording below is qualified to match rather than repeating the old blanket promise.
 						 * issue #7：「確認」を押すとこの <form id="your-profile"> 全体が送信され（上のボタンの
 						 * コメントを参照）、これはこの画面からの本物の離脱にあたる。そのため本体自身の
 						 * wp-admin/js/user-profile.js は、他のどの離脱とも同じ条件で「行った変更が失われます」の
@@ -557,18 +563,25 @@ class ACGD_User_Access {
 						 * アクセス判定に既に課している「JavaScript で判定しない」という用心と同じもの
 						 * （ここでは判定の対象が「アクセスの可否」ではなく「安全に抑え込めるか」だが構図は同じ）。
 						 * そのためこの区画は、本体の警告が本物かどうかを予測しようとはせず、代わりに——出た
-						 * としても実害を無くす。ここで出る場合、それはこのボタンが送信する内容に関しては常に
-						 * 誤報である：上で入力した ID とパスワードは、ダイアログのどちらを選んでも失われない
-						 * （この区画自身の項目は、本体の項目と違い、ACGD_Basic_Auth::maybe_handle_verify_request()
-						 * が確認画面へリダイレクトする前に呼ぶ ACGD_User_Access::stash_resubmit() によって、
-						 * 常に保管され出し直される）。
+						 * としても通常時の実害を無くす。ここで出る場合、それはこのボタンが送信する内容に関して
+						 * 多くの場合は誤報である：上で入力した ID とパスワードは、ACGD_Basic_Auth::
+						 * maybe_handle_verify_request() が確認画面へリダイレクトする前に呼ぶ
+						 * ACGD_User_Access::stash_resubmit() によって保管され出し直される——ただしそれは同メソッドの
+						 * 対象・nonce のガードを通ったときに限る。どちらかのガードが弾いた場合
+						 * （ACGD_Basic_Auth::decline_verify_request()。stash_resubmit() に到達する前に exit する。
+						 * 実運用で多いのは、画面を nonce の有効期限より長く開いたままにしていたケース。同メソッド
+						 * 自身の docblock を参照）は何も保管されておらず、戻った画面の入力欄は実際に空になる
+						 * （コードレビュー回・PR #12・Medium：この説明は以前「何があっても保たれる」と約束していたが、
+						 * この経路はそれに反していた）。戻った画面の通知（render_verify_notice()）はその場合について
+						 * 既に案内している（'expired' / 'mismatch'）ため、下の説明文もそれに合わせて言い過ぎない
+						 * 表現にする。
 						 */
 						?>
 						<p class="description">
 							<?php esc_html_e( 'Your browser may ask you to confirm leaving this page when you click Verify.', 'etbs-account-guard' ); ?>
 						</p>
 						<p class="description">
-							<strong><?php esc_html_e( 'It is safe to leave: the ID and password entered above are not lost.', 'etbs-account-guard' ); ?></strong>
+							<strong><?php esc_html_e( 'It is safe to leave: unless the confirmation has expired, the ID and password entered above are not lost.', 'etbs-account-guard' ); ?></strong>
 						</p>
 					</td>
 				</tr>
