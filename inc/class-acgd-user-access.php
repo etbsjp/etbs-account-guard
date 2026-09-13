@@ -514,6 +514,60 @@ class ACGD_User_Access {
 						<p class="description">
 							<?php esc_html_e( 'Set the ID and password above, click Verify to confirm they work, and you will be returned here to save them.', 'etbs-account-guard' ); ?>
 						</p>
+						<?php
+						/*
+						 * issue #7: clicking "Verify" submits this whole <form id="your-profile"> (see the comment
+						 * on the button above), which is a real navigation away from this screen — core's own
+						 * wp-admin/js/user-profile.js therefore may raise its own "the changes you made will be
+						 * lost" beforeunload warning, exactly as it would for any other navigation away from this
+						 * form, because the only thing that silences it is a click on #submit/#wp-submit/
+						 * #createusersub (core's own $submitButtons), which "Verify" deliberately is not (it must
+						 * stay a check, not a save — see ACGD_Basic_Auth::VERIFY_REQUEST_FIELD).
+						 * A client-side fix was considered and rejected: telling core's warning apart from a
+						 * genuine one would mean this plugin's own script deciding, on every click, whether
+						 * anything OTHER than the fields in this section changed since the page loaded — and, if
+						 * so, silencing core's beforeunload handler for this one event. There is no way to target
+						 * only core's own handler: `beforeunload` has exactly one queue of listeners, so silencing
+						 * it silences every warning registered on the page, including any unrelated one another
+						 * plugin might raise on this very screen. That is precisely the failure mode the "solve it
+						 * safely or don't suppress at all" note on issue #7 warns against, and it is the same
+						 * "don't decide access — or, here, safety — with JavaScript" caution CLAUDE.md already
+						 * applies to this plugin's actual access checks. So this section does not try to predict
+						 * whether core's warning is real; it removes the practical cost of it firing at all,
+						 * because when it does fire here, it is always a false alarm for what this button itself
+						 * submits: the ID and password just typed above are not lost regardless of which way the
+						 * dialog is answered (this section's own fields, unlike core's, are always stashed and
+						 * redisplayed by ACGD_User_Access::stash_resubmit(), called from
+						 * ACGD_Basic_Auth::maybe_handle_verify_request() before it redirects to the confirmation
+						 * screen).
+						 * issue #7：「確認」を押すとこの <form id="your-profile"> 全体が送信され（上のボタンの
+						 * コメントを参照）、これはこの画面からの本物の離脱にあたる。そのため本体自身の
+						 * wp-admin/js/user-profile.js は、他のどの離脱とも同じ条件で「行った変更が失われます」の
+						 * beforeunload 警告を出しうる——これを黙らせるのは #submit / #wp-submit /
+						 * #createusersub（本体自身の $submitButtons）のクリックだけであり、「確認」は意図的に
+						 * そのどれでもない（保存ではなく検査のままでなければならない。
+						 * ACGD_Basic_Auth::VERIFY_REQUEST_FIELD を参照）。
+						 * クライアント側での対処は検討したうえで見送った：本体の警告を本物の警告と見分けるには、
+						 * このプラグイン自身のスクリプトが、クリックのたびに「この区画の項目以外に何か変わって
+						 * いないか」を判定し、変わっていなければ beforeunload をこの1回だけ黙らせる、という
+						 * 作りになる。しかし beforeunload の listener の列はページ全体で1本しかなく、本体だけを
+						 * 狙って黙らせる方法は無い——黙らせれば、この画面に他のプラグインが独自に出している
+						 * 無関係な警告まで一緒に消えてしまう。これはまさに issue #7 の「安全に判定できないなら
+						 * 抑え込まない」という注記が警戒している失敗の形であり、CLAUDE.md がこのプラグイン自身の
+						 * アクセス判定に既に課している「JavaScript で判定しない」という用心と同じもの
+						 * （ここでは判定の対象が「アクセスの可否」ではなく「安全に抑え込めるか」だが構図は同じ）。
+						 * そのためこの区画は、本体の警告が本物かどうかを予測しようとはせず、代わりに——出た
+						 * としても実害を無くす。ここで出る場合、それはこのボタンが送信する内容に関しては常に
+						 * 誤報である：上で入力した ID とパスワードは、ダイアログのどちらを選んでも失われない
+						 * （この区画自身の項目は、本体の項目と違い、ACGD_Basic_Auth::maybe_handle_verify_request()
+						 * が確認画面へリダイレクトする前に呼ぶ ACGD_User_Access::stash_resubmit() によって、
+						 * 常に保管され出し直される）。
+						 */
+						?>
+						<p class="description">
+							<?php esc_html_e( 'Your browser may ask you to confirm leaving this page when you click Verify.', 'etbs-account-guard' ); ?>
+							<?php esc_html_e( 'It is safe to leave: the ID and password entered above are not lost.', 'etbs-account-guard' ); ?>
+						</p>
 					</td>
 				</tr>
 			<?php endif; ?>
