@@ -87,6 +87,8 @@ The update check state saved by the bundled update checker (rebuilt by the next 
 
 == Changelog ==
 
+* [ Other ] Skipped an unnecessary database read on every admin request while checking for a pending BASIC authentication confirmation, on sites where server-side BASIC authentication is already in place.
+
 = 1.1.0 =
 * [ New Feature ] Added Access Restriction, letting a role or a specific user be required to connect from an allowed IP address, with a denial log and an emergency switch to turn it off.
 * [ New Feature ] Added BASIC authentication as a third Access Restriction mode, letting a role or a specific user be required to answer a browser sign-in prompt with a separate username and password, with its own receive diagnosis, a confirmation screen for setting up one's own credentials, and a denial log entry for it.

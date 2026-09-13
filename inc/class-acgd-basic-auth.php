@@ -164,6 +164,46 @@ class ACGD_Basic_Auth {
 	const VERIFY_TTL = 5 * MINUTE_IN_SECONDS;
 
 	/**
+	 * How many admins currently hold a live "Verify" confirmation (VERIFIED_TRANSIENT_PREFIX). Autoloaded, on
+	 * purpose, for the same reason as ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION: it lets
+	 * maybe_strip_confirmed_header() skip get_transient() entirely — a real, non-autoloaded read — on every
+	 * single admin request on a site where server-side BASIC auth is already in effect and
+	 * has_credentials_in_server() therefore never short-circuits (code review, Low; measured: 1 query per
+	 * admin request avoided when this is 0. See maybe_strip_confirmed_header()).
+	 *
+	 * Unlike BASIC_ID_COUNT_OPTION, this count can only drift too HIGH, never too low, and that is deliberate
+	 * — it fails toward the slower, always-correct behavior, never toward skipping a check that still matters:
+	 * - Incremented in handle_verify(), only when a confirmation is newly created for an admin who did not
+	 *   already have a live one.
+	 * - Decremented in invalidate_verification(), which runs once a save actually consumes the confirmation.
+	 * - Never decremented when a confirmation instead expires on its own after VERIFY_TTL without being saved
+	 *   or invalidated (docs/spec.md 5.3's "確認したあと保存せずにログアウトした" limitation): WordPress does
+	 *   not fire anything when a transient's TTL lapses, so there is nothing to hook. Left uncorrected, this
+	 *   keeps the count at 1 for that admin, and maybe_strip_confirmed_header() simply keeps calling
+	 *   get_transient() as it always did — no request is ever let through incorrectly, the drift only costs
+	 *   back the one query this option exists to save.
+	 * 現在「確認」が生きている（VERIFIED_TRANSIENT_PREFIX を持つ）管理者の人数。
+	 * ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION と同じ理由で意図的に autoload する：サーバー側で
+	 * BASIC 認証が既に掛かっていて has_credentials_in_server() が短絡しないサイトでは、管理画面の全リクエストで
+	 * get_transient()——autoload しない実際の読み取り——が走っていたのを、これで丸ごと省ける
+	 * （コードレビュー・Low。実測：これが 0 のとき管理画面リクエスト1回あたりクエリ1本を削減。
+	 * maybe_strip_confirmed_header() を参照）。
+	 *
+	 * BASIC_ID_COUNT_OPTION と違い、この値は多めにずれることはあっても少なめにずれることはない。これは意図的で、
+	 * 「遅いが常に正しい」側へ倒れるようにしており、「まだ効いているはずの確認を見落とす」側には倒れない：
+	 * - handle_verify() で、その管理者がまだ生きている確認を持っていないときだけ増やす
+	 * - invalidate_verification() で、保存が実際に確認を消費した時点で減らす
+	 * - 確認が保存も無効化もされず VERIFY_TTL で自然に切れたとき（docs/spec.md 5.3 の「確認したあと保存せずに
+	 *   ログアウトした」という既知の限界）は減らさない：transient の TTL が切れても WordPress は何も発火しない
+	 *   ので、フックする先が無い。直さないままだと、その管理者ぶんだけ 1 のまま残り続け、
+	 *   maybe_strip_confirmed_header() はそれまでどおり get_transient() を呼び続けるだけ——誤って通してしまう
+	 *   ことは無く、ずれの代償はこの値が省くはずだった1クエリが戻ってくることだけ。
+	 *
+	 * @var string
+	 */
+	const CONFIRMED_COUNT_OPTION = 'acgd_basic_confirmed_count';
+
+	/**
 	 * Option that holds the receive diagnosis result (docs/spec.md 5.3, "受信の診断"). Not autoloaded: read
 	 * only on the Access Restriction settings tab and by the save-time gate that blocks turning BASIC mode on.
 	 * 受信の診断（docs/spec.md 5.3）の結果を持つオプション。autoload しない。「アクセス制限」設定タブと、
@@ -586,6 +626,26 @@ class ACGD_Basic_Auth {
 	 */
 	public static function maybe_strip_confirmed_header( $input ) {
 		try {
+			/*
+			 * Mirrors priority 1's own BASIC_ID_COUNT_OPTION early return: when nobody currently holds a live
+			 * "Verify" confirmation, there is nothing this method could ever find, so skip straight past the
+			 * get_transient() below — a real, non-autoloaded read — without even checking $_SERVER first. See
+			 * CONFIRMED_COUNT_OPTION for why this can only ever cost back the one query it saves, never let a
+			 * request through that this method would otherwise have caught (code review, Low; measured: 1
+			 * query per admin request avoided on a site with server-side BASIC auth already in effect, once
+			 * this is 0).
+			 * 優先度1が持つ BASIC_ID_COUNT_OPTION と同じ早期 return。現在「確認」を生きたまま持つ管理者が
+			 * 1人もいないなら、このメソッドが見つけられるものは何も無いので、$_SERVER を見るより前に、下の
+			 * get_transient()——autoload しない実際の読み取り——を飛ばす。これがずれても代償はこのオプションが
+			 * 省くはずだった1クエリが戻ってくることだけで、本来このメソッドが捕まえるはずだったリクエストを
+			 * 誤って通してしまうことは無い理由は CONFIRMED_COUNT_OPTION を参照（コードレビュー・Low。実測：
+			 * サーバー側で BASIC 認証が既に掛かっているサイトで、これが 0 のとき管理画面リクエスト1回あたり
+			 * クエリ1本を削減）。
+			 */
+			if ( (int) get_option( self::CONFIRMED_COUNT_OPTION, 0 ) < 1 ) {
+				return $input;
+			}
+
 			/*
 			 * ★ Read $_SERVER itself, not get_submitted_credentials(): the question here is "is there still
 			 * anything in $_SERVER to remove", and that method deliberately answers a different one. It
@@ -1422,6 +1482,15 @@ class ACGD_Basic_Auth {
 			// 生成関数として手近だからにすぎない：この値をハッシュ化したり人の入力と比較したりすることは無いため、
 			// 実質的には「パスワード」ではない。
 			$token = wp_generate_password( 32, false, false );
+			// Keep CONFIRMED_COUNT_OPTION in sync: only bump it when this admin did not already have a live
+			// confirmation, so re-submitting "Verify" for the same admin cannot inflate the count past the
+			// number of admins actually holding one (see CONFIRMED_COUNT_OPTION).
+			// CONFIRMED_COUNT_OPTION を同期させる：この管理者がまだ生きている確認を持っていないときだけ増やす。
+			// 同じ管理者が「確認」を出し直しても、実際に確認を持つ管理者の人数を超えて膨らませないため
+			// （CONFIRMED_COUNT_OPTION を参照）。
+			if ( false === get_transient( self::VERIFIED_TRANSIENT_PREFIX . $admin_id ) ) {
+				update_option( self::CONFIRMED_COUNT_OPTION, (int) get_option( self::CONFIRMED_COUNT_OPTION, 0 ) + 1, true ); // Autoloaded on purpose; see CONFIRMED_COUNT_OPTION. / 意図的に autoload する。理由は CONFIRMED_COUNT_OPTION を参照。
+			}
 			set_transient(
 				self::VERIFIED_TRANSIENT_PREFIX . $admin_id,
 				array(
@@ -1555,7 +1624,14 @@ class ACGD_Basic_Auth {
 	 * @return void
 	 */
 	public static function invalidate_verification( $admin_id ) {
-		delete_transient( self::VERIFIED_TRANSIENT_PREFIX . (int) $admin_id );
+		// Only decrement CONFIRMED_COUNT_OPTION when a transient actually existed to delete (delete_transient()
+		// returns false otherwise) — never below 0, in case the count was already out of sync in the other
+		// direction for some other reason (see CONFIRMED_COUNT_OPTION).
+		// delete_transient() が実際に何か削除したときだけ CONFIRMED_COUNT_OPTION を減らす（何も無ければ
+		// false を返す）。0 未満にはしない（別の理由で既に値がずれていた場合の保険。CONFIRMED_COUNT_OPTION を参照）。
+		if ( delete_transient( self::VERIFIED_TRANSIENT_PREFIX . (int) $admin_id ) ) {
+			update_option( self::CONFIRMED_COUNT_OPTION, max( 0, (int) get_option( self::CONFIRMED_COUNT_OPTION, 0 ) - 1 ), true );
+		}
 	}
 
 	/*-------------------------------------------*/
