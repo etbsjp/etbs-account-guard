@@ -566,7 +566,9 @@ class ACGD_User_Access {
 						?>
 						<p class="description">
 							<?php esc_html_e( 'Your browser may ask you to confirm leaving this page when you click Verify.', 'etbs-account-guard' ); ?>
-							<?php esc_html_e( 'It is safe to leave: the ID and password entered above are not lost.', 'etbs-account-guard' ); ?>
+						</p>
+						<p class="description">
+							<strong><?php esc_html_e( 'It is safe to leave: the ID and password entered above are not lost.', 'etbs-account-guard' ); ?></strong>
 						</p>
 					</td>
 				</tr>
