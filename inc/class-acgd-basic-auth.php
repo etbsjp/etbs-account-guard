@@ -171,8 +171,9 @@ class ACGD_Basic_Auth {
 	 * has_credentials_in_server() therefore never short-circuits (code review, Low; measured: 1 query per
 	 * admin request avoided when this is 0. See maybe_strip_confirmed_header()).
 	 *
-	 * Unlike BASIC_ID_COUNT_OPTION, this count can only drift too HIGH, never too low, and that is deliberate
-	 * — it fails toward the slower, always-correct behavior, never toward skipping a check that still matters:
+	 * On the common path — one admin confirming, then either saving or letting it expire — this count only
+	 * ever drifts too HIGH, never too low, and that direction is deliberate: it fails toward the slower,
+	 * always-correct behavior, never toward skipping a check that still matters:
 	 * - Incremented in handle_verify(), only when a confirmation is newly created for an admin who did not
 	 *   already have a live one.
 	 * - Decremented in invalidate_verification(), which runs once a save actually consumes the confirmation.
@@ -180,8 +181,21 @@ class ACGD_Basic_Auth {
 	 *   or invalidated (docs/spec.md 5.3's "確認したあと保存せずにログアウトした" limitation): WordPress does
 	 *   not fire anything when a transient's TTL lapses, so there is nothing to hook. Left uncorrected, this
 	 *   keeps the count at 1 for that admin, and maybe_strip_confirmed_header() simply keeps calling
-	 *   get_transient() as it always did — no request is ever let through incorrectly, the drift only costs
-	 *   back the one query this option exists to save.
+	 *   get_transient() as it always did — the drift only costs back the one query this option exists to save.
+	 *
+	 * ★ There IS a path where this can drift too LOW instead (security review, Medium): the read-modify-write
+	 * in handle_verify()/invalidate_verification() (get_option() → ±1 → update_option()) is not atomic, so two
+	 * different admins confirming — or one confirming while another's save is invalidating theirs — closely
+	 * enough in time can race and lose one of the two writes, including a decrement "winning" over an
+	 * increment it raced with. That can leave this count at 0 while one admin's confirmation is still live.
+	 * This stays safe regardless, because this count decides nothing about authorization:
+	 * is_request_authenticated_for() never reads it (docs/spec.md 5.3), and it only gates whether
+	 * maybe_strip_confirmed_header() bothers looking for a confirmation to strip from $_SERVER. Reading a
+	 * stale 0 here at worst leaves that one admin's confirmed credentials unstripped for this one request — the
+	 * same cosmetic cost already described above (core's red notice next to the green one), never an
+	 * authentication bypass or a lockout. Fixing the race with an atomic update was considered and rejected:
+	 * this is a transient count, not something a usermeta query like BASIC_ID_COUNT_OPTION's could simply
+	 * recompute from scratch, and the added complexity buys nothing this value is actually relied on for.
 	 * 現在「確認」が生きている（VERIFIED_TRANSIENT_PREFIX を持つ）管理者の人数。
 	 * ACGD_Access_Restriction::BASIC_ID_COUNT_OPTION と同じ理由で意図的に autoload する：サーバー側で
 	 * BASIC 認証が既に掛かっていて has_credentials_in_server() が短絡しないサイトでは、管理画面の全リクエストで
@@ -189,15 +203,30 @@ class ACGD_Basic_Auth {
 	 * （コードレビュー・Low。実測：これが 0 のとき管理画面リクエスト1回あたりクエリ1本を削減。
 	 * maybe_strip_confirmed_header() を参照）。
 	 *
-	 * BASIC_ID_COUNT_OPTION と違い、この値は多めにずれることはあっても少なめにずれることはない。これは意図的で、
-	 * 「遅いが常に正しい」側へ倒れるようにしており、「まだ効いているはずの確認を見落とす」側には倒れない：
+	 * 普段の経路——1人の管理者が確認し、その後保存するか自然に期限切れになるか——では、この値は多めに
+	 * ずれることはあっても少なめにずれることはない。これは意図的で、「遅いが常に正しい」側へ倒れるように
+	 * しており、「まだ効いているはずの確認を見落とす」側には倒れない：
 	 * - handle_verify() で、その管理者がまだ生きている確認を持っていないときだけ増やす
 	 * - invalidate_verification() で、保存が実際に確認を消費した時点で減らす
 	 * - 確認が保存も無効化もされず VERIFY_TTL で自然に切れたとき（docs/spec.md 5.3 の「確認したあと保存せずに
 	 *   ログアウトした」という既知の限界）は減らさない：transient の TTL が切れても WordPress は何も発火しない
 	 *   ので、フックする先が無い。直さないままだと、その管理者ぶんだけ 1 のまま残り続け、
-	 *   maybe_strip_confirmed_header() はそれまでどおり get_transient() を呼び続けるだけ——誤って通してしまう
-	 *   ことは無く、ずれの代償はこの値が省くはずだった1クエリが戻ってくることだけ。
+	 *   maybe_strip_confirmed_header() はそれまでどおり get_transient() を呼び続けるだけ——ずれの代償は
+	 *   この値が省くはずだった1クエリが戻ってくることだけ。
+	 *
+	 * ★ 少なめにずれる経路も**存在する**（セキュリティレビュー・Medium）：handle_verify() /
+	 * invalidate_verification() の read-modify-write（get_option() → ±1 → update_option()）は原子的ではない
+	 * ため、異なる2人の管理者がほぼ同時に確認する——あるいは1人が確認する間にもう1人の保存が無効化を行う——
+	 * ようなタイミングが重なると、片方の書き込みが失われるレースが起こり得る（減算が、それと競合した加算に
+	 * 「勝つ」場合も含む）。その結果、ある管理者の確認がまだ生きているのに、この値が 0 になることがあり得る。
+	 * それでも安全である理由は、この値が認可判定に一切使われないため：`is_request_authenticated_for()`
+	 * （docs/spec.md 5.3）はこの値を読まず、この値が左右するのは `maybe_strip_confirmed_header()` が
+	 * 「確認を探して `$_SERVER` から剥がすかどうか」だけ。ここで古い 0 を読んでしまっても、最悪その1人の
+	 * 管理者ぶんの確認済み資格情報がこのリクエストで剥がされないだけで——上で説明した見た目だけの代償
+	 * （本体の赤い通知が緑の隣に並ぶ）と同じ範囲に収まり、認証のバイパスやロックアウトには繋がらない。
+	 * このレースを原子的な更新で直すことは検討のうえ見送った：これは transient のカウントであり、
+	 * `BASIC_ID_COUNT_OPTION` のような usermeta クエリで一から再計算し直せる性質のものではなく、
+	 * 実装を複雑にしてまで得るものが無いと判断したため。
 	 *
 	 * @var string
 	 */
@@ -629,18 +658,20 @@ class ACGD_Basic_Auth {
 			/*
 			 * Mirrors priority 1's own BASIC_ID_COUNT_OPTION early return: when nobody currently holds a live
 			 * "Verify" confirmation, there is nothing this method could ever find, so skip straight past the
-			 * get_transient() below — a real, non-autoloaded read — without even checking $_SERVER first. See
-			 * CONFIRMED_COUNT_OPTION for why this can only ever cost back the one query it saves, never let a
-			 * request through that this method would otherwise have caught (code review, Low; measured: 1
-			 * query per admin request avoided on a site with server-side BASIC auth already in effect, once
-			 * this is 0).
+			 * get_transient() below — a real, non-autoloaded read — without even checking $_SERVER first.
+			 * CONFIRMED_COUNT_OPTION documents a race that can make this read a stale 0 while a confirmation is
+			 * still live for some admin, letting this method skip stripping $_SERVER for that one request. See
+			 * that constant for why this stays safe either way — this count gates only a $_SERVER cleanup, not
+			 * an authorization decision (code review, Low; security review, Medium; measured: 1 query per
+			 * admin request avoided on a site with server-side BASIC auth already in effect, once this is 0).
 			 * 優先度1が持つ BASIC_ID_COUNT_OPTION と同じ早期 return。現在「確認」を生きたまま持つ管理者が
 			 * 1人もいないなら、このメソッドが見つけられるものは何も無いので、$_SERVER を見るより前に、下の
-			 * get_transient()——autoload しない実際の読み取り——を飛ばす。これがずれても代償はこのオプションが
-			 * 省くはずだった1クエリが戻ってくることだけで、本来このメソッドが捕まえるはずだったリクエストを
-			 * 誤って通してしまうことは無い理由は CONFIRMED_COUNT_OPTION を参照（コードレビュー・Low。実測：
-			 * サーバー側で BASIC 認証が既に掛かっているサイトで、これが 0 のとき管理画面リクエスト1回あたり
-			 * クエリ1本を削減）。
+			 * get_transient()——autoload しない実際の読み取り——を飛ばす。CONFIRMED_COUNT_OPTION に書いた
+			 * とおり、レースにより古い 0 を読んでしまい、ある管理者の確認がまだ生きているのにこのメソッドが
+			 * その1リクエストぶんだけ `$_SERVER` の剥がしをスキップすることがあり得る。それでも安全である
+			 * 理由（この値が左右するのは認可判定ではなく `$_SERVER` の後始末だけであること）は同定数を参照
+			 * （コードレビュー・Low。セキュリティレビュー・Medium。実測：サーバー側で BASIC 認証が既に
+			 * 掛かっているサイトで、これが 0 のとき管理画面リクエスト1回あたりクエリ1本を削減）。
 			 */
 			if ( (int) get_option( self::CONFIRMED_COUNT_OPTION, 0 ) < 1 ) {
 				return $input;
