@@ -2,7 +2,7 @@
 Contributors:      etbsjp
 Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
-Stable tag:        1.1.0
+Stable tag:        1.1.1
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -87,6 +87,7 @@ The update check state saved by the bundled update checker (rebuilt by the next 
 
 == Changelog ==
 
+= 1.1.1 =
 * [ Bug Fix ] Fixed the "Verify" button for BASIC authentication credentials requiring the mode to already be switched to "BASIC authentication" before it would run, so an admin could not check new credentials while still on "No restriction" or "IP restriction".
 * [ Bug Fix ] Fixed the "Verify" button for BASIC authentication credentials leaving no indication that the ID and password just entered are kept even when WordPress's own "changes you made will be lost" warning appears; added a note next to the button making this clear.
 * [ Other ] Skipped an unnecessary database read on every admin request while checking for a pending BASIC authentication confirmation, on sites where server-side BASIC authentication is already in place.
