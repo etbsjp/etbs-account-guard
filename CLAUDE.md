@@ -21,13 +21,14 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 | 関数・オプション・フック・ユーザーメタのプレフィックス | `acgd_` |
 | 定数・クラスのプレフィックス | `ACGD_`（自プラグイン判定用に `ACGD_PLUGIN_FILE` を持つ） |
 | 設定画面の画面ID | `settings_page_etbs-account-guard` |
-| リポジトリ / ブランチ | `etbsjp/etbs-account-guard` の **`dist` 一本**（`main` は作らない） |
+| リポジトリ | `etbsjp/etbs-account-guard` |
+| ブランチ | **既定ブランチは `wporg`。作業・PR は `wporg` 向け。** `dist` は既存の自社配布サイト（更新チェッカー同梱版）への配信元として凍結しており、**触らない（push・マージ・改名・削除のいずれも禁止）**。更新チェッカーを外した版が `dist` に入ると、その版を見ている既存サイトが公式ディレクトリへ更新を問い合わせ始め、スラッグを確保する前に他人のプラグインを「更新」として受け取りうるため |
 
 **版数の置き場**：本体ヘッダの `Version:` と `readme.txt` の `Stable tag:`。
 ★ 置き場を増やしたら（JS/CSS の読み込みで `ACGD_VERSION` を作るなど）この節を直すこと。
 ★ JS/CSS のキャッシュ用の版数は **`filemtime()`（ファイルの更新時刻）** を使う（仕様書 3.7）。`ACGD_VERSION` は作らないので、置き場は上の2つのまま。
 
-★★ **版数は実装の PR で上げない。** `dist` は利用者サイトへの配信元なので、版数を上げてマージした瞬間に配信される。
+★★ **版数は実装の PR で上げない。** 公式ディレクトリへは SVN へ commit した瞬間に配信される。その commit は人が行う。
 版数上げは人が判断して行う（etbs-plugin-rules.md の運用）。
 
 ## 言語・コメント
@@ -96,8 +97,10 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 **共通ルールは `~/.claude/etbs-plugin-rules.md` の 2.7 節。そちらの内容はここに転記しない。**
 ここに置くのは **このリポジトリでしか決まらない値**だけ。
 
-- 定義は `.github/workflows/ci.yml`（原本 widget-shortcode-tools と byte 一致）。PR ごとに `php -l`（PHP 7.4 / 8.3）と
-  `PHPCS (WordPress-Extra, changed lines)` が走る。`dist` への直 push では `php -l` の2つだけ走る
+- 定義は `.github/workflows/ci.yml`（原本 widget-shortcode-tools と byte 一致ではなくなった。`push.branches` に
+  `wporg` を足しているため。issue #13）。PR ごとに `php -l`（PHP 7.4 / 8.3）と
+  `PHPCS (WordPress-Extra, changed lines)` が走る。`wporg` / `dist` への直 push では `php -l` の2つだけ走る
+  （`dist` は版数上げを人が直接 push する運用のため、`wporg` は版数上げの直 push でも構文チェックが走るようにするため）
 - **既存指摘の基準値: 0 ERROR / 0 WARNING**（`3be6059` で `vendor/bin/phpcs --standard=./.phpcs.xml.dist --report=summary $(git ls-files '*.php')` を実測、11ファイル）
 - `composer.json` / `composer.lock` は原本のまま（`name` は `etbsjp/widget-shortcode-tools`。**lock だけ差し替えない**）
 - **`Requires PHP` は無宣言。** CI の matrix は `['7.4','8.3']` なので **7.3 は CI では守られていない**。7.3 の `php -l` は手元で通す

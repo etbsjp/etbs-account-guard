@@ -1,7 +1,9 @@
 # ★ パターンは必ず先頭 "/" でアンカーすること。
-#   スラッシュ無しは .gitignore と同じ規則で全階層にマッチするため、
-#   同梱している inc/plugin-update-checker/ の composer.json と vendor/ まで
-#   配布物から削り落とされ、PUC が Parsedown / PucReadmeParser を読めず Fatal になる。
+#   スラッシュ無しは .gitignore と同じ規則で全階層にマッチする。このブランチ（wporg）は
+#   issue #13 で plugin-update-checker を外したため、composer.json / vendor/ を無印で書いても
+#   同梱ライブラリの composer.json や vendor/ に当たる心配は無くなったが、無印で書かない
+#   というルール自体は他の etbs プラグイン（PUC を同梱する dist 系）と揃えて維持する。
+# ★ /languages/ はここに入れない。日本語訳（.mo）を同梱して提出する決定のため（docs/spec.md 3.1）。
 /.gitignore      export-ignore
 /.gitattributes  export-ignore
 /CLAUDE.md       export-ignore

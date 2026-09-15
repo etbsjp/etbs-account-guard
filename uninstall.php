@@ -34,22 +34,56 @@
  *   利用者が設定した値。
  *
  * Deleted / 消すもの（一時状態）:
- * - `external_updates-etbs-account-guard` (site option) … update check state of the bundled
- *   plugin-update-checker (when it last checked, and the update it found). It is rebuilt by the next check,
- *   so it is temporary state. The name is the library's default for a plugin ('external_updates-' . slug in
- *   Puc/v5p5/UpdateChecker.php, with the slug given in inc/update-checker.php), and the library saves it
- *   with update_site_option() (Puc/v5p5/StateStore.php), so it is removed with delete_site_option().
- *   同梱の plugin-update-checker の更新確認の状態（最後に確認した日時と、見つけた更新）。次の確認で作り直されるので
- *   一時状態に当たる。名前はライブラリがプラグインに付ける既定の名前（Puc/v5p5/UpdateChecker.php の
- *   'external_updates-' . スラッグ。スラッグは inc/update-checker.php で渡している）で、ライブラリは
- *   update_site_option() で保存する（Puc/v5p5/StateStore.php）ので、delete_site_option() で消す。
- * - `puc_manual_check_errors-etbs-account-guard` (site transient) … errors of a manual update check, kept for
- *   60 seconds (Puc/v5p5/Plugin/Ui.php). Removed so that nothing of the library is left behind.
- *   手動の更新確認で出たエラー。60秒だけ保持される（Puc/v5p5/Plugin/Ui.php）。ライブラリのものを何も残さないために消す。
- * - The cron event of plugin-update-checker is removed by the library itself on deactivation
- *   (register_deactivation_hook()), and uninstalling always goes through deactivation.
- *   plugin-update-checker の cron は無効化の時点でライブラリ自身が消し（register_deactivation_hook()）、
- *   削除は必ず無効化を経由する。
+ * - `external_updates-etbs-account-guard` (site option) … update check state left behind by
+ *   plugin-update-checker, a library that a previous self-distributed build of this plugin bundled (the
+ *   wordpress.org build does not; self-updaters are not allowed there). On a site upgraded from that build,
+ *   this row can still be present even though nothing writes it anymore, so it is rebuilt by nothing and is
+ *   pure leftover state. The name is the library's default for a plugin ('external_updates-' . slug in its
+ *   UpdateChecker.php), and the library saved it with update_site_option(), so it is removed with
+ *   delete_site_option().
+ *   以前の自社配布版が同梱していたライブラリ plugin-update-checker が残した更新確認の状態
+ *   （wordpress.org 版は同梱しない。独自の更新機構が認められていないため）。その版から入れ替えた
+ *   サイトでは、もう何も書き込まない状態でこの行だけが残りうる。何によっても作り直されない、
+ *   純粋な残骸。名前はライブラリがプラグインに付ける既定の名前（UpdateChecker.php の
+ *   'external_updates-' . スラッグ）で、ライブラリは update_site_option() で保存していたため、
+ *   delete_site_option() で消す。
+ * - `puc_manual_check_errors-etbs-account-guard` (site transient) … the same previous self-distributed
+ *   build's manual update check errors, kept for 60 seconds by the library (Plugin/Ui.php) and possibly still
+ *   present right after the switch. Removed so that nothing of the library is left behind.
+ *   同じく以前の自社配布版が同梱していたライブラリが残した、手動の更新確認のエラー。ライブラリの仕様で
+ *   60秒だけ保持される（Plugin/Ui.php）ため、切り替え直後にはまだ残っている可能性がある。ライブラリの
+ *   ものを何も残さないために消す。
+ * - `puc_cron_check_updates-etbs-account-guard` (site-wide cron event, one occurrence, no arguments) … the
+ *   same previous self-distributed build's plugin-update-checker scheduled this itself
+ *   (Puc/v5p5/Scheduler.php: `$this->cronHook = $this->updateChecker->getUniqueName('cron_check_updates')`,
+ *   which becomes `'puc_' . $baseTag . '-' . $slug`; the slug `'etbs-account-guard'` was passed explicitly
+ *   in the old `inc/update-checker.php`). The library only ever cleared this cron itself on deactivation
+ *   (`register_deactivation_hook()` in Puc/v5p5/Plugin/UpdateChecker.php calling `Scheduler::
+ *   removeUpdaterCron()`); that code is gone from this wordpress.org build, and a site that moved straight
+ *   from the self-distributed build to this one without an intervening deactivate/activate cycle (for
+ *   example, a plain file swap while the plugin stayed active) never ran that hook, so the event would
+ *   otherwise keep firing forever with no code left anywhere that recognizes it. The primary cleanup for a
+ *   site that keeps using this build is acgd_clear_legacy_puc_cron(), hooked to admin_init in inc/func.php:
+ *   it fires the first time such a site's administrator opens wp-admin, well before that site is ever
+ *   uninstalled. Removed here too, with `wp_clear_scheduled_hook()`, as a backstop for the case that function
+ *   cannot reach — a site uninstalled without an admin ever opening wp-admin on this build (for example, one
+ *   deleted right after the file swap) — and, incidentally, the same one-shot cleanup as the two leftovers
+ *   above for a site that is uninstalled normally.
+ *   `puc_cron_check_updates-etbs-account-guard`（サイト全体の cron イベント・1件・引数なし）。同じく
+ *   以前の自社配布版の plugin-update-checker 自身が仕掛けたもの（Puc/v5p5/Scheduler.php の
+ *   `$this->cronHook = $this->updateChecker->getUniqueName('cron_check_updates')` で、これは
+ *   `'puc_' . $baseTag . '-' . $slug` になる。スラッグ `'etbs-account-guard'` は旧 inc/update-checker.php
+ *   で明示的に渡していた）。ライブラリがこの cron を消していたのは無効化のときだけ
+ *   （Puc/v5p5/Plugin/UpdateChecker.php の `register_deactivation_hook()` が `Scheduler::
+ *   removeUpdaterCron()` を呼ぶ形）で、そのコードはこの wordpress.org 版には無い。自社配布版から
+ *   この版へ、無効化・有効化を挟まずに移行したサイト（例：有効なままファイルだけ入れ替えた場合）では
+ *   このフックが一度も走らないため、放っておくとこのイベント名を知るコードがどこにも無いまま、
+ *   永久に空振りし続ける。この版を使い続けるサイトに対する本来の掃除は、inc/func.php の admin_init に
+ *   掛けた acgd_clear_legacy_puc_cron() で、そのサイトの管理者が最初に wp-admin を開いた時点で、
+ *   アンインストールされるよりずっと前に走る。ここでも `wp_clear_scheduled_hook()` で消しているのは、
+ *   その関数が届かない場合（この版で一度も wp-admin を開かないままアンインストールされたサイト。
+ *   例えばファイル入れ替え直後に削除された場合）の保険であり、通常どおりアンインストールされる
+ *   サイトにとっては、上の2つの残骸と同じ一度きりの掃除でもある。
  * - `acgd_access_denial_log` (1.1.0, option) … the denial log (docs/spec.md 5.4), rebuilt from scratch as
  *   denials happen again after reinstalling; nothing here can be reproduced from a past state, but it also
  *   documents nothing the user configured, only what this plugin itself recorded.
@@ -99,8 +133,10 @@
  *   with a short TTL as a backstop (RESUBMIT_TTL / ACGD_Basic_Auth::VERIFY_TTL: 5 minutes; the diagnosis
  *   token: 60 seconds), so any left over from an interrupted request are gone on their own regardless of
  *   uninstalling. This is exactly the temporary state that policy A already covers (3.6); it needs no
- *   explicit action here. 1.0.0 in isolation has no tables or cron events of its own, and 1.1.0 adds neither
- *   of those either (transients and the two options above only, as just described).
+ *   explicit action here. Neither 1.0.0 nor any later version of this plugin's own code has ever scheduled a
+ *   table or a cron event of its own; the only cron event removed above
+ *   (`puc_cron_check_updates-etbs-account-guard`) is not this plugin's, but a leftover of a previous
+ *   self-distributed build's bundled library, as described above.
  *   1.1.0 には、ここでは意図的に消していない transient が複数ある。「再表示用」の transient
  *   （ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' と
  *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'）で、「アクセス制限」タブや
@@ -114,8 +150,9 @@
  *   既に消えており、保険として短い TTL（RESUBMIT_TTL・ACGD_Basic_Auth::VERIFY_TTL は5分、診断トークンは
  *   60秒）を持つため、途中で終わったリクエストの残りがあっても、アンインストールの有無にかかわらず
  *   自然に消える。これはまさに案A（3.6）がすでに扱う一時状態であり、ここでの明示的な対応は不要。
- *   1.0.0 のこのプラグイン自身は、独自のテーブル・cron を持たない。1.1.0 でもそれらは増えない
- *   （増えるのは上記の transient と2つのオプションだけ）。
+ *   1.0.0 以降、このプラグイン自身のコードが独自のテーブルや cron を仕掛けたことは一度も無い。上で
+ *   消している唯一の cron イベント（`puc_cron_check_updates-etbs-account-guard`）は、このプラグイン
+ *   自身のものではなく、上述のとおり以前の自社配布版が同梱していたライブラリの残骸。
  *
  * @package etbs-account-guard
  */
@@ -124,10 +161,15 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-// Temporary state of the bundled plugin-update-checker; see the docblock above.
-// 同梱の plugin-update-checker の一時状態（上の docblock を参照）。
+// Temporary state left behind by a previous self-distributed build's bundled plugin-update-checker;
+// see the docblock above. The cron event is also cleared earlier by acgd_clear_legacy_puc_cron()
+// (inc/func.php, admin_init) on any site that keeps using this build; the call here is a backstop.
+// 以前の自社配布版が同梱していた plugin-update-checker が残した一時状態（上の docblock を参照）。
+// cron イベントは、この版を使い続けるサイトでは acgd_clear_legacy_puc_cron()（inc/func.php・
+// admin_init）がもっと早くに消している。ここでの呼び出しは保険。
 delete_site_option( 'external_updates-etbs-account-guard' );
 delete_site_transient( 'puc_manual_check_errors-etbs-account-guard' );
+wp_clear_scheduled_hook( 'puc_cron_check_updates-etbs-account-guard' );
 
 // Access Restriction's own temporary state (1.1.0); see the docblock above.
 // アクセス制限自身の一時状態（1.1.0。上の docblock を参照）。

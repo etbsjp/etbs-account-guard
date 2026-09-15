@@ -2,6 +2,7 @@
 Contributors:      etbsjp
 Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
+Tested up to:      7.1
 Stable tag:        1.1.1
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
@@ -35,7 +36,7 @@ On the Access Restriction tab of Settings > ETBS Account Guard, you can require 
 * The IP list combines one site-wide list with any addresses added just for one user. Each line is a single IPv4 or IPv6 address or a range in CIDR notation; text after `#` is a note. Only the address the server itself sees for the connection (`REMOTE_ADDR`) is used; headers such as `X-Forwarded-For` are never read, since a visitor can set those themselves.
 * Saving the Access Restriction tab, or a user's own restriction on their user edit screen, is refused (with an explanation) if it would leave no unrestricted administrator (or other user who can manage options), if it would lock out the very access you are saving from, or (for BASIC authentication, see below) if a user who would end up in that mode has not set their own credentials yet.
 * The last 100 denials are listed on the Denial Log tab.
-* If Access Restriction ever malfunctions, it turns itself off and shows a warning on the Access Restriction tab and the dashboard widget, rather than locking anyone out by mistake.
+* If Access Restriction ever malfunctions, it turns itself off and shows a warning on the Access Restriction tab and, on other admin screens, as an admin notice, rather than locking anyone out by mistake.
 
 = Access Restriction (BASIC authentication) =
 
