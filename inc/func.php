@@ -7,12 +7,15 @@
  * class-acgd-access-restriction.php (IP restriction, the shared foundation and BASIC credential storage),
  * class-acgd-basic-auth.php (BASIC authentication itself: matching, the confirmation screen and the receive
  * diagnosis) and class-acgd-user-access.php (the per-user screens). The settings screen is in
- * class-acgd-settings.php. The dashboard widget and the update checker are loaded from the main file.
+ * class-acgd-settings.php. The Access Restriction fault notice (admin_notices) is defined further down in
+ * this file. Neither a dashboard widget nor an update checker is bundled in this wordpress.org build
+ * (issue #13).
  * 「ログイン名の保護」（1.0.0）は class-acgd-login-name.php にある。「アクセス制限」（1.1.0）は
  * class-acgd-access-restriction.php（IP 制限・共通の土台・BASIC 資格情報の保存）、
  * class-acgd-basic-auth.php（BASIC 認証そのもの：照合・確認画面・受信の診断）、class-acgd-user-access.php
- * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。
- * ダッシュボードのウィジェットと更新チェッカーは本体ファイルから読み込む。
+ * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。アクセス制限の故障通知
+ * （admin_notices）はこのファイルの後半で定義している。この wordpress.org 版はダッシュボードの
+ * ウィジェットも更新チェッカーも同梱しない（issue #13）。
  *
  * @package etbs-account-guard
  */
