@@ -1080,25 +1080,31 @@ msgid "Request development"
 msgstr "開発のご依頼"
 
 #. translators: %s: URL of the Access Restriction tab of the settings screen
-#: inc/func.php:296
+#: inc/func.php:325
 #, php-format
 msgid ""
-"Access Restriction is stopped because of an internal problem, and everyone "
-"can sign in without an IP check until this is fixed. Open the <a "
-"href=\"%s\">Access Restriction tab</a> of the settings screen for details."
+"Open the <a href=\"%s\">Access Restriction tab</a> of the settings screen "
+"for details."
 msgstr ""
-"アクセス制限は内部の問題により停止しており、直るまでは誰でもIPの確認なしにサ"
-"インインできます。詳しくは設定画面の<a href=\"%s\">「アクセス制限」タブ</a>を"
-"開いて確認してください。"
+"詳しくは設定画面の<a href=\"%s\">「アクセス制限」タブ</a>を開いて確認してくだ"
+"さい。"
 
-#. translators: 1: PHP constant, ACGD_DISABLE_RESTRICTION; 2: URL of the Access Restriction tab of the settings screen
-#: inc/func.php:313
+#: inc/func.php:341
+msgid "Access Restriction is stopped because of an internal problem."
+msgstr "アクセス制限は内部の問題により停止しています。"
+
+#: inc/func.php:342
+msgid "Everyone can sign in without an IP check until this is fixed."
+msgstr "直るまでは誰でもIPの確認なしにサインインできます。"
+
+#. translators: %s: PHP constant, ACGD_DISABLE_RESTRICTION
+#: inc/func.php:366
 #, php-format
 msgid ""
-"The emergency switch (%1$s in wp-config.php) is turned on, so Access "
-"Restriction is stopped. Login Name Protection is not affected. Open the <a "
-"href=\"%2$s\">Access Restriction tab</a> of the settings screen for details."
-msgstr ""
-"非常用スイッチ (wp-config.phpの%1$s) がオンのため、アクセス制限は停止してい"
-"ます。ログイン名の保護には影響しません。詳しくは設定画面の<a "
-"href=\"%2$s\">「アクセス制限」タブ</a>を開いて確認してください。"
+"The emergency switch (%s in wp-config.php) is turned on, so Access "
+"Restriction is stopped."
+msgstr "非常用スイッチ (wp-config.phpの%s) がオンのため、アクセス制限は停止しています。"
+
+#: inc/func.php:369
+msgid "Login Name Protection is not affected."
+msgstr "ログイン名の保護には影響しません。"

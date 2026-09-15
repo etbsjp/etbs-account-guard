@@ -309,15 +309,41 @@ function acgd_access_restriction_admin_notices() {
 		return;
 	}
 
-	if ( ACGD_Access_Restriction::has_fault() ) {
+	$has_fault       = ACGD_Access_Restriction::has_fault();
+	$switch_disabled = ACGD_Access_Restriction::is_switch_disabled();
+	if ( ! $has_fault && ! $switch_disabled ) {
+		return;
+	}
+
+	// Shared by both notices below: points to the Access Restriction tab for details. Built once here (and
+	// only once at least one notice is due) so the sentence, and the translation call it costs, is not
+	// duplicated or paid for on every admin screen load.
+	// 以下の両方の通知で共通に使う、詳細への案内文。ここで一度だけ（少なくとも一方の通知が出るときだけ）
+	// 作り、翻訳の呼び出しをすべての管理画面表示のたびに払わせない。
+	$open_tab_sentence = sprintf(
+		/* translators: %s: URL of the Access Restriction tab of the settings screen */
+		__( 'Open the <a href="%s">Access Restriction tab</a> of the settings screen for details.', 'etbs-account-guard' ),
+		esc_url( ACGD_Settings::get_page_url( 'access' ) )
+	);
+
+	if ( $has_fault ) {
 		?>
 		<div class="notice notice-error">
 			<p>
 				<?php
-				printf(
-					/* translators: %s: URL of the Access Restriction tab of the settings screen */
-					wp_kses( __( 'Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Open the <a href="%s">Access Restriction tab</a> of the settings screen for details.', 'etbs-account-guard' ), array( 'a' => array( 'href' => true ) ) ),
-					esc_url( ACGD_Settings::get_page_url( 'access' ) )
+				// Each sentence is its own translation (coding-rules.md: one sentence per translation
+				// function), joined by acgd_join_sentences() the same way as elsewhere in this plugin.
+				// 各文をそれぞれ別の翻訳にし（coding-rules.md：翻訳関数には1文ずつ）、このプラグインの
+				// 他の箇所と同じく acgd_join_sentences() でつなぐ。
+				echo wp_kses(
+					acgd_join_sentences(
+						array(
+							esc_html__( 'Access Restriction is stopped because of an internal problem.', 'etbs-account-guard' ),
+							esc_html__( 'Everyone can sign in without an IP check until this is fixed.', 'etbs-account-guard' ),
+							$open_tab_sentence,
+						)
+					),
+					array( 'a' => array( 'href' => true ) )
 				);
 				?>
 			</p>
@@ -325,17 +351,24 @@ function acgd_access_restriction_admin_notices() {
 		<?php
 	}
 
-	if ( ACGD_Access_Restriction::is_switch_disabled() ) {
+	if ( $switch_disabled ) {
 		?>
 		<div class="notice notice-warning">
 			<p>
 				<?php
+				// Same reasoning as the notice above: one sentence per translation, joined together.
+				// 上の通知と同じ考え方：翻訳は1文ずつにし、つなぎ合わせる。
 				echo wp_kses(
-					sprintf(
-						/* translators: 1: PHP constant, ACGD_DISABLE_RESTRICTION; 2: URL of the Access Restriction tab of the settings screen */
-						__( 'The emergency switch (%1$s in wp-config.php) is turned on, so Access Restriction is stopped. Login Name Protection is not affected. Open the <a href="%2$s">Access Restriction tab</a> of the settings screen for details.', 'etbs-account-guard' ),
-						'<code>' . esc_html( 'ACGD_DISABLE_RESTRICTION' ) . '</code>',
-						esc_url( ACGD_Settings::get_page_url( 'access' ) )
+					acgd_join_sentences(
+						array(
+							sprintf(
+								/* translators: %s: PHP constant, ACGD_DISABLE_RESTRICTION */
+								esc_html__( 'The emergency switch (%s in wp-config.php) is turned on, so Access Restriction is stopped.', 'etbs-account-guard' ),
+								'<code>' . esc_html( 'ACGD_DISABLE_RESTRICTION' ) . '</code>'
+							),
+							esc_html__( 'Login Name Protection is not affected.', 'etbs-account-guard' ),
+							$open_tab_sentence,
+						)
 					),
 					array(
 						'a'    => array( 'href' => true ),
