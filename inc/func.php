@@ -260,22 +260,31 @@ add_filter( 'admin_footer_text', 'acgd_admin_footer_text' );
  * Warns users who can manage options, on every admin screen except this plugin's own settings screen, when
  * Access Restriction is currently stopped (docs/spec.md 5.5): a fault of its own, or the emergency switch.
  *
- * Replaces the removed dashboard widget as the place this is surfaced outside of the settings screen (the
- * wordpress.org build does not ship a dashboard widget). Skipped on ACGD_Settings::SCREEN_ID because the
- * Access Restriction tab already prints the same warning (ACGD_Settings::render_access_restriction_notices());
- * showing both would duplicate it. No dismiss button and nothing recorded in user meta: the notice disappears
- * on its own once the underlying state clears, so there is nothing to remember. When both conditions are
- * false, neither current_user_can() short-circuits nor the two state checks below issue any additional query
- * beyond what has_fault() / is_switch_disabled() already do elsewhere in a request.
+ * Replaces the removed dashboard widget as the place this is surfaced outside of the Access Restriction tab
+ * of the settings screen (the wordpress.org build does not ship a dashboard widget). Skipped only when both
+ * ACGD_Settings::SCREEN_ID matches and the Access Restriction tab is the one showing (ACGD_Settings::
+ * get_current_tab() === 'access'), because that tab already prints the same warning (ACGD_Settings::
+ * render_access_restriction_notices()); showing both would duplicate it. Every other tab of this plugin's
+ * settings screen — including its default, Login Name Protection — prints nothing of its own, so this notice
+ * still needs to fire there (UX review, high priority: matching on the screen ID alone suppressed it across
+ * the whole settings screen). No dismiss button and nothing recorded in user meta: the notice disappears on
+ * its own once the underlying state clears, so there is nothing to remember. When both conditions are false,
+ * neither current_user_can() short-circuits nor the two state checks below issue any additional query beyond
+ * what has_fault() / is_switch_disabled() already do elsewhere in a request.
  * アクセス制限が止まっているとき（docs/spec.md 5.5：自分自身の故障、または非常用スイッチ）に、
- * manage_options を持つユーザーへ、本プラグインの設定画面以外の管理画面で警告を出す。
+ * manage_options を持つユーザーへ、本プラグインの設定画面の「アクセス制限」タブ以外の管理画面で
+ * 警告を出す。
  *
- * 削除したダッシュボードのウィジェットに代わる、設定画面の外での表示場所になる（wordpress.org 版は
- * ダッシュボードのウィジェットを持たない）。ACGD_Settings::SCREEN_ID では出さない。「アクセス制限」
- * タブに同じ警告が既に出るため（ACGD_Settings::render_access_restriction_notices()）、二重表示になる。
- * 閉じるボタンは無く、ユーザーメタにも何も記録しない。状態が直れば自動で消えるので、記憶させる必要が
- * 無い。両方の条件が偽のときは、current_user_can() 以降の分岐でも has_fault() / is_switch_disabled()
- * が他の場所で既に行っている以上の問い合わせは発生しない。
+ * 削除したダッシュボードのウィジェットに代わる、設定画面の「アクセス制限」タブ以外での表示場所に
+ * なる（wordpress.org 版はダッシュボードのウィジェットを持たない）。ACGD_Settings::SCREEN_ID と
+ * 一致し、かつ「アクセス制限」タブを開いているとき（ACGD_Settings::get_current_tab() === 'access'）
+ * だけ出さない。そのタブには ACGD_Settings::render_access_restriction_notices() が同じ警告を既に
+ * 出しており、二重表示になるため。設定画面の既定タブ「ログイン名の保護」を含む他のタブには何も
+ * 出ないので、この通知はそこでも出す必要がある（植草レビュー・優先度高：画面IDだけで判定すると
+ * 設定画面全体で抑制されてしまっていた）。閉じるボタンは無く、ユーザーメタにも何も記録しない。
+ * 状態が直れば自動で消えるので、記憶させる必要が無い。両方の条件が偽のときは、current_user_can()
+ * 以降の分岐でも has_fault() / is_switch_disabled() が他の場所で既に行っている以上の問い合わせは
+ * 発生しない。
  *
  * @return void
  */
@@ -284,8 +293,19 @@ function acgd_access_restriction_admin_notices() {
 		return;
 	}
 
+	// Skipped only on the Access Restriction tab itself: that is the one tab where
+	// ACGD_Settings::render_access_restriction_notices() already prints the same warning. The settings
+	// screen's other tabs (its default is Login Name Protection; see ACGD_Settings::get_current_tab())
+	// show nothing of their own, so this notice must still fire there — matching on the screen ID alone
+	// suppressed it across the whole settings screen, leaving a stopped Access Restriction unreported
+	// while any other tab was open (UX review, high priority).
+	// 「アクセス制限」タブそのものにいるときだけ出さない。ACGD_Settings::
+	// render_access_restriction_notices() が同じ警告を出すのはそのタブだけで、設定画面の既定タブ
+	// （「ログイン名の保護」。ACGD_Settings::get_current_tab() 参照）を含む他のタブには何も出ない。
+	// 画面IDだけで判定すると設定画面全体で抑制され、「アクセス制限」以外のタブを開いている間は
+	// 停止中でも気付けなくなっていた（植草レビュー・優先度高）。
 	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-	if ( $screen && ACGD_Settings::SCREEN_ID === $screen->id ) {
+	if ( $screen && ACGD_Settings::SCREEN_ID === $screen->id && 'access' === ACGD_Settings::get_current_tab() ) {
 		return;
 	}
 
