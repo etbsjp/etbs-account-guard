@@ -98,7 +98,7 @@ Deleting the plugin removes the denial log of Access Restriction, the saved resu
 
 = 1.2.0 =
 * [ Spec Change ] Removed the bundled update checker; updates are now delivered through WordPress.org.
-* [ Spec Change ] Removed the dashboard widget; the list of users whose display name matches their login name remains on the settings screen, and a stopped Access Restriction (internal problem or emergency switch) is now shown as an admin notice.
+* [ Spec Change ] Removed the dashboard widget; the list of users whose display name or nickname is their login name stays on the settings screen, and a stopped Access Restriction is now shown as an admin notice.
 * [ Other ] Removed the scheduled update check left behind by an earlier version distributed outside WordPress.org.
 
 = 1.1.1 =
