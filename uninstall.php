@@ -34,22 +34,25 @@
  *   利用者が設定した値。
  *
  * Deleted / 消すもの（一時状態）:
- * - `external_updates-etbs-account-guard` (site option) … update check state of the bundled
- *   plugin-update-checker (when it last checked, and the update it found). It is rebuilt by the next check,
- *   so it is temporary state. The name is the library's default for a plugin ('external_updates-' . slug in
- *   Puc/v5p5/UpdateChecker.php, with the slug given in inc/update-checker.php), and the library saves it
- *   with update_site_option() (Puc/v5p5/StateStore.php), so it is removed with delete_site_option().
- *   同梱の plugin-update-checker の更新確認の状態（最後に確認した日時と、見つけた更新）。次の確認で作り直されるので
- *   一時状態に当たる。名前はライブラリがプラグインに付ける既定の名前（Puc/v5p5/UpdateChecker.php の
- *   'external_updates-' . スラッグ。スラッグは inc/update-checker.php で渡している）で、ライブラリは
- *   update_site_option() で保存する（Puc/v5p5/StateStore.php）ので、delete_site_option() で消す。
- * - `puc_manual_check_errors-etbs-account-guard` (site transient) … errors of a manual update check, kept for
- *   60 seconds (Puc/v5p5/Plugin/Ui.php). Removed so that nothing of the library is left behind.
- *   手動の更新確認で出たエラー。60秒だけ保持される（Puc/v5p5/Plugin/Ui.php）。ライブラリのものを何も残さないために消す。
- * - The cron event of plugin-update-checker is removed by the library itself on deactivation
- *   (register_deactivation_hook()), and uninstalling always goes through deactivation.
- *   plugin-update-checker の cron は無効化の時点でライブラリ自身が消し（register_deactivation_hook()）、
- *   削除は必ず無効化を経由する。
+ * - `external_updates-etbs-account-guard` (site option) … update check state left behind by
+ *   plugin-update-checker, a library that a previous self-distributed build of this plugin bundled (the
+ *   wordpress.org build does not; self-updaters are not allowed there). On a site upgraded from that build,
+ *   this row can still be present even though nothing writes it anymore, so it is rebuilt by nothing and is
+ *   pure leftover state. The name is the library's default for a plugin ('external_updates-' . slug in its
+ *   UpdateChecker.php), and the library saved it with update_site_option(), so it is removed with
+ *   delete_site_option().
+ *   以前の自社配布版が同梱していたライブラリ plugin-update-checker が残した更新確認の状態
+ *   （wordpress.org 版は同梱しない。独自の更新機構が認められていないため）。その版から入れ替えた
+ *   サイトでは、もう何も書き込まない状態でこの行だけが残りうる。何によっても作り直されない、
+ *   純粋な残骸。名前はライブラリがプラグインに付ける既定の名前（UpdateChecker.php の
+ *   'external_updates-' . スラッグ）で、ライブラリは update_site_option() で保存していたため、
+ *   delete_site_option() で消す。
+ * - `puc_manual_check_errors-etbs-account-guard` (site transient) … the same previous self-distributed
+ *   build's manual update check errors, kept for 60 seconds by the library (Plugin/Ui.php) and possibly still
+ *   present right after the switch. Removed so that nothing of the library is left behind.
+ *   同じく以前の自社配布版が同梱していたライブラリが残した、手動の更新確認のエラー。ライブラリの仕様で
+ *   60秒だけ保持される（Plugin/Ui.php）ため、切り替え直後にはまだ残っている可能性がある。ライブラリの
+ *   ものを何も残さないために消す。
  * - `acgd_access_denial_log` (1.1.0, option) … the denial log (docs/spec.md 5.4), rebuilt from scratch as
  *   denials happen again after reinstalling; nothing here can be reproduced from a past state, but it also
  *   documents nothing the user configured, only what this plugin itself recorded.
@@ -124,8 +127,9 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-// Temporary state of the bundled plugin-update-checker; see the docblock above.
-// 同梱の plugin-update-checker の一時状態（上の docblock を参照）。
+// Temporary state left behind by a previous self-distributed build's bundled plugin-update-checker;
+// see the docblock above.
+// 以前の自社配布版が同梱していた plugin-update-checker が残した一時状態（上の docblock を参照）。
 delete_site_option( 'external_updates-etbs-account-guard' );
 delete_site_transient( 'puc_manual_check_errors-etbs-account-guard' );
 

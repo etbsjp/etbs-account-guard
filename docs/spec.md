@@ -33,8 +33,8 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 | 関数・オプション・フック・ユーザーメタのプレフィックス | `acgd_` |
 | 定数・クラスのプレフィックス | `ACGD_`（自プラグイン判定用に `ACGD_PLUGIN_FILE` を持つ） |
 | 設定画面の画面ID | `settings_page_etbs-account-guard`（`add_options_page`。★ 画面IDは推測せず実測する） |
-| リポジトリ / ブランチ | `etbsjp/etbs-account-guard` の **`dist` 一本** |
-| 更新配信 | 同梱の plugin-update-checker（v5p5）が `dist` を見る |
+| リポジトリ / ブランチ | `etbsjp/etbs-account-guard`。**既定ブランチ・作業ブランチ・PR 先は `wporg`。** `dist` は既存の自社配布サイト向けの凍結ブランチで、触らない（`CLAUDE.md` 参照） |
+| 更新配信 | wordpress.org の公式ディレクトリへ提出する版。更新チェッカーは同梱しない（wordpress.org は独自の更新機構を認めない）。配信は公式ディレクトリの SVN へ commit した瞬間に起き、その commit は人が行う |
 
 ★ **フォルダ名を最初から将来の wordpress.org のスラッグと同じにしておく。** 自社配布の個体は、フォルダ名で
 api.wordpress.org に更新を照会しうる。フォルダ名が違うと、wp.org へ移るときに「他人が同名を取ると、その人の
@@ -84,9 +84,13 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 
 | 面 | フック | 限定条件 |
 |---|---|---|
-| ダッシュボード | `wp_dashboard_setup` → `wp_add_dashboard_widget` | `manage_options`。**リンクだけの箱にしない**（概要・使い方・注意事項・サポート案内・設定画面へのボタン）。★ **`inc/` の独立したファイルに置く**（wp.org 版の `wporg` ブランチで外せるように） |
 | プラグイン一覧の行 | `plugin_row_meta`（**4引数**で受ける） | `plugin_basename( ACGD_PLUGIN_FILE ) === $file` の行だけ |
 | 設定画面のフッター | `admin_footer_text` | `settings_page_etbs-account-guard` の画面だけ（限定しないと全管理画面のフッターを乗っ取る） |
+
+★ 当初は「ダッシュボード」（`wp_dashboard_setup` → `wp_add_dashboard_widget`）も3面目として持っていたが、
+wordpress.org へ提出できる形にする過程（issue #13）でダッシュボードのウィジェット自体を外したため、
+支援導線は上の2面になった。ウィジェットが持っていた「アクセス制限が止まっている」警告は、
+`admin_notices` の通知（5.5 参照）に移した。
 
 ### 3.6 アンインストール（案A）
 
@@ -94,7 +98,7 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 |---|---|---|
 | 消さない | **消さない** | **消す** |
 
-- 1.0.0：**残す**＝ログイン名の保護の設定。**消す**＝同梱の plugin-update-checker（v5p5）の更新確認の状態（サイトオプション `external_updates-etbs-account-guard`。ライブラリがプラグインに付ける既定の名前で、`update_site_option()` で保存される）と、手動の更新確認のエラー（サイトの一時データ `puc_manual_check_errors-etbs-account-guard`。60秒）。どちらも次の確認で作り直される一時状態に当たる。このプラグイン自身はテーブル・cron・一時状態を持たない（PUC の cron は無効化の時点でライブラリが消す）。
+- 1.0.0：**残す**＝ログイン名の保護の設定。**消す**＝以前の自社配布版が同梱していた plugin-update-checker（v5p5）が残した、更新確認の状態（サイトオプション `external_updates-etbs-account-guard`。ライブラリがプラグインに付ける既定の名前で、`update_site_option()` で保存されていた）と、手動の更新確認のエラー（サイトの一時データ `puc_manual_check_errors-etbs-account-guard`。60秒）。★ wordpress.org 版（`wporg`）は plugin-update-checker を同梱しない（issue #13）ため、これらのキーはもう何によっても書き込まれないが、その版から入れ替えたサイトに残りうる残骸として、引き続き消す。このプラグイン自身はテーブル・cron・一時状態を持たない。
 - 1.1.0：**残す**＝アクセス制限の設定、ユーザーメタ（モード・追加の IP・BASIC 認証の資格情報のハッシュ）。**消す**＝拒否の記録、受信診断の結果。
 - 「消さない」ものは、`uninstall.php` の docblock に**なぜ消さないか**を書く（空にしない）。
 - ★★★ **検証は管理画面の「削除」でやらない**（シンボリックリンク越しにこのリポジトリの中身が全部消える）。
@@ -157,7 +161,9 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
   - 既知の限界：ログインの応答時間の差。本体はアカウントがあるときだけ `wp_check_password()` を呼ぶので、アカウントの有無で応答時間に差が出る。空の照合を足すと、SiteGuard の画像認証の誤答（照合しない）と逆向きの差ができるため単純ではなく、**1.0.0 では塞がない**（README・readme.txt の既知の限界に、パスワード再発行の時間差と並べて書く）。
 - **g**：`is_author()` かつ**ログインしていない**とき 404（投稿者のフィード `/author/<名前>/feed/`・`?author_name=` を含む）。ログイン中は従来どおり表示する（設定画面の説明に「結果はブラウザーのプライベートウィンドウで確かめる」旨と、オンにする前にテーマが投稿者ページへリンクしているかを確かめる手順を書く）。
 - **h**：`display_name === user_login` または `nickname === user_login` のユーザーを、設定画面のログイン名の保護タブに一覧する（見出しの id は `acgd-public-names`）。列はログイン名 (ユーザー名)・表示名・ニックネームで、ログイン名と同じ値には「(ログイン名と同じ)」を文字で添える。各行のログイン名の下に、ユーザー一覧と同じ形の「編集」リンク（ユーザー編集画面の `#nickname`）を置く。
-  ダッシュボードのウィジェットの先頭に、該当する人数（件数だけの問い合わせ）と一覧へのリンクを出す（0人なら出さない）。
+  ★ 当初はダッシュボードのウィジェットの先頭にも該当する人数と一覧へのリンクを出していたが、issue #13 で
+  ウィジェット自体を外したのに合わせてこの表示も外した（設定画面のタブに既にある一覧と重複するうえ、
+  常時出る宣伝的な通知になるのを避けるため）。この人数は、上記の設定画面のタブでのみ確認できる。
 
 ### 受け入れ条件（1.0.0）
 
@@ -270,7 +276,10 @@ UTM は `?utm_source=etbs-account-guard&utm_medium=plugin`、`target="_blank" re
 - ★ **例外：判定そのものを行わない経路の例外は記録しない。** `ACGD_Basic_Auth::maybe_strip_confirmed_header()`（`determine_current_user` の優先度15）がそれで、ここは「確認済み・保存前の BASIC 資格情報を `$_SERVER` から剥がす」だけの経路であり、誰を通すかの判定には一切関与しない。上の表の「止めて通す＋警告」は記録（`record_fault()`）を伴い、それは **`is_disabled()` = `is_switch_disabled() || has_fault()`** という機能停止スイッチを引くことを意味する。**この経路の失敗の代償**は、確認から保存までの窓の間、その管理者のプロフィール画面に本体の赤い通知（「サイトでは Basic 認証が使われているようですが……」）が緑の隣に並ぶことに留まる。**REST の 401 はこの経路の失敗では起きない**：401 になるのは cookie でユーザーを特定できていないリクエストだけ（5.3 ★★★。本体の `wp_validate_application_password()` は `! empty( $input_user )` で先に戻る）で、そういうリクエストではこのコールバックは `$admin_id <= 0` で何もせず戻るため、例外があってもなくても結果は同じ。**スイッチを引く代償のほうが大きい**ので引かない。
   - この経路では **`WP_DEBUG` が真のときだけ `error_log()` に記録し、機能は止めない**（省略ではなく決定）。記録するのは例外のクラス名とメッセージだけで、**こちらから資格情報（ID・パスワード・ヘッダーの値）を載せることはしない**。★ 記録するメッセージの文面自体は例外を投げた側（本体・PHP）が作るものであり、このコード自身が作るものではないため、その文面に何が含まれるかまでは保証しない。何も残さないと、将来の `TypeError` やオブジェクトキャッシュの障害で 5.3 ★★★ の保護が黙って効かなくなったときに誰も気付けないため。
 - **非常用スイッチ**：`wp-config.php` に `define( 'ACGD_DISABLE_RESTRICTION', true );` を書くと、**アクセス制限だけ**が止まる（ログイン名の保護はそのまま）。
-  **README・設定画面のアクセス制限タブ・ダッシュボードの注意事項**の3か所に書く。ログイン画面には出さない。
+  使い方そのものは **README・readme.txt・設定画面のアクセス制限タブ**の3か所に書く。
+  ★ 当初はここにダッシュボードのウィジェットの注意事項も含めていたが、issue #13 でウィジェットを外したため、
+  スイッチが実際に有効なときは代わりに `admin_notices` の警告（notice-warning。5.5・`acgd_access_restriction_admin_notices()`
+  参照）が、設定画面以外の管理画面で状態を知らせ、アクセス制限タブへリンクする。ログイン画面には出さない。
 - メールで復旧リンクを送る仕組みは作らない（新しい入口を作らない）。
 
 ### 5.6 画面
@@ -320,5 +329,6 @@ ID とパスワードの両方が入力されていればモードに関わら�
   ★ worktree で作業するときは、リンクの向き先を確認してから検証する（本体クローンを指したままだと、古いコードを検証することになる）。終わったら戻す。
 - ブラウザを使わない検証：`wp-load.php` を CLI で読み、フィルタ・関数を直接叩く。Local の `php.ini` を `-c` で渡す（渡さないと DB 接続エラーになり、サイトが止まっているように見える）。
 - HTTP の実測は `curl`。**HTTP のステータスだけで合否を決めない**（本文・`Location`・JSON の中身で判定する）。
-- 配布物の検証：`git archive --format=tar HEAD | tar -t | sort` を取り、追跡している開発用ファイル（`CLAUDE.md` / `docs/` / `.github/` / `composer.*` / `.phpcs.xml.dist`）が入っておらず、
-  `languages/*.mo` と `inc/plugin-update-checker/` 一式（`vendor/Parsedown*.php` / `vendor/PucReadmeParser.php` を含む）が入っていることを確かめる。
+- 配布物の検証：`git archive --format=tar HEAD | tar -t | sort` を取り、追跡している開発用ファイル（`CLAUDE.md` / `docs/` / `.github/` / `composer.*` / `.phpcs.xml.dist`）と
+  `inc/plugin-update-checker/` 一式・`inc/update-checker.php` ・`inc/dashboard-widget.php`（issue #13 で外した。wordpress.org は独自の更新機構を認めず、審査で問われうる）が入っておらず、
+  `languages/*.mo` が入っていることを確かめる。

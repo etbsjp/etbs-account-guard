@@ -2,13 +2,16 @@ name: CI
 
 # PR に対して無条件に実行する（run-ci 等のラベル条件は付けない）。
 # ★ dist への直 push でも構文チェックだけは走らせる。
-#   dist は PUC の配信元で、版数上げは人が直接 push する運用のため、
+#   dist は既存の自社配布サイトへの配信元（版数上げは人が直接 push する運用）のため、
 #   PR を通らない変更がそのまま利用者へ配られる経路が残っていた。
+# ★ wporg（wordpress.org 公式ディレクトリ提出用の既定ブランチ）への直 push でも同じ理由で走らせる
+#   （issue #13。版数上げの push が公式ディレクトリへの SVN commit の前段になるため）。
 on:
   pull_request:
   push:
     branches:
       - dist
+      - wporg
 
 # 既定を最小権限にする。検査しかしないので読み取りだけで足りる。
 permissions:

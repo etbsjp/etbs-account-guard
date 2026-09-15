@@ -248,3 +248,81 @@ function acgd_admin_footer_text( $text ) {
 	return acgd_get_support_sentences();
 }
 add_filter( 'admin_footer_text', 'acgd_admin_footer_text' );
+
+/*-------------------------------------------*/
+/* Access Restriction fault notice / アクセス制限の故障通知
+/*-------------------------------------------*/
+
+/**
+ * Warns users who can manage options, on every admin screen except this plugin's own settings screen, when
+ * Access Restriction is currently stopped (docs/spec.md 5.5): a fault of its own, or the emergency switch.
+ *
+ * Replaces the removed dashboard widget as the place this is surfaced outside of the settings screen (the
+ * wordpress.org build does not ship a dashboard widget). Skipped on ACGD_Settings::SCREEN_ID because the
+ * Access Restriction tab already prints the same warning (ACGD_Settings::render_access_restriction_notices());
+ * showing both would duplicate it. No dismiss button and nothing recorded in user meta: the notice disappears
+ * on its own once the underlying state clears, so there is nothing to remember. When both conditions are
+ * false, neither current_user_can() short-circuits nor the two state checks below issue any additional query
+ * beyond what has_fault() / is_switch_disabled() already do elsewhere in a request.
+ * アクセス制限が止まっているとき（docs/spec.md 5.5：自分自身の故障、または非常用スイッチ）に、
+ * manage_options を持つユーザーへ、本プラグインの設定画面以外の管理画面で警告を出す。
+ *
+ * 削除したダッシュボードのウィジェットに代わる、設定画面の外での表示場所になる（wordpress.org 版は
+ * ダッシュボードのウィジェットを持たない）。ACGD_Settings::SCREEN_ID では出さない。「アクセス制限」
+ * タブに同じ警告が既に出るため（ACGD_Settings::render_access_restriction_notices()）、二重表示になる。
+ * 閉じるボタンは無く、ユーザーメタにも何も記録しない。状態が直れば自動で消えるので、記憶させる必要が
+ * 無い。両方の条件が偽のときは、current_user_can() 以降の分岐でも has_fault() / is_switch_disabled()
+ * が他の場所で既に行っている以上の問い合わせは発生しない。
+ *
+ * @return void
+ */
+function acgd_access_restriction_admin_notices() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+	if ( $screen && ACGD_Settings::SCREEN_ID === $screen->id ) {
+		return;
+	}
+
+	if ( ACGD_Access_Restriction::has_fault() ) {
+		?>
+		<div class="notice notice-error">
+			<p>
+				<?php
+				printf(
+					/* translators: %s: URL of the Access Restriction tab of the settings screen */
+					wp_kses( __( 'Access Restriction is stopped because of an internal problem, and everyone can sign in without an IP check until this is fixed. Open the <a href="%s">Access Restriction tab</a> of the settings screen for details.', 'etbs-account-guard' ), array( 'a' => array( 'href' => true ) ) ),
+					esc_url( ACGD_Settings::get_page_url( 'access' ) )
+				);
+				?>
+			</p>
+		</div>
+		<?php
+	}
+
+	if ( ACGD_Access_Restriction::is_switch_disabled() ) {
+		?>
+		<div class="notice notice-warning">
+			<p>
+				<?php
+				echo wp_kses(
+					sprintf(
+						/* translators: 1: PHP constant, ACGD_DISABLE_RESTRICTION; 2: URL of the Access Restriction tab of the settings screen */
+						__( 'The emergency switch (%1$s in wp-config.php) is turned on, so Access Restriction is stopped. Login Name Protection is not affected. Open the <a href="%2$s">Access Restriction tab</a> of the settings screen for details.', 'etbs-account-guard' ),
+						'<code>' . esc_html( 'ACGD_DISABLE_RESTRICTION' ) . '</code>',
+						esc_url( ACGD_Settings::get_page_url( 'access' ) )
+					),
+					array(
+						'a'    => array( 'href' => true ),
+						'code' => array(),
+					)
+				);
+				?>
+			</p>
+		</div>
+		<?php
+	}
+}
+add_action( 'admin_notices', 'acgd_access_restriction_admin_notices' );
