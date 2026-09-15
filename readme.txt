@@ -98,8 +98,8 @@ Deleting the plugin removes the denial log of Access Restriction, the saved resu
 
 = 1.2.0 =
 * [ Spec Change ] Removed the bundled update checker; updates are now delivered through WordPress.org.
-* [ Spec Change ] Replaced the dashboard widget with an admin notice that appears only while Access Restriction is stopped by an internal problem or by the emergency switch.
-* [ Other ] Cleared the update check data and the scheduled update check left behind by an earlier version distributed outside WordPress.org.
+* [ Spec Change ] Removed the dashboard widget; the list of users whose display name matches their login name remains on the settings screen, and a stopped Access Restriction (internal problem or emergency switch) is now shown as an admin notice.
+* [ Other ] Removed the scheduled update check left behind by an earlier version distributed outside WordPress.org.
 
 = 1.1.1 =
 * [ Bug Fix ] Fixed the "Verify" button for BASIC authentication credentials requiring the mode to already be switched to "BASIC authentication" before it would run, so an admin could not check new credentials while still on "No restriction" or "IP restriction".
