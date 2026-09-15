@@ -7,15 +7,16 @@
  * class-acgd-access-restriction.php (IP restriction, the shared foundation and BASIC credential storage),
  * class-acgd-basic-auth.php (BASIC authentication itself: matching, the confirmation screen and the receive
  * diagnosis) and class-acgd-user-access.php (the per-user screens). The settings screen is in
- * class-acgd-settings.php. The Access Restriction fault notice (admin_notices) is defined further down in
- * this file. Neither a dashboard widget nor an update checker is bundled in this wordpress.org build
- * (issue #13).
+ * class-acgd-settings.php. The Access Restriction fault notice (admin_notices) and the one-time cleanup of
+ * a previous self-distributed build's leftover cron event (admin_init) are defined further down in this
+ * file. Neither a dashboard widget nor an update checker is bundled in this wordpress.org build (issue #13).
  * 「ログイン名の保護」（1.0.0）は class-acgd-login-name.php にある。「アクセス制限」（1.1.0）は
  * class-acgd-access-restriction.php（IP 制限・共通の土台・BASIC 資格情報の保存）、
  * class-acgd-basic-auth.php（BASIC 認証そのもの：照合・確認画面・受信の診断）、class-acgd-user-access.php
  * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。アクセス制限の故障通知
- * （admin_notices）はこのファイルの後半で定義している。この wordpress.org 版はダッシュボードの
- * ウィジェットも更新チェッカーも同梱しない（issue #13）。
+ * （admin_notices）と、以前の自社配布版が残した cron イベントの一度きりの掃除（admin_init）は
+ * このファイルの後半で定義している。この wordpress.org 版はダッシュボードのウィジェットも
+ * 更新チェッカーも同梱しない（issue #13）。
  *
  * @package etbs-account-guard
  */
@@ -74,6 +75,48 @@ ACGD_Access_Restriction::init();
 ACGD_Basic_Auth::init();
 ACGD_User_Access::init();
 ACGD_Settings::init();
+
+/*-------------------------------------------*/
+/* Legacy plugin-update-checker cron cleanup / 旧版の plugin-update-checker が残した cron の掃除
+/*-------------------------------------------*/
+
+/**
+ * Clears the cron event a previous self-distributed build's bundled plugin-update-checker scheduled, on
+ * sites that moved straight to this wordpress.org build without an intervening deactivate/activate cycle.
+ *
+ * That library only ever cleared its own cron event (puc_cron_check_updates-etbs-account-guard) on
+ * deactivation (register_deactivation_hook()); this build carries none of that code, so a site that swapped
+ * the plugin files in place while it stayed active never runs that hook, and the event would otherwise fire
+ * forever with nothing left that recognizes it. uninstall.php already removes the same event as a backstop
+ * (docs/spec.md 3.6), but that backstop only runs if the site is ever uninstalled, which a site that keeps
+ * using this plugin never does. Hooked to admin_init so it runs once an admin using this build actually
+ * opens wp-admin, rather than on every front-end request. wp_next_scheduled() only reads the already
+ * autoloaded 'cron' option, so this costs no extra query, and is a no-op once the event is gone — whether
+ * because this function already cleared it or because it was never scheduled in the first place, on a site
+ * installed straight from wordpress.org — so calling it on every admin_init is safe and idempotent.
+ *
+ * 以前の自社配布版が同梱していた plugin-update-checker が仕掛けた cron イベント
+ * （puc_cron_check_updates-etbs-account-guard）を、無効化・有効化を挟まずにこの wordpress.org 版へ
+ * 移行したサイトで消す。
+ *
+ * このライブラリは自分の cron イベントを無効化のときにしか消さなかった（register_deactivation_hook()）。
+ * この版にはそのコードが無いため、有効なままファイルだけ入れ替えたサイトではそのフックが一度も走らず、
+ * 放っておくとこのイベントを知るコードがどこにも無いまま永久に空振りし続ける。uninstall.php にも同じ
+ * イベントを消す保険を置いているが（docs/spec.md 3.6）、それはアンインストールされたときにしか働かず、
+ * この版を使い続けるサイトでは永久に走らない。フロント側の毎リクエストではなく、この版を使っている
+ * 管理者が実際に wp-admin を開いたときに一度だけ走るよう admin_init に掛ける。wp_next_scheduled() は
+ * 既に autoload 済みの 'cron' オプションを読むだけなので、追加のクエリは発生しない。イベントが既に
+ * 無い状態（このプラグイン自身がすでに消した後、または wordpress.org から直接インストールしたサイトで
+ * もとから存在しない）では何もしないため、毎回の admin_init で呼んでも安全（冪等）。
+ *
+ * @return void
+ */
+function acgd_clear_legacy_puc_cron() {
+	if ( wp_next_scheduled( 'puc_cron_check_updates-etbs-account-guard' ) ) {
+		wp_clear_scheduled_hook( 'puc_cron_check_updates-etbs-account-guard' );
+	}
+}
+add_action( 'admin_init', 'acgd_clear_legacy_puc_cron' );
 
 /*-------------------------------------------*/
 /* Support links / 支援・依頼リンク

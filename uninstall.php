@@ -62,8 +62,13 @@
  *   removeUpdaterCron()`); that code is gone from this wordpress.org build, and a site that moved straight
  *   from the self-distributed build to this one without an intervening deactivate/activate cycle (for
  *   example, a plain file swap while the plugin stayed active) never ran that hook, so the event would
- *   otherwise keep firing forever with no code left anywhere that recognizes it. Removed here with
- *   `wp_clear_scheduled_hook()`, the same one-shot cleanup as the two leftovers above.
+ *   otherwise keep firing forever with no code left anywhere that recognizes it. The primary cleanup for a
+ *   site that keeps using this build is acgd_clear_legacy_puc_cron(), hooked to admin_init in inc/func.php:
+ *   it fires the first time such a site's administrator opens wp-admin, well before that site is ever
+ *   uninstalled. Removed here too, with `wp_clear_scheduled_hook()`, as a backstop for the case that function
+ *   cannot reach — a site uninstalled without an admin ever opening wp-admin on this build (for example, one
+ *   deleted right after the file swap) — and, incidentally, the same one-shot cleanup as the two leftovers
+ *   above for a site that is uninstalled normally.
  *   `puc_cron_check_updates-etbs-account-guard`（サイト全体の cron イベント・1件・引数なし）。同じく
  *   以前の自社配布版の plugin-update-checker 自身が仕掛けたもの（Puc/v5p5/Scheduler.php の
  *   `$this->cronHook = $this->updateChecker->getUniqueName('cron_check_updates')` で、これは
@@ -73,7 +78,12 @@
  *   removeUpdaterCron()` を呼ぶ形）で、そのコードはこの wordpress.org 版には無い。自社配布版から
  *   この版へ、無効化・有効化を挟まずに移行したサイト（例：有効なままファイルだけ入れ替えた場合）では
  *   このフックが一度も走らないため、放っておくとこのイベント名を知るコードがどこにも無いまま、
- *   永久に空振りし続ける。上の2つの残骸と同じ、一度きりの掃除として `wp_clear_scheduled_hook()` で消す。
+ *   永久に空振りし続ける。この版を使い続けるサイトに対する本来の掃除は、inc/func.php の admin_init に
+ *   掛けた acgd_clear_legacy_puc_cron() で、そのサイトの管理者が最初に wp-admin を開いた時点で、
+ *   アンインストールされるよりずっと前に走る。ここでも `wp_clear_scheduled_hook()` で消しているのは、
+ *   その関数が届かない場合（この版で一度も wp-admin を開かないままアンインストールされたサイト。
+ *   例えばファイル入れ替え直後に削除された場合）の保険であり、通常どおりアンインストールされる
+ *   サイトにとっては、上の2つの残骸と同じ一度きりの掃除でもある。
  * - `acgd_access_denial_log` (1.1.0, option) … the denial log (docs/spec.md 5.4), rebuilt from scratch as
  *   denials happen again after reinstalling; nothing here can be reproduced from a past state, but it also
  *   documents nothing the user configured, only what this plugin itself recorded.
@@ -152,8 +162,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 // Temporary state left behind by a previous self-distributed build's bundled plugin-update-checker;
-// see the docblock above.
+// see the docblock above. The cron event is also cleared earlier by acgd_clear_legacy_puc_cron()
+// (inc/func.php, admin_init) on any site that keeps using this build; the call here is a backstop.
 // 以前の自社配布版が同梱していた plugin-update-checker が残した一時状態（上の docblock を参照）。
+// cron イベントは、この版を使い続けるサイトでは acgd_clear_legacy_puc_cron()（inc/func.php・
+// admin_init）がもっと早くに消している。ここでの呼び出しは保険。
 delete_site_option( 'external_updates-etbs-account-guard' );
 delete_site_transient( 'puc_manual_check_errors-etbs-account-guard' );
 wp_clear_scheduled_hook( 'puc_cron_check_updates-etbs-account-guard' );
