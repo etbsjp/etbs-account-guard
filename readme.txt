@@ -84,15 +84,15 @@ No. Each item returns to the behavior of WordPress itself when it is turned off.
 
 = What is removed when I delete the plugin? =
 
-The update check state and the scheduled update check left behind by an earlier self-distributed build of this plugin (if any), the denial log of Access Restriction, and the saved result of the BASIC authentication receive diagnosis (rebuilt the next time it is run). All settings, including the per-role and per-user Access Restriction modes, IP lists, and BASIC authentication IDs and password hashes, are kept so that they come back if you install the plugin again.
+Deleting the plugin removes the denial log of Access Restriction, the saved result of the BASIC authentication receive diagnosis (rebuilt the next time it is run), a few internal records and cached counts, and, if present, the update check data left behind by an earlier version distributed outside WordPress.org. All settings, including the per-role and per-user Access Restriction modes, IP lists, and BASIC authentication IDs and password hashes, are kept so that they come back if you install the plugin again.
 
 == Screenshots ==
 
 1. The Login Name Protection tab of Settings > ETBS Account Guard, where each place that can reveal login names (REST API, oEmbed, sitemap, class names, author ID links, login errors, author pages) can be turned on or off.
 2. The list of users whose display name or nickname is the same as their login name, with a link to each user's profile.
-3. The Access Restriction tab, where each role can be restricted to allowed IP addresses or asked for a second ID and password (BASIC authentication).
-4. The Access Restriction section of the user edit screen, where a user can follow the role setting or get their own mode and extra IP addresses.
-5. The Denial Log tab, listing blocked sign-ins and requests with the date and time, user, IP address and where it happened.
+3. The Access Restriction tab, where each role other than administrator can be restricted to allowed IP addresses or asked for a second ID and password (BASIC authentication).
+4. The Access Restriction section of the user edit screen, where an administrator can set a user to follow the role setting or give them their own mode, extra IP addresses, and a BASIC authentication ID and password.
+5. The Denial Log tab, listing denied sign-ins and requests with the date and time, user, IP address and where it happened.
 
 == Changelog ==
 
