@@ -3,7 +3,7 @@ Contributors:      etbsjp
 Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
 Tested up to:      7.1
-Stable tag:        1.1.1
+Stable tag:        1.2.0
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,11 @@ Deleting the plugin removes the denial log of Access Restriction, the saved resu
 5. The Denial Log tab, listing denied sign-ins and requests with the date and time, user, IP address and where it happened.
 
 == Changelog ==
+
+= 1.2.0 =
+* [ Spec Change ] Removed the bundled update checker; updates are now delivered through WordPress.org.
+* [ Spec Change ] Replaced the dashboard widget with an admin notice that appears only while Access Restriction is stopped by an internal problem or by the emergency switch.
+* [ Other ] Cleared the update check data and the scheduled update check left behind by an earlier version distributed outside WordPress.org.
 
 = 1.1.1 =
 * [ Bug Fix ] Fixed the "Verify" button for BASIC authentication credentials requiring the mode to already be switched to "BASIC authentication" before it would run, so an admin could not check new credentials while still on "No restriction" or "IP restriction".
