@@ -2,6 +2,7 @@
 Contributors:      etbsjp
 Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
+Requires PHP:      7.3
 Tested up to:      7.1
 Stable tag:        1.2.0
 License:           GPL-2.0-or-later

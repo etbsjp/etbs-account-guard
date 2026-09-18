@@ -530,7 +530,7 @@ class ACGD_Access_Restriction {
 				'fields'     => 'ID',
 				'orderby'    => 'login',
 				'order'      => 'ASC',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
 				'meta_query' => self::restricted_candidates_meta_query( $role_modes ),
 			)
 		);
@@ -755,7 +755,7 @@ class ACGD_Access_Restriction {
 				'fields'     => 'ID',
 				'orderby'    => 'login',
 				'order'      => 'ASC',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
 				'meta_query' => self::restricted_candidates_meta_query( $role_modes ),
 			)
 		);
@@ -960,6 +960,70 @@ class ACGD_Access_Restriction {
 			'entries' => $entries,
 			'invalid' => $invalid,
 		);
+	}
+
+	/**
+	 * Sanitizes a submitted IP list, line by line. wp_check_invalid_utf8() answers for the whole string it is
+	 * handed, so sanitizing the field in one go turns a single invalid byte anywhere -- including inside a '#'
+	 * note -- into an empty field, and saving that would wipe the list without saying so. Sanitizing line by
+	 * line keeps the damage to the line it is on. A line that had content but sanitizes to nothing is not valid
+	 * UTF-8; it is replaced with U+FFFD, which is itself valid UTF-8 and is never a valid address or range, so
+	 * validate_ip_list() reports it through its existing "invalid line" message: no new string, nothing is
+	 * saved, and the admin is told which line.
+	 *
+	 * Never hand the raw text back instead. Those bytes do not reach validate_ip_list() at all when they sit in
+	 * a note (strip_comment() cuts the note off before the line is checked), so the list saves "successfully":
+	 * $wpdb->process_fields() then refuses the write and update_user_meta()/update_option() return false without
+	 * touching the cache, which the callers do not check -- a silent no-op save. esc_textarea() cannot render
+	 * those bytes either (it passes ENT_QUOTES without ENT_SUBSTITUTE, so it returns an empty string).
+	 *
+	 * ★ sanitize_textarea_field() also rewrites the '#' notes themselves: see docs/spec.md 5.2. The character
+	 * set of an address or a CIDR range is untouched, so which addresses are allowed never changes.
+	 *
+	 * 送信された IP 一覧を、行ごとにサニタイズする。wp_check_invalid_utf8() は渡された文字列全体について
+	 * 答えるため、欄まるごとに掛けると、どこか1バイトの不正が——'#' 以降のメモの中であっても——欄全体を
+	 * 空にし、それを保存すると一覧が無言で消える。行ごとに掛ければ被害はその行に留まる。中身があったのに
+	 * 空になった行は不正な UTF-8 なので U+FFFD に差し替える。U+FFFD 自体は正しい UTF-8 で、アドレスにも
+	 * 範囲にも決してならないため、validate_ip_list() の既存の「不正な行」の文言でそのまま報告される。
+	 * 新しい訳語は要らず、何も保存されず、どの行かが管理者に伝わる。
+	 *
+	 * 代わりに生の文字列へ戻してはいけない。そのバイトがメモの中にあると validate_ip_list() まで届かず
+	 * （strip_comment() が検証前にメモを切り落とすため）、一覧は「保存成功」に見える。その後
+	 * $wpdb->process_fields() が書き込みを拒否し、update_user_meta() / update_option() はキャッシュに
+	 * 触れないまま false を返すが、呼び出し側はそれを見ていない——無言の空振り保存になる。
+	 * esc_textarea() もそのバイトを描画できない（ENT_SUBSTITUTE を付けずに ENT_QUOTES を渡すので空文字を返す）。
+	 *
+	 * ★ sanitize_textarea_field() は '#' 以降のメモ自体も書き換える（docs/spec.md 5.2）。アドレスと
+	 * CIDR の範囲の文字集合には当たらないので、通る許可先が変わることは無い。
+	 *
+	 * ★ Do not add the /u modifier to the preg_split() below. This method exists to handle text that may not
+	 * be valid UTF-8, and with /u preg_split() returns false on exactly that input, which would break the
+	 * foreach and return an empty list.
+	 * ★ 下の preg_split() に /u 修飾子を足さないこと。このメソッドは不正な UTF-8 でありうる文字列を扱う
+	 * ために存在しており、/u を付けるとまさにその入力で preg_split() が false を返し、foreach ごと壊れて
+	 * 空の一覧が返る。
+	 *
+	 * @param mixed $raw Submitted text (not necessarily a string). / 送信された文字列（文字列とは限らない）。
+	 * @return string Sanitized text, safe to validate, save and redisplay. / 検証・保存・再表示に耐えるサニタイズ済みの文字列。
+	 */
+	public static function sanitize_ip_list_text( $raw ) {
+		if ( ! is_string( $raw ) ) {
+			// Not a string at all (a crafted array, say). Return one line that can never be an address, so
+			// validate_ip_list() rejects it. Returning '' would instead save an empty list without saying so,
+			// which is the very failure this method exists to prevent.
+			// そもそも文字列でない（細工された配列など）。アドレスになり得ない1行を返し、validate_ip_list() に
+			// 拒否させる。'' を返すと代わりに空の一覧が無言で保存され、それはこのメソッドが防ぐために
+			// 存在している失敗そのものになる。
+			return "\xEF\xBF\xBD";
+		}
+
+		$lines = preg_split( '/\r\n|\r|\n/', $raw );
+		foreach ( $lines as $index => $line ) {
+			$clean           = sanitize_textarea_field( $line );
+			$lines[ $index ] = ( '' === $clean && '' !== trim( $line ) ) ? "\xEF\xBF\xBD" : $clean;
+		}
+
+		return implode( "\n", $lines );
 	}
 
 	/**

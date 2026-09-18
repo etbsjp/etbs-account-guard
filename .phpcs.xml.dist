@@ -14,4 +14,11 @@
     <arg name="colors"/>
 
     <rule ref="WordPress-Extra"/>
+
+    <!--
+        WordPress-Extra が参照する WordPress.Security.* は EscapeOutput / SafeRedirect / NonceVerification /
+        PluginMenuSlug の4つだけで、入力のサニタイズを見る ValidatedSanitizedInput が入っていない。
+        認証を扱うプラグインでここが外れていると「0 ERROR で緑」がサニタイズ衛生の証拠にならないため、明示的に足す。
+    -->
+    <rule ref="WordPress.Security.ValidatedSanitizedInput"/>
 </ruleset>

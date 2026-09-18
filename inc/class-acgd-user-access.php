@@ -744,8 +744,19 @@ class ACGD_User_Access {
 			$mode = 'follow'; // Unknown value: fall back to the safe default. / 未知の値は安全な既定値に倒す。
 		}
 
-		$ip_text    = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
-		$basic_id   = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+		// docs/spec.md 5.2。行ごとのサニタイズと、その理由は sanitize_ip_list_text() の docblock にある。
+		// See ACGD_Access_Restriction::sanitize_ip_list_text() for why this is sanitized line by line.
+		$ip_text  = ACGD_Access_Restriction::sanitize_ip_list_text( isset( $_POST['acgd_user_ips'] ) ? wp_unslash( $_POST['acgd_user_ips'] ) : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_ip_list_text() sanitizes it, line by line. / sanitize_ip_list_text() が行ごとにサニタイズする。
+		$basic_id = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+
+		// Left unsanitized, exactly as the receiving side is (ACGD_Basic_Auth::parse_submitted_credentials()):
+		// this is the same password, and normalizing only one of the two sides would make a password that can
+		// be saved but never accepted again. Only its hash is stored (password_hash()); it is never echoed and
+		// never used in a query.
+		// 受信側（ACGD_Basic_Auth::parse_submitted_credentials()）とまったく同じく、サニタイズしない：同じ
+		// パスワードであり、片側だけ正規化すると「保存はできるのに二度と受理されない」パスワードが生まれる。
+		// 保存されるのはハッシュ（password_hash()）だけで、出力も SQL も経由しない。
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See the comment above. / 上のコメントを参照。
 		$basic_pass = isset( $_POST['acgd_basic_password'] ) ? (string) wp_unslash( $_POST['acgd_basic_password'] ) : '';
 		// Only ever meaningful when $is_self (see ACGD_Basic_Auth::find_verified_hash()); read unconditionally
 		// here anyway, since nothing is done with it until then. Present only on the one profile-screen
@@ -1041,7 +1052,7 @@ class ACGD_User_Access {
 	 *
 	 * @param int    $target_id Target user being edited. / 編集対象のユーザー。
 	 * @param string $mode      Submitted mode ('follow', 'none', 'ip' or 'basic'; already validated by the caller). / 送信されたモード（'follow'・'none'・'ip'・'basic'。呼び出し側で検証済み）。
-	 * @param string $ip_text   Raw added-IP text, exactly as submitted (may contain invalid lines). / 送信された生の追加 IP（不正な行を含みうる）。
+	 * @param string $ip_text   Sanitized added-IP text (may still contain invalid lines). / サニタイズ済みの追加 IP（不正な行を含みうる）。
 	 * @param string $basic_id  Submitted BASIC authentication ID (never the password; see the class docblock notes on render_fields()). / 送信された BASIC 認証の ID（パスワードは含めない。render_fields() の説明を参照）。
 	 * @return void
 	 */
@@ -1066,7 +1077,7 @@ class ACGD_User_Access {
 	 * @param int $target_id Target user being edited. / 編集対象のユーザー。
 	 * @return array|null {
 	 *     @type string $mode     Mode, as submitted. / 送信されたモード。
-	 *     @type string $ips      Raw added-IP text, as submitted. / 送信された生の追加 IP。
+	 *     @type string $ips      Sanitized added-IP text. / サニタイズ済みの追加 IP。
 	 *     @type string $basic_id BASIC authentication ID, as submitted. / 送信された BASIC 認証の ID。
 	 * }
 	 */
