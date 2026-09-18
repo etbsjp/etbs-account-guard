@@ -940,6 +940,28 @@ class ACGD_Access_Restriction {
 	 *     @type string[] $invalid Invalid lines: 1-based line number => original line text. / 無効な行（1始まりの行番号 => 元の行の文字列）。
 	 * }
 	 */
+	public static function validate_ip_list( $text ) {
+		$entries = array();
+		$invalid = array();
+
+		foreach ( preg_split( '/\r\n|\r|\n/', (string) $text ) as $index => $raw_line ) {
+			$line = trim( self::strip_comment( $raw_line ) );
+			if ( '' === $line ) {
+				continue;
+			}
+			if ( self::is_valid_ip_or_cidr( $line ) ) {
+				$entries[] = $line;
+			} else {
+				$invalid[ $index + 1 ] = trim( $raw_line );
+			}
+		}
+
+		return array(
+			'entries' => $entries,
+			'invalid' => $invalid,
+		);
+	}
+
 	/**
 	 * Sanitizes a submitted IP list, line by line. wp_check_invalid_utf8() answers for the whole string it is
 	 * handed, so sanitizing the field in one go turns a single invalid byte anywhere -- including inside a '#'
@@ -974,12 +996,25 @@ class ACGD_Access_Restriction {
 	 * ★ sanitize_textarea_field() は '#' 以降のメモ自体も書き換える（docs/spec.md 5.2）。アドレスと
 	 * CIDR の範囲の文字集合には当たらないので、通る許可先が変わることは無い。
 	 *
+	 * ★ Do not add the /u modifier to the preg_split() below. This method exists to handle text that may not
+	 * be valid UTF-8, and with /u preg_split() returns false on exactly that input, which would break the
+	 * foreach and return an empty list.
+	 * ★ 下の preg_split() に /u 修飾子を足さないこと。このメソッドは不正な UTF-8 でありうる文字列を扱う
+	 * ために存在しており、/u を付けるとまさにその入力で preg_split() が false を返し、foreach ごと壊れて
+	 * 空の一覧が返る。
+	 *
 	 * @param mixed $raw Submitted text (not necessarily a string). / 送信された文字列（文字列とは限らない）。
 	 * @return string Sanitized text, safe to validate, save and redisplay. / 検証・保存・再表示に耐えるサニタイズ済みの文字列。
 	 */
 	public static function sanitize_ip_list_text( $raw ) {
 		if ( ! is_string( $raw ) ) {
-			return '';
+			// Not a string at all (a crafted array, say). Return one line that can never be an address, so
+			// validate_ip_list() rejects it. Returning '' would instead save an empty list without saying so,
+			// which is the very failure this method exists to prevent.
+			// そもそも文字列でない（細工された配列など）。アドレスになり得ない1行を返し、validate_ip_list() に
+			// 拒否させる。'' を返すと代わりに空の一覧が無言で保存され、それはこのメソッドが防ぐために
+			// 存在している失敗そのものになる。
+			return "\xEF\xBF\xBD";
 		}
 
 		$lines = preg_split( '/\r\n|\r|\n/', $raw );
@@ -989,28 +1024,6 @@ class ACGD_Access_Restriction {
 		}
 
 		return implode( "\n", $lines );
-	}
-
-	public static function validate_ip_list( $text ) {
-		$entries = array();
-		$invalid = array();
-
-		foreach ( preg_split( '/\r\n|\r|\n/', (string) $text ) as $index => $raw_line ) {
-			$line = trim( self::strip_comment( $raw_line ) );
-			if ( '' === $line ) {
-				continue;
-			}
-			if ( self::is_valid_ip_or_cidr( $line ) ) {
-				$entries[] = $line;
-			} else {
-				$invalid[ $index + 1 ] = trim( $raw_line );
-			}
-		}
-
-		return array(
-			'entries' => $entries,
-			'invalid' => $invalid,
-		);
 	}
 
 	/**

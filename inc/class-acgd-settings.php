@@ -741,6 +741,10 @@ class ACGD_Settings {
 		$new_roles = self::sanitize_role_modes( isset( $input['roles'] ) ? $input['roles'] : array() );
 		// docs/spec.md 5.2。行ごとのサニタイズと、その理由は sanitize_ip_list_text() の docblock にある。
 		// See ACGD_Access_Restriction::sanitize_ip_list_text() for why this is sanitized line by line.
+		// No wp_unslash() here, unlike the user edit screen: the Settings API already unslashed $input before
+		// handing it over (wp-admin/options.php). Calling it again would eat one backslash from a '#' note.
+		// ユーザー編集画面と違い、ここでは wp_unslash() を呼ばない：Settings API が $input を渡す前に既に
+		// unslash 済み（wp-admin/options.php）。もう一度呼ぶと '#' のメモからバックスラッシュが1つ食われる。
 		$ip_text   = ACGD_Access_Restriction::sanitize_ip_list_text( isset( $input['site_ips'] ) ? $input['site_ips'] : '' );
 		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
 

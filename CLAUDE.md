@@ -107,5 +107,13 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
   `ValidatedSanitizedInput` が入っていない。実際、wordpress.org の審査で指摘されるまで未サニタイズが8件あり、
   phpcs は緑のままだった。#17 で `.phpcs.xml.dist` に明示的に足してある。**同種の穴が無いかは、sniff を名指しで
   走らせた陽性対照でしか分からない**（`--sniffs=<Sniff名>` で撃つ）
+- ★★★ **Plugin Check は `--categories` を絞らない。** 省略すると general / plugin_repo / security /
+  performance / accessibility の5カテゴリすべてが走る。`--categories=plugin_repo` は4カテゴリを明示的に
+  落とした測り方で、その「0 ERROR」は審査員が見る数字ではない。#17 で全カテゴリに広げたところ、
+  **`phpcs:ignore` の sniff 名の綴り誤り**（`slow_query_meta_query` ← 正しくは `slow_db_query_meta_query`）が
+  初めて見えた。綴りが違う注釈は「指摘が出ない」という形でしか現れないので、phpcs 側では永久に検出できない
+- ★★ **Plugin Check は対象がシンボリックリンクだと `.claude/worktrees/` の中まで走査する。** 必ず
+  `git archive` の展開物を、配布時と同じフォルダ名（`etbs-account-guard`）で置いて測る。フォルダ名が
+  違うとテキストドメイン不一致が大量に出て、本物の指摘が埋もれる
 - `composer.json` / `composer.lock` は原本のまま（`name` は `etbsjp/widget-shortcode-tools`。**lock だけ差し替えない**）
 - **`Requires PHP` は無宣言。** CI の matrix は `['7.4','8.3']` なので **7.3 は CI では守られていない**。7.3 の `php -l` は手元で通す
