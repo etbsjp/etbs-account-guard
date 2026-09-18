@@ -153,6 +153,16 @@ class ACGD_Basic_Auth {
 	const VERIFY_TOKEN_FIELD = 'acgd_basic_verify_token';
 
 	/**
+	 * Style handle for the self-contained page rendered by render_minimal_page(). Registered with no src and
+	 * filled with wp_add_inline_style(), so nothing is ever fetched over the network for that page.
+	 * render_minimal_page() が出力する自己完結したページ用のスタイルのハンドル。src 無しで登録し
+	 * wp_add_inline_style() で中身を入れるため、あのページのために何かを取りに行くことは一度も無い。
+	 *
+	 * @var string
+	 */
+	const MINIMAL_PAGE_STYLE_HANDLE = 'acgd-minimal-page';
+
+	/**
 	 * How long the pending-verification and verified-confirmation transients live. Long enough for the
 	 * confirmation round trip (including a browser's native BASIC dialog, which a person may take a moment to
 	 * fill in); short enough that a confirmation from one attempt cannot resurface for a later, unrelated one.
@@ -479,7 +489,28 @@ class ACGD_Basic_Auth {
 				// password containing a backslash or a quote.
 				// $_SERVER にも wp_magic_quotes() が掛かるため、wp_unslash() を通す。これを忘れると
 				// バックスラッシュや引用符を含むパスワードが一致しなくなる。
-				'username' => (string) wp_unslash( $_SERVER['PHP_AUTH_USER'] ),
+				// The ID goes through sanitize_text_field() on the way in (ACGD_User_Access::save_fields() and
+				// maybe_handle_verify_request()), so the received side is put through the same function to make
+				// both sides of hash_equals() identical. Applied to BOTH branches of this method -- see the
+				// Authorization header branch below: which branch a site takes is decided by its server, and the
+				// two must never disagree about what counts as the same ID.
+				// 保存側は sanitize_text_field() を通っている（ACGD_User_Access::save_fields() と
+				// maybe_handle_verify_request()）ので、受信側も同じ関数を通し、hash_equals() の左右を揃える。
+				// この関数の2つの分岐の両方に掛ける（下の Authorization ヘッダーの分岐を参照）：どちらの分岐を
+				// 通るかはサーバー構成で決まるため、両者が「同じ ID とは何か」で食い違ってはならない。
+				'username' => sanitize_text_field( wp_unslash( $_SERVER['PHP_AUTH_USER'] ) ),
+				// The password is deliberately left unsanitized: it is only ever passed to password_verify() and
+				// hash_equals(), never echoed, never used in a query and never stored (only its hash is). Running
+				// it through sanitize_text_field() would strip tags, collapse whitespace and remove percent-encoded
+				// sequences, so any password containing those characters could be saved but never accepted again.
+				// Core does the same -- wp-includes/user.php passes $_SERVER['PHP_AUTH_PW'] to
+				// wp_authenticate_application_password() without sanitizing or even unslashing it.
+				// パスワードは意図的にサニタイズしない：password_verify() と hash_equals() にしか渡らず、出力も
+				// SQL も経由せず、保存されるのはハッシュだけである。sanitize_text_field() はタグを除去し、空白を
+				// 畳み、パーセント符号化を削るため、それらの文字を含むパスワードは保存できるのに二度と受理され
+				// なくなる。本体も同じ扱いで、wp-includes/user.php は $_SERVER['PHP_AUTH_PW'] を
+				// サニタイズも wp_unslash() もせず wp_authenticate_application_password() に渡している。
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See the comment above. / 上のコメントを参照。
 				'password' => isset( $_SERVER['PHP_AUTH_PW'] ) ? (string) wp_unslash( $_SERVER['PHP_AUTH_PW'] ) : '',
 			);
 		}
@@ -489,6 +520,11 @@ class ACGD_Basic_Auth {
 				continue;
 			}
 
+			// Not a credential: this is the raw transport header, used only to locate and base64-decode the
+			// token below. The credentials it yields are sanitized where they are built, further down.
+			// 資格情報ではない：下でトークンの位置を特定し base64 復号するためだけに使う、輸送用のヘッダー
+			// 文字列である。ここから得られる資格情報は、下の組み立てている箇所でサニタイズする。
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See the comment above. / 上のコメントを参照。
 			$header = trim( (string) wp_unslash( $_SERVER[ $key ] ) );
 			if ( 0 !== stripos( $header, 'Basic ' ) ) { // Scheme name is case-insensitive (RFC 7235). / スキーム名は大文字小文字を区別しない（RFC 7235）。
 				continue;
@@ -510,7 +546,15 @@ class ACGD_Basic_Auth {
 			}
 
 			return array(
-				'username' => substr( $decoded, 0, $position ), // The password may itself contain a colon, so split on the first one only. / パスワード側にコロンが入り得るので、最初のコロンだけで分割する。
+				// Sanitized exactly as the PHP_AUTH_USER branch above is, so the two branches cannot disagree
+				// about what counts as the same ID. Invalid UTF-8 becomes '' here, which
+				// find_basic_user_by_credentials() rejects outright -- it fails closed.
+				// 上の PHP_AUTH_USER の分岐とまったく同じようにサニタイズし、2つの分岐が「同じ ID とは何か」で
+				// 食い違わないようにする。不正な UTF-8 はここで '' になり、find_basic_user_by_credentials() が
+				// そのまま弾く＝安全側に倒れる。
+				'username' => sanitize_text_field( substr( $decoded, 0, $position ) ), // The password may itself contain a colon, so split on the first one only. / パスワード側にコロンが入り得るので、最初のコロンだけで分割する。
+				// Left unsanitized for the same reason as the PHP_AUTH_PW branch above.
+				// 上の PHP_AUTH_PW の分岐と同じ理由でサニタイズしない。
 				'password' => substr( $decoded, $position + 1 ),
 			);
 		}
@@ -1336,9 +1380,27 @@ class ACGD_Basic_Auth {
 			$edit_url = admin_url();
 		}
 
-		$mode     = isset( $_POST['acgd_user_mode'] ) ? sanitize_key( wp_unslash( $_POST['acgd_user_mode'] ) ) : 'follow';
-		$ip_text  = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
+		$mode = isset( $_POST['acgd_user_mode'] ) ? sanitize_key( wp_unslash( $_POST['acgd_user_mode'] ) ) : 'follow';
+
+		// sanitize_textarea_field(), not sanitize_text_field(): this is a multi-line list (one address or CIDR
+		// range per line, with '#' notes), and sanitize_text_field() would collapse every newline into a space
+		// and merge the whole list into a single unparsable line. Every line is validated as an address or a
+		// range by ACGD_Access_Restriction::validate_ip_list() before anything is saved.
+		// sanitize_text_field() ではなく sanitize_textarea_field() を使う：1行に1つのアドレスまたは CIDR の
+		// 範囲（'#' 以降はメモ）を書く複数行の一覧であり、sanitize_text_field() は改行をすべて空白に畳んで
+		// 一覧全体を解析不能な1行にしてしまう。各行は保存前に
+		// ACGD_Access_Restriction::validate_ip_list() がアドレスまたは範囲として検証する。
+		$ip_text  = isset( $_POST['acgd_user_ips'] ) ? sanitize_textarea_field( wp_unslash( $_POST['acgd_user_ips'] ) ) : '';
 		$basic_id = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+
+		// Left unsanitized, exactly as the receiving side is (ACGD_Basic_Auth::parse_submitted_credentials()):
+		// this is the same password, and normalizing only one of the two sides would make a password that can
+		// be saved but never accepted again. Only its hash is stored (password_hash()); it is never echoed and
+		// never used in a query.
+		// 受信側（ACGD_Basic_Auth::parse_submitted_credentials()）とまったく同じく、サニタイズしない：同じ
+		// パスワードであり、片側だけ正規化すると「保存はできるのに二度と受理されない」パスワードが生まれる。
+		// 保存されるのはハッシュ（password_hash()）だけで、出力も SQL も経由しない。
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See the comment above. / 上のコメントを参照。
 		$password = isset( $_POST['acgd_basic_password'] ) ? (string) wp_unslash( $_POST['acgd_basic_password'] ) : '';
 
 		// Whatever was typed is worth redisplaying either way, so the admin does not have to retype it
@@ -1692,7 +1754,14 @@ class ACGD_Basic_Auth {
 	 * @return string Validated URL. / 検証済みの URL。
 	 */
 	private static function validated_redirect_to( $fallback ) {
-		$raw = isset( $_REQUEST['redirect_to'] ) ? (string) wp_unslash( $_REQUEST['redirect_to'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only; the value itself is validated by wp_validate_redirect() below, and nothing is changed by reading it.
+		// Not sanitized here on purpose: wp_validate_redirect() below is the validation, and it accepts only a
+		// URL on this host, so anything else is replaced with $fallback. This is the same treatment core gives
+		// the field, and the same as ACGD_Login_Name::filtered_redirect_to().
+		// ここで意図的にサニタイズしない：下の wp_validate_redirect() が検証そのものであり、このホストの URL
+		// しか通さず、それ以外は $fallback に差し替わる。本体がこの欄に与えている扱いと同じで、
+		// ACGD_Login_Name::filtered_redirect_to() とも同じ。
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only; validated by wp_validate_redirect() below. / 読み取りのみ。下の wp_validate_redirect() が検証する。
+		$raw = isset( $_REQUEST['redirect_to'] ) ? (string) wp_unslash( $_REQUEST['redirect_to'] ) : '';
 
 		if ( '' === $raw ) {
 			// wp_validate_redirect() does NOT fall back to $fallback when $raw is '' (core bug-for-bug
@@ -1720,12 +1789,34 @@ class ACGD_Basic_Auth {
 	}
 
 	/**
-	 * Prints a minimal, self-contained HTML page (no theme template: this can run before WordPress has
-	 * chosen one, and must never leak a protected page's own markup) and exits. Adapted from PageGuard's
-	 * inc/class-auth.php render_page().
-	 * 最小限の自己完結した HTML ページを出力して exit する（テーマのテンプレートは使わない：WordPress が
-	 * テンプレートを選ぶ前に動きうるうえ、保護対象ページ自身のマークアップを漏らしてはならないため）。
-	 * PageGuard の inc/class-auth.php の render_page() を参考にしている。
+	 * Prints a minimal, self-contained HTML page. No theme template is used: this is the body of a 401, and
+	 * it must never leak the markup of the page it is standing in for. Adapted from PageGuard's
+	 * inc/class-auth.php render_page(). The caller is the one that exits (send_challenge_response()).
+	 *
+	 * Where this runs: the only caller is send_challenge_response(), reached from handle_challenge() and
+	 * handle_verify(), both of which are registered on login_form_{action} -- so this always runs inside
+	 * wp-login.php, well after 'init' and 'wp_loaded'. That is what makes the style calls below safe.
+	 *
+	 * The CSS is registered with no src and printed with wp_add_inline_style()/wp_print_styles() rather than
+	 * shipped as a file, so that the page stays self-contained: this is the screen someone sees after
+	 * dismissing the browser's BASIC prompt, and on the very setups this plugin is written for (a server that
+	 * blocks direct access to wp-content, or that already runs BASIC authentication site-wide) a stylesheet
+	 * fetched as a subresource is exactly the thing that would not arrive. Passing a handle to
+	 * wp_print_styles() also skips do_action( 'wp_print_styles' ), so no other plugin can print into it.
+	 * 最小限の自己完結した HTML ページを出力する。テーマのテンプレートは使わない：これは 401 の本文であり、
+	 * 身代わりになっているページのマークアップを漏らしてはならないため。PageGuard の inc/class-auth.php の
+	 * render_page() を参考にしている。exit するのは呼び出し元（send_challenge_response()）のほう。
+	 *
+	 * どこで動くか：呼び出し元は send_challenge_response() だけで、そこへ来るのは handle_challenge() と
+	 * handle_verify()。どちらも login_form_{action} に登録しているので、これは常に wp-login.php の中、
+	 * 'init' も 'wp_loaded' も十分に終わった後に動く。下のスタイルの呼び出しが安全なのはこのため。
+	 *
+	 * CSS はファイルとして配らず、src 無しで登録して wp_add_inline_style()／wp_print_styles() で出力する。
+	 * このページを自己完結させるため：ブラウザの BASIC の入力を閉じた人が見る画面であり、しかもこの
+	 * プラグインが想定している環境そのもの（wp-content への直接アクセスを塞いでいるサーバー、またはサイト
+	 * 全体に BASIC 認証を掛けているサーバー）では、サブリソースとして取りに行くスタイルシートこそが届かない。
+	 * wp_print_styles() にハンドルを渡すと do_action( 'wp_print_styles' ) も発火しないので、他のプラグインが
+	 * この画面に何かを出力することもない。
 	 *
 	 * @param string   $title   Heading. / 見出し。
 	 * @param string[] $lines   Paragraphs, plain text. / 段落（プレーンテキスト）。
@@ -1735,6 +1826,32 @@ class ACGD_Basic_Auth {
 	private static function render_minimal_page( $title, $lines, $actions ) {
 		$site_name  = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
 		$page_title = ( '' !== trim( (string) $site_name ) ) ? $title . ' | ' . $site_name : $title;
+
+		$css = <<<'ACGD_CSS'
+		body { margin: 0; padding: 3em 1.5em; background: #f0f0f1; color: #1d2327; font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; line-height: 1.7; }
+		.acgd-box { max-width: 32em; margin: 0 auto; padding: 1.75em 2em; background: #fff; border: 1px solid #dcdcde; border-radius: 4px; }
+		.acgd-box h1 { margin: 0 0 .75em; font-size: 1.25em; }
+		.acgd-box p { margin: 0 0 .5em; }
+		.acgd-actions { margin: 1.5em 0 0; display: flex; flex-wrap: wrap; gap: .75em; }
+		.acgd-actions a { display: inline-block; padding: .5em 1.25em; border: 1px solid #2271b1; border-radius: 3px; color: #2271b1; text-decoration: none; }
+		.acgd-actions a:hover, .acgd-actions a:focus { background: #f0f6fc; }
+		.acgd-actions a.acgd-primary { background: #2271b1; color: #fff; }
+		.acgd-actions a.acgd-primary:hover, .acgd-actions a.acgd-primary:focus { background: #135e96; border-color: #135e96; }
+		@media (prefers-color-scheme: dark) {
+			body { background: #1d2327; color: #f0f0f1; }
+			.acgd-box { background: #2c3338; border-color: #3c434a; }
+			.acgd-actions a { border-color: #72aee6; color: #72aee6; }
+			.acgd-actions a:hover, .acgd-actions a:focus { background: #32373c; }
+			.acgd-actions a.acgd-primary { background: #2271b1; border-color: #2271b1; color: #fff; }
+			.acgd-actions a.acgd-primary:hover, .acgd-actions a.acgd-primary:focus { background: #135e96; border-color: #135e96; }
+		}
+		ACGD_CSS;
+
+		// No version: the handle has no src, so nothing is fetched and there is no URL to bust a cache on.
+		// 版数は無い：このハンドルは src を持たず、何も取りに行かないので、キャッシュを外す URL も存在しない。
+		// phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion -- See the comment above: with no src there is nothing to cache and no URL to version. / 上のコメントを参照：src が無いのでキャッシュされるものも、版数を付ける URL も存在しない。
+		wp_register_style( self::MINIMAL_PAGE_STYLE_HANDLE, false, array(), null );
+		wp_add_inline_style( self::MINIMAL_PAGE_STYLE_HANDLE, $css );
 		?>
 <!DOCTYPE html>
 <html lang="<?php echo esc_attr( get_bloginfo( 'language' ) ); ?>">
@@ -1743,25 +1860,7 @@ class ACGD_Basic_Auth {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title><?php echo esc_html( $page_title ); ?></title>
-<style>
-body { margin: 0; padding: 3em 1.5em; background: #f0f0f1; color: #1d2327; font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; line-height: 1.7; }
-.acgd-box { max-width: 32em; margin: 0 auto; padding: 1.75em 2em; background: #fff; border: 1px solid #dcdcde; border-radius: 4px; }
-.acgd-box h1 { margin: 0 0 .75em; font-size: 1.25em; }
-.acgd-box p { margin: 0 0 .5em; }
-.acgd-actions { margin: 1.5em 0 0; display: flex; flex-wrap: wrap; gap: .75em; }
-.acgd-actions a { display: inline-block; padding: .5em 1.25em; border: 1px solid #2271b1; border-radius: 3px; color: #2271b1; text-decoration: none; }
-.acgd-actions a:hover, .acgd-actions a:focus { background: #f0f6fc; }
-.acgd-actions a.acgd-primary { background: #2271b1; color: #fff; }
-.acgd-actions a.acgd-primary:hover, .acgd-actions a.acgd-primary:focus { background: #135e96; border-color: #135e96; }
-@media (prefers-color-scheme: dark) {
-	body { background: #1d2327; color: #f0f0f1; }
-	.acgd-box { background: #2c3338; border-color: #3c434a; }
-	.acgd-actions a { border-color: #72aee6; color: #72aee6; }
-	.acgd-actions a:hover, .acgd-actions a:focus { background: #32373c; }
-	.acgd-actions a.acgd-primary { background: #2271b1; border-color: #2271b1; color: #fff; }
-	.acgd-actions a.acgd-primary:hover, .acgd-actions a.acgd-primary:focus { background: #135e96; border-color: #135e96; }
-}
-</style>
+		<?php wp_print_styles( self::MINIMAL_PAGE_STYLE_HANDLE ); ?>
 </head>
 <body>
 <div class="acgd-box">

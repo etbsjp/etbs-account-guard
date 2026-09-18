@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       ETBS Account Guard
- * Plugin URI:        https://etbs.jp/product-category/wordpress-tools/
+ * Plugin URI:        https://etbs.jp/product/etbs-account-guard/
  * Description:       Protects the accounts that manage your site. Hides the login names of your users from visitors who are not logged in.
  * Version:           1.2.0
  * Author:            ETBS (DAI)

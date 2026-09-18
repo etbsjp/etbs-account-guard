@@ -744,8 +744,25 @@ class ACGD_User_Access {
 			$mode = 'follow'; // Unknown value: fall back to the safe default. / 未知の値は安全な既定値に倒す。
 		}
 
-		$ip_text    = isset( $_POST['acgd_user_ips'] ) ? (string) wp_unslash( $_POST['acgd_user_ips'] ) : '';
-		$basic_id   = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+		// sanitize_textarea_field(), not sanitize_text_field(): this is a multi-line list (one address or CIDR
+		// range per line, with '#' notes), and sanitize_text_field() would collapse every newline into a space
+		// and merge the whole list into a single unparsable line. Every line is validated as an address or a
+		// range by ACGD_Access_Restriction::validate_ip_list() before anything is saved.
+		// sanitize_text_field() ではなく sanitize_textarea_field() を使う：1行に1つのアドレスまたは CIDR の
+		// 範囲（'#' 以降はメモ）を書く複数行の一覧であり、sanitize_text_field() は改行をすべて空白に畳んで
+		// 一覧全体を解析不能な1行にしてしまう。各行は保存前に
+		// ACGD_Access_Restriction::validate_ip_list() がアドレスまたは範囲として検証する。
+		$ip_text  = isset( $_POST['acgd_user_ips'] ) ? sanitize_textarea_field( wp_unslash( $_POST['acgd_user_ips'] ) ) : '';
+		$basic_id = isset( $_POST['acgd_basic_id'] ) ? sanitize_text_field( wp_unslash( $_POST['acgd_basic_id'] ) ) : '';
+
+		// Left unsanitized, exactly as the receiving side is (ACGD_Basic_Auth::parse_submitted_credentials()):
+		// this is the same password, and normalizing only one of the two sides would make a password that can
+		// be saved but never accepted again. Only its hash is stored (password_hash()); it is never echoed and
+		// never used in a query.
+		// 受信側（ACGD_Basic_Auth::parse_submitted_credentials()）とまったく同じく、サニタイズしない：同じ
+		// パスワードであり、片側だけ正規化すると「保存はできるのに二度と受理されない」パスワードが生まれる。
+		// 保存されるのはハッシュ（password_hash()）だけで、出力も SQL も経由しない。
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- See the comment above. / 上のコメントを参照。
 		$basic_pass = isset( $_POST['acgd_basic_password'] ) ? (string) wp_unslash( $_POST['acgd_basic_password'] ) : '';
 		// Only ever meaningful when $is_self (see ACGD_Basic_Auth::find_verified_hash()); read unconditionally
 		// here anyway, since nothing is done with it until then. Present only on the one profile-screen

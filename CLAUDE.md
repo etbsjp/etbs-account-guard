@@ -101,6 +101,11 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
   `wporg` を足しているため。issue #13）。PR ごとに `php -l`（PHP 7.4 / 8.3）と
   `PHPCS (WordPress-Extra, changed lines)` が走る。`wporg` / `dist` への直 push では `php -l` の2つだけ走る
   （`dist` は版数上げを人が直接 push する運用のため、`wporg` は版数上げの直 push でも構文チェックが走るようにするため）
-- **既存指摘の基準値: 0 ERROR / 0 WARNING**（`3be6059` で `vendor/bin/phpcs --standard=./.phpcs.xml.dist --report=summary $(git ls-files '*.php')` を実測、11ファイル）
+- **既存指摘の基準値: 0 ERROR / 0 WARNING**（issue #17 で `vendor/bin/phpcs --standard=./.phpcs.xml.dist --report=summary $(git ls-files '*.php')` を実測、9ファイル）
+  ★★ **この基準値は issue #17 より前は入力のサニタイズを検査していなかった。** `WordPress-Extra` が参照する
+  `WordPress.Security.*` は EscapeOutput / SafeRedirect / NonceVerification / PluginMenuSlug の4つだけで、
+  `ValidatedSanitizedInput` が入っていない。実際、wordpress.org の審査で指摘されるまで未サニタイズが8件あり、
+  phpcs は緑のままだった。#17 で `.phpcs.xml.dist` に明示的に足してある。**同種の穴が無いかは、sniff を名指しで
+  走らせた陽性対照でしか分からない**（`--sniffs=<Sniff名>` で撃つ）
 - `composer.json` / `composer.lock` は原本のまま（`name` は `etbsjp/widget-shortcode-tools`。**lock だけ差し替えない**）
 - **`Requires PHP` は無宣言。** CI の matrix は `['7.4','8.3']` なので **7.3 は CI では守られていない**。7.3 の `php -l` は手元で通す
