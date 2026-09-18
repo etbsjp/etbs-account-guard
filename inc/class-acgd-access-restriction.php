@@ -530,7 +530,7 @@ class ACGD_Access_Restriction {
 				'fields'     => 'ID',
 				'orderby'    => 'login',
 				'order'      => 'ASC',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
 				'meta_query' => self::restricted_candidates_meta_query( $role_modes ),
 			)
 		);
@@ -755,7 +755,7 @@ class ACGD_Access_Restriction {
 				'fields'     => 'ID',
 				'orderby'    => 'login',
 				'order'      => 'ASC',
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Narrows the users to look at; the alternative is loading every user. Settings screen only. / 見るユーザーを絞るため。代わりは全ユーザーの読み込み。設定画面のみ。
 				'meta_query' => self::restricted_candidates_meta_query( $role_modes ),
 			)
 		);
