@@ -739,32 +739,9 @@ class ACGD_Settings {
 		}
 
 		$new_roles = self::sanitize_role_modes( isset( $input['roles'] ) ? $input['roles'] : array() );
-		// sanitize_textarea_field(), not sanitize_text_field(): this is a multi-line list (one address or CIDR
-		// range per line, with '#' notes), and sanitize_text_field() would collapse every newline into a space
-		// and merge the whole list into a single unparsable line. Every line is validated as an address or a
-		// range by ACGD_Access_Restriction::validate_ip_list() before anything is saved.
-		// Note that this does touch the '#' notes: a note containing '<' loses the tag-like part, and one
-		// containing a percent-encoded sequence loses it. The character set of an address or a CIDR range
-		// (0-9 a-f A-F : . /) contains neither, so what is allowed through is never affected.
-		// Falling back to the unsanitized text when sanitizing empties it is deliberate: wp_check_invalid_utf8()
-		// returns '' for the whole field if a single byte of it is invalid UTF-8, and saving that would wipe
-		// the user's addresses without saying so. Handing the original back lets validate_ip_list() reject it
-		// through the existing "invalid line" path instead.
-		// sanitize_text_field() ではなく sanitize_textarea_field() を使う：1行に1つのアドレスまたは CIDR の
-		// 範囲（'#' 以降はメモ）を書く複数行の一覧であり、sanitize_text_field() は改行をすべて空白に畳んで
-		// 一覧全体を解析不能な1行にしてしまう。各行は保存前に
-		// ACGD_Access_Restriction::validate_ip_list() がアドレスまたは範囲として検証する。
-		// ★ '#' 以降のメモには影響が出る：'<' を含むメモはタグに見える部分が落ち、パーセント符号化を含む
-		// メモはその部分が消える。アドレス・CIDR の範囲の文字集合（0-9 a-f A-F : . /）はどちらも含まないので、
-		// 通る許可先が変わることは無い。
-		// サニタイズの結果が空になったら元の文字列に戻すのは意図的：wp_check_invalid_utf8() は1バイトでも
-		// 不正な UTF-8 があると欄全体に '' を返し、それを保存すると利用者のアドレスが無言で全部消える。
-		// 元に戻せば、validate_ip_list() の既存の「不正な行」の経路で明示的に拒否される。
-		$raw_ips = isset( $input['site_ips'] ) ? (string) wp_unslash( $input['site_ips'] ) : '';
-		$ip_text = sanitize_textarea_field( $raw_ips );
-		if ( '' === $ip_text && '' !== $raw_ips ) {
-			$ip_text = $raw_ips;
-		}
+		// docs/spec.md 5.2。行ごとのサニタイズと、その理由は sanitize_ip_list_text() の docblock にある。
+		// See ACGD_Access_Restriction::sanitize_ip_list_text() for why this is sanitized line by line.
+		$ip_text   = ACGD_Access_Restriction::sanitize_ip_list_text( isset( $input['site_ips'] ) ? $input['site_ips'] : '' );
 		$validated = ACGD_Access_Restriction::validate_ip_list( $ip_text );
 
 		if ( $validated['invalid'] ) {
@@ -904,7 +881,7 @@ class ACGD_Settings {
 	 * なぜオプションの値として返す（保存する）のではなく transient を使うかは RESUBMIT_TRANSIENT_PREFIX を参照。
 	 *
 	 * @param string[] $roles   Sanitized (but possibly check-1/check-2-failing) role => mode. / サニタイズ済み（チェック1・2には失敗しうる）の権限 => モード。
-	 * @param string   $ip_text Raw site-wide IP list text, exactly as submitted (may contain invalid lines). / 送信された生のサイトの IP 一覧（不正な行を含みうる）。
+	 * @param string   $ip_text Sanitized site-wide IP list text (may still contain invalid lines). / サニタイズ済みのサイトの IP 一覧（不正な行を含みうる）。
 	 * @return void
 	 */
 	private static function stash_resubmit( $roles, $ip_text ) {
@@ -928,7 +905,7 @@ class ACGD_Settings {
 	 *
 	 * @return array|null {
 	 *     @type string[] $roles    Role => mode, as submitted. / 送信された 権限 => モード。
-	 *     @type string   $site_ips Raw site-wide IP list text, as submitted. / 送信された生のサイトの IP 一覧。
+	 *     @type string   $site_ips Sanitized site-wide IP list text. / サニタイズ済みのサイトの IP 一覧。
 	 * }
 	 */
 	private static function get_resubmit_data() {
