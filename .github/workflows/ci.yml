@@ -26,14 +26,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # 追跡されている全 .php を PHP 7.4 / 8.3 の両方で構文チェックする。
+  # 追跡されている全 .php を、宣言した下限と現行版で構文チェックする。
+  # ★★ この repo だけ matrix に 7.3 が入っている（原本は '7.4', '8.3'）。
+  #   etbs-account-guard は `Requires PHP: 7.3` を宣言しており（本体ヘッダと readme.txt）、
+  #   宣言は利用者への約束なのに CI がその下限を一度も検査していない、という穴があったため。
+  #   経緯: https://github.com/etbsjp/etbs-account-guard/issues/19
+  #   ★ 原本（widget-shortcode-tools）からこのファイルを同期するときに 7.3 を落とさないこと。
+  #   落とすと、7.4 以上の構文が混ざっても誰も気付かないまま宣言だけが嘘になる。
   php-lint:
     name: php -l (PHP ${{ matrix.php-version }})
-    runs-on: ubuntu-latest
+    # ★ 7.3 は ubuntu-latest では用意できないことがあるため、そのときだけ古い runner を使う。
+    #   include で runs-on を上書きする形にしてあるので、7.4 / 8.3 は ubuntu-latest のまま。
+    runs-on: ${{ matrix.runs-on || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['7.4', '8.3']
+        php-version: ['7.3', '7.4', '8.3']
+        include:
+          - php-version: '7.3'
+            runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
