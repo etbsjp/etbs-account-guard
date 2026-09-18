@@ -53,8 +53,8 @@ msgid ""
 "This screen protects your account with a second username and password (BASIC "
 "authentication), separate from your WordPress login."
 msgstr ""
-"この画面は、WordPressのログインとは別の2つ目のユーザー名とパスワード(BASIC認"
-"証)でアカウントを守っています。"
+"この画面は、WordPress のログインとは別の2つ目のユーザー名とパスワード (BASIC "
+"認証) でアカウントを守っています。"
 
 #: inc/class-acgd-basic-auth.php:945
 msgid "A second sign-in is required"
@@ -88,7 +88,7 @@ msgstr "ログアウト"
 #: inc/class-acgd-basic-auth.php:1001
 #, php-format
 msgid "%s Staff Access"
-msgstr "%s関係者専用"
+msgstr "%s 関係者専用"
 
 #: inc/class-acgd-basic-auth.php:1193 inc/class-acgd-basic-auth.php:1475
 #: inc/class-acgd-basic-auth.php:1847
@@ -99,7 +99,7 @@ msgstr "この操作を行う権限がありません。"
 #: inc/class-acgd-basic-auth.php:1933
 #, php-format
 msgid "Unexpected response to the diagnosis request (status: %d)."
-msgstr "診断リクエストへの応答が想定外でした(ステータス: %d)。"
+msgstr "診断リクエストへの応答が想定外でした (ステータス: %d)。"
 
 #: inc/class-acgd-invalid-credentials.php:88
 msgid "The username or password you entered is incorrect."
@@ -140,7 +140,7 @@ msgstr "REST API"
 msgid ""
 "Hide the user information of the REST API (%s) from visitors who are not "
 "logged in"
-msgstr "REST APIのユーザー情報 (%s) を、ログインしていない訪問者には返さない"
+msgstr "REST API のユーザー情報 (%s) を、ログインしていない訪問者には返さない"
 
 #. translators: %s: address of the user list of the REST API, such as /wp-json/wp/v2/users
 #: inc/class-acgd-settings.php:292
@@ -149,16 +149,16 @@ msgid ""
 "While this is off, anyone can see the list of users and their login names by "
 "opening %s in a browser."
 msgstr ""
-"オフの間は、ブラウザーで%sを開くだけで、誰でもユーザーの一覧とログイン名を見"
-"られます。"
+"オフの間は、ブラウザーで %s を開くだけで、誰でもユーザーの一覧とログイン名を"
+"見られます。"
 
 #: inc/class-acgd-settings.php:295
 msgid ""
 "Themes and apps that read author names through the REST API without logging "
 "in, such as headless sites, will no longer get them."
 msgstr ""
-"ログインせずにREST APIから投稿者名を読み込むテーマやアプリ (ヘッドレス構成な"
-"ど) では、投稿者名が表示されなくなります。"
+"ログインせずに REST API から投稿者名を読み込むテーマやアプリ (ヘッドレス構成"
+"など) では、投稿者名が表示されなくなります。"
 
 #: inc/class-acgd-settings.php:296
 msgid "Logged-in users, including the block editor, can use them as before."
@@ -170,7 +170,7 @@ msgstr "埋め込み (oEmbed)"
 
 #: inc/class-acgd-settings.php:301
 msgid "Use the site name and home page URL as the author of embedded posts"
-msgstr "埋め込まれた投稿の投稿者を、サイト名とトップページのURLにする"
+msgstr "埋め込まれた投稿の投稿者を、サイト名とトップページの URL にする"
 
 #: inc/class-acgd-settings.php:303
 msgid ""
@@ -204,7 +204,7 @@ msgstr "投稿と固定ページのサイトマップには影響しません。
 
 #: inc/class-acgd-settings.php:319
 msgid "HTML class names"
-msgstr "HTMLのクラス名"
+msgstr "HTML のクラス名"
 
 #: inc/class-acgd-settings.php:320
 msgid "Remove class names that contain the login name"
@@ -215,8 +215,8 @@ msgid ""
 "While this is off, the HTML of comments by registered users and of author "
 "pages contains class names with the login name."
 msgstr ""
-"オフの間は、登録ユーザーのコメントと投稿者ページのHTMLに、ログイン名を含むク"
-"ラス名が付きます。"
+"オフの間は、登録ユーザーのコメントと投稿者ページの HTML に、ログイン名を含む"
+"クラス名が付きます。"
 
 #. translators: 1: class name added to comments by registered users, 2: class name added to author pages
 #: inc/class-acgd-settings.php:325
@@ -224,37 +224,38 @@ msgstr ""
 msgid ""
 "This removes %1$s from comments by registered users and %2$s from author "
 "pages."
-msgstr "登録ユーザーのコメントから%1$sを、投稿者ページから%2$sを外します。"
+msgstr "登録ユーザーのコメントから %1$s を、投稿者ページから %2$s を外します。"
 
 #. translators: %s: example of a class name that contains the user ID
 #: inc/class-acgd-settings.php:331
 #, php-format
 msgid "Class names that contain the user ID, such as %s, are kept."
-msgstr "%sのようなユーザーIDを含むクラス名は残します。"
+msgstr "%s のようなユーザー ID を含むクラス名は残します。"
 
 #: inc/class-acgd-settings.php:334
 msgid ""
 "If your custom CSS uses these class names, that CSS will no longer apply."
 msgstr ""
-"これらのクラス名を使ったCSSを書いている場合は、そのCSSが効かなくなります。"
+"これらのクラス名を使った CSS を書いている場合は、その CSS が効かなくなりま"
+"す。"
 
 #: inc/class-acgd-settings.php:338
 msgid "Author ID links"
-msgstr "投稿者IDのリンク"
+msgstr "投稿者 ID のリンク"
 
 #. translators: %s: example of a link by author number, such as /?author=1
 #: inc/class-acgd-settings.php:341
 #, php-format
 msgid "Redirect links by author number, such as %s, to the home page"
-msgstr "%sのような投稿者番号のリンクをトップページへ転送する"
+msgstr "%s のような投稿者番号のリンクをトップページへ転送する"
 
 #: inc/class-acgd-settings.php:345
 msgid ""
 "While this is off, WordPress sends these links to the author page, whose "
 "address contains the login name."
 msgstr ""
-"オフの間は、WordPressがこのリンクを、アドレスにログイン名を含む投稿者ページへ"
-"転送します。"
+"オフの間は、WordPress がこのリンクを、アドレスにログイン名を含む投稿者ページ"
+"へ転送します。"
 
 #: inc/class-acgd-settings.php:346
 msgid "Filtering by author in the admin screens is not affected."
@@ -327,8 +328,8 @@ msgid ""
 "If a page whose address contains %s opens, your theme links to author pages, "
 "and those links will lead to \"Page not found\"."
 msgstr ""
-"アドレスに%sを含むページが開く場合は、テーマが投稿者ページへリンクしているた"
-"め、オンにするとそのリンク先が「ページが見つかりません」になります。"
+"アドレスに %s を含むページが開く場合は、テーマが投稿者ページへリンクしている"
+"ため、オンにするとそのリンク先が「ページが見つかりません」になります。"
 
 #: inc/class-acgd-settings.php:374
 msgid ""
@@ -347,8 +348,8 @@ msgid ""
 "WordPress reveals login names to visitors who are not logged in at several "
 "places, and each item below closes one of them."
 msgstr ""
-"WordPressには、ログインしていない訪問者にもログイン名が分かってしまう場所が複"
-"数あり、下の各項目がそれぞれ1か所を塞ぎます。"
+"WordPress には、ログインしていない訪問者にもログイン名が分かってしまう場所が"
+"複数あり、下の各項目がそれぞれ1か所を塞ぎます。"
 
 #: inc/class-acgd-settings.php:505
 msgid ""
@@ -433,11 +434,11 @@ msgstr "権限"
 
 #: inc/class-acgd-settings.php:699
 msgid "Site-wide IP list"
-msgstr "サイトのIP一覧"
+msgstr "サイトの IP 一覧"
 
 #: inc/class-acgd-settings.php:705
 msgid "Allowed IP addresses"
-msgstr "許可するIPアドレス"
+msgstr "許可する IP アドレス"
 
 #. translators: 1: line number, 2: the line's content
 #: inc/class-acgd-settings.php:751
@@ -445,7 +446,8 @@ msgstr "許可するIPアドレス"
 msgid ""
 "Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s"
 msgstr ""
-"サイトのIP一覧の%1$d行目が、有効なIPアドレスまたは範囲ではありません: %2$s"
+"サイトの IP 一覧の%1$d行目が、有効な IP アドレスまたは範囲ではありません: "
+"%2$s"
 
 #: inc/class-acgd-settings.php:778
 msgid ""
@@ -481,8 +483,8 @@ msgid ""
 "BASIC authentication mode cannot be turned on for a role because the receive "
 "diagnosis below has not succeeded. Run it first. Not saved."
 msgstr ""
-"受信診断が成功していないため、権限をBASIC認証モードにできません。先に下の診断"
-"を実行してください。保存されませんでした。"
+"受信診断が成功していないため、権限を BASIC 認証モードにできません。先に下の診"
+"断を実行してください。保存されませんでした。"
 
 #. translators: 1: login name of a user who would end up in BASIC mode without credentials, 2: URL of that user's edit screen
 #: inc/class-acgd-settings.php:841
@@ -492,9 +494,9 @@ msgid ""
 "password set. Set them on their <a href=\"%2$s\">user edit screen</a> first, "
 "or choose a different mode. Not saved."
 msgstr ""
-"この保存を行うと、%1$sが自分のIDとパスワードを設定しないままBASIC認証モードに"
-"なります。先に<a href=\"%2$s\">ユーザー編集画面</a>で設定するか、別のモードを"
-"選んでください。保存されませんでした。"
+"この保存を行うと、%1$s が自分の ID とパスワードを設定しないまま BASIC 認証"
+"モードになります。先に<a href=\"%2$s\">ユーザー編集画面</a>で設定するか、別の"
+"モードを選んでください。保存されませんでした。"
 
 #. translators: %s: login name of a user who would end up in BASIC mode without credentials
 #: inc/class-acgd-settings.php:847
@@ -504,13 +506,13 @@ msgid ""
 "password set. Set them on their user edit screen first, or choose a "
 "different mode. Not saved."
 msgstr ""
-"この保存を行うと、%sが自分のIDとパスワードを設定しないままBASIC認証モードにな"
-"ります。先にそのユーザーの編集画面で設定するか、別のモードを選んでください。"
-"保存されませんでした。"
+"この保存を行うと、%s が自分の ID とパスワードを設定しないまま BASIC 認証モー"
+"ドになります。先にそのユーザーの編集画面で設定するか、別のモードを選んでくだ"
+"さい。保存されませんでした。"
 
 #: inc/class-acgd-settings.php:1005
 msgid "BASIC authentication receive diagnosis"
-msgstr "BASIC認証の受信診断"
+msgstr "BASIC 認証の受信診断"
 
 #: inc/class-acgd-settings.php:1006
 msgid ""
@@ -520,10 +522,10 @@ msgid ""
 "request). Run the diagnosis below to check this site before turning BASIC "
 "authentication mode on for any role or user."
 msgstr ""
-"サーバーの構成によっては、BASIC認証のユーザー名とパスワードがWordPressまで届"
-"かないことや、既にサーバー側でサイト全体にBASIC認証がかかっていることがありま"
-"す(1回のリクエストに載せられる資格情報は1つだけです)。権限やユーザーをBASIC認"
-"証モードにする前に、下の診断でこのサイトを確認してください。"
+"サーバーの構成によっては、BASIC 認証のユーザー名とパスワードが WordPress まで"
+"届かないことや、すでにサーバー側でサイト全体に BASIC 認証がかかっていることが"
+"あります (1回のリクエストに載せられる資格情報は1つだけです)。権限やユーザー"
+"を BASIC 認証モードにする前に、下の診断でこのサイトを確認してください。"
 
 #: inc/class-acgd-settings.php:1012
 msgid ""
@@ -531,8 +533,8 @@ msgid ""
 "password with every request; using HTTPS is strongly recommended (this does "
 "not block saving)."
 msgstr ""
-"この接続はHTTPSではありません。BASIC認証は毎回のリクエストでユーザー名とパス"
-"ワードを送るため、HTTPSの利用を強く推奨します(保存は止めません)。"
+"この接続は HTTPS ではありません。BASIC 認証は毎回のリクエストでユーザー名とパ"
+"スワードを送るため、HTTPS の利用を強く推奨します (保存は止めません)。"
 
 #: inc/class-acgd-settings.php:1019
 msgid "Run diagnosis"
@@ -543,19 +545,20 @@ msgid ""
 "The diagnosis has not been run yet. BASIC authentication mode cannot be "
 "turned on until it succeeds."
 msgstr ""
-"診断はまだ実行されていません。成功するまでBASIC認証モードを有効にできません。"
+"診断はまだ実行されていません。成功するまで BASIC 認証モードを有効にできませ"
+"ん。"
 
 #: inc/class-acgd-settings.php:1049
 msgid "Received. BASIC authentication can be turned on for this site."
-msgstr "受信できています。このサイトでBASIC認証を有効にできます。"
+msgstr "受信できています。このサイトで BASIC 認証を有効にできます。"
 
 #: inc/class-acgd-settings.php:1053
 msgid ""
 "Not received. The username and password do not reach WordPress, so BASIC "
 "authentication cannot be turned on until this is fixed."
 msgstr ""
-"受信できていません。ユーザー名とパスワードがWordPressまで届いていないため、直"
-"すまでBASIC認証を有効にできません。"
+"受信できていません。ユーザー名とパスワードが WordPress まで届いていないため、"
+"直すまで BASIC 認証を有効にできません。"
 
 #: inc/class-acgd-settings.php:1057
 msgid ""
@@ -563,17 +566,17 @@ msgid ""
 "this address. Only one such credential can be sent per request, so this "
 "plugin's BASIC authentication cannot be turned on at the same time."
 msgstr ""
-"このサーバーは、このアドレスに対して既に自身のBASIC認証のサインインを求めてい"
-"ます。1回のリクエストに送れる資格情報は1つだけのため、このプラグインのBASIC認"
-"証を同時に有効にはできません。"
+"このサーバーは、このアドレスに対してすでに自身の BASIC 認証のサインインを求め"
+"ています。1回のリクエストに送れる資格情報は1つだけのため、このプラグインの "
+"BASIC 認証を同時に有効にはできません。"
 
 #: inc/class-acgd-settings.php:1061
 msgid ""
 "Could not determine whether the username and password reach WordPress. BASIC "
 "authentication cannot be turned on until the diagnosis succeeds."
 msgstr ""
-"ユーザー名とパスワードがWordPressまで届くかどうかを判定できませんでした。診断"
-"が成功するまでBASIC認証を有効にできません。"
+"ユーザー名とパスワードが WordPress まで届くかどうかを判定できませんでした。診"
+"断が成功するまで BASIC 認証を有効にできません。"
 
 #. translators: %s: date and time the diagnosis was last run
 #: inc/class-acgd-settings.php:1072
@@ -594,7 +597,7 @@ msgid ""
 "This plugin never edits .htaccess automatically. Review it and add it "
 "yourself."
 msgstr ""
-"このプラグインが .htaccessを自動で書き換えることはありません。内容を確認のう"
+"このプラグインが .htaccess を自動で書き換えることはありません。内容を確認のう"
 "え、ご自身で追記してください。"
 
 #: inc/class-acgd-settings.php:1115
@@ -603,7 +606,7 @@ msgid ""
 "and other plugins, this may not work or may affect how your site is "
 "displayed. If unsure, ask your hosting provider."
 msgstr ""
-"編集する前に、今の .htaccessを必ず控えてください。サーバーや他のプラグインと"
+"編集する前に、今の .htaccess を必ず控えてください。サーバーや他のプラグインと"
 "の組み合わせによっては、うまく動かない場合やサイトの表示に影響する場合があり"
 "ます。不安な場合はレンタルサーバーの管理会社にご相談ください。"
 
@@ -621,11 +624,11 @@ msgid ""
 "section shown here for other users appears there too, for anyone who can "
 "manage options."
 msgstr ""
-"自分自身のアカウントを制限する、または自分のBASIC認証のIDとパスワードを設定す"
-"るには、ご自身の<a href=\"%s\">プロフィール</a>画面を開いてください(ツール"
-"バーや管理画面メニューからも辿れます)。ここで他のユーザーに対して表示している"
-"のと同じ「アクセス制限」の区画が、オプションを管理できる人にはそちらにも表示"
-"されます。"
+"自分自身のアカウントを制限する、または自分の BASIC 認証の ID とパスワードを設"
+"定するには、ご自身の<a href=\"%s\">プロフィール</a>画面を開いてください (ツー"
+"ルバーや管理画面メニューからも辿れます)。ここで他のユーザーに対して表示してい"
+"るのと同じ「アクセス制限」の区画が、オプションを管理できる人にはそちらにも表"
+"示されます。"
 
 #: inc/class-acgd-settings.php:1170
 msgid ""
@@ -633,9 +636,9 @@ msgid ""
 "can sign in without an IP check until this is fixed. Saving this tab again, "
 "once the settings are valid, clears this warning."
 msgstr ""
-"アクセス制限は内部の問題により停止しており、直るまでは誰でもIPの確認なしにサ"
-"インインできます。設定を正しい内容にしてこのタブを保存し直すと、この警告は消"
-"えます。"
+"アクセス制限は内部の問題により停止しており、直るまでは誰でも IP の確認なしに"
+"サインインできます。設定を正しい内容にしてこのタブを保存し直すと、この警告は"
+"消えます。"
 
 #. translators: %s: PHP constant name, ACGD_DISABLE_RESTRICTION
 #: inc/class-acgd-settings.php:1175
@@ -644,7 +647,7 @@ msgid ""
 "The emergency switch (%s in wp-config.php) is turned on, so Access "
 "Restriction is stopped. Login Name Protection is not affected."
 msgstr ""
-"非常用スイッチ (wp-config.phpの%s) がオンのため、アクセス制限は停止していま"
+"非常用スイッチ (wp-config.php の %s) がオンのため、アクセス制限は停止していま"
 "す。ログイン名の保護には影響しません。"
 
 #: inc/class-acgd-settings.php:1204
@@ -666,8 +669,8 @@ msgid ""
 "administrator is always unrestricted at the role level; restrict a specific "
 "administrator from their own user edit screen instead."
 msgstr ""
-"administratorは権限単位では常に制限なしです。特定の管理者を制限したい場合は、"
-"そのユーザーの編集画面で設定してください。"
+"administrator は権限単位では常に制限なしです。特定の管理者を制限したい場合"
+"は、そのユーザーの編集画面で設定してください。"
 
 #. translators: %s: link to the current admin's own standard WordPress "Profile" screen
 #: inc/class-acgd-settings.php:1223
@@ -685,9 +688,9 @@ msgid ""
 "password first, on their user edit screen; a role cannot be switched to it "
 "as a shortcut around that."
 msgstr ""
-"BASIC認証にするには、対象となる各ユーザーが先に自分のユーザー編集画面でIDとパ"
-"スワードを設定している必要があります。権限をこのモードに変えても、その手順を"
-"省略することはできません。"
+"BASIC 認証にするには、対象となる各ユーザーが先に自分のユーザー編集画面で ID "
+"とパスワードを設定している必要があります。権限をこのモードに変えても、その手"
+"順を省略することはできません。"
 
 #: inc/class-acgd-settings.php:1255
 msgid "Role"
@@ -705,7 +708,7 @@ msgstr "制限なし (固定)"
 #: inc/class-acgd-settings.php:1273
 #, php-format
 msgid "Mode for %s"
-msgstr "%sのモード"
+msgstr "%s のモード"
 
 #. translators: %s: role name, such as Editor
 #: inc/class-acgd-settings.php:1274 inc/class-acgd-user-access.php:376
@@ -715,12 +718,12 @@ msgstr "制限なし"
 
 #: inc/class-acgd-settings.php:1275 inc/class-acgd-user-access.php:377
 msgid "IP restriction"
-msgstr "IP制限"
+msgstr "IP 制限"
 
 #: inc/class-acgd-settings.php:1276 inc/class-acgd-settings.php:1528
 #: inc/class-acgd-user-access.php:378
 msgid "BASIC authentication"
-msgstr "BASIC認証"
+msgstr "BASIC 認証"
 
 #. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation
 #: inc/class-acgd-settings.php:1308
@@ -729,8 +732,8 @@ msgid ""
 "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # "
 "is a note, and blank lines are ignored."
 msgstr ""
-"1行に1つのIPアドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。# "
-"の後ろはメモで、空行は無視します。"
+"1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。"
+"# の後ろはメモで、空行は無視します。"
 
 #: inc/class-acgd-settings.php:1312
 msgid ""
@@ -746,7 +749,7 @@ msgid ""
 "such as X-Forwarded-For are never used."
 msgstr ""
 "判定は、この接続についてサーバーから見えているアドレスだけで行います。X-"
-"Forwarded-Forなどのヘッダーは一切使いません。"
+"Forwarded-For などのヘッダーは一切使いません。"
 
 #: inc/class-acgd-settings.php:1356
 msgid "Your current connection:"
@@ -760,7 +763,7 @@ msgstr "サーバーは今のあなたの接続元のアドレスを判別でき
 #: inc/class-acgd-settings.php:1364
 #, php-format
 msgid "The server sees this connection as coming from %s."
-msgstr "サーバーには、この接続は%sから来ているように見えています。"
+msgstr "サーバーには、この接続は %s から来ているように見えています。"
 
 #: inc/class-acgd-settings.php:1393
 msgid "Users who are currently restricted"
@@ -781,8 +784,8 @@ msgid ""
 "If Access Restriction locks everyone out, add %s to wp-config.php. This "
 "stops Access Restriction only; Login Name Protection keeps working."
 msgstr ""
-"アクセス制限で誰も入れなくなった場合は、wp-config.phpに%sを追加してください。"
-"止まるのはアクセス制限だけで、ログイン名の保護は動作し続けます。"
+"アクセス制限で誰も入れなくなった場合は、wp-config.php に %s を追加してくださ"
+"い。止まるのはアクセス制限だけで、ログイン名の保護は動作し続けます。"
 
 #. translators: %d: maximum number of entries kept in the denial log
 #: inc/class-acgd-settings.php:1467
@@ -804,7 +807,7 @@ msgstr "ユーザー"
 
 #: inc/class-acgd-settings.php:1485
 msgid "IP address"
-msgstr "IPアドレス"
+msgstr "IP アドレス"
 
 #: inc/class-acgd-settings.php:1486
 msgid "Where"
@@ -828,7 +831,7 @@ msgstr "権限の設定に従う"
 
 #: inc/class-acgd-user-access.php:383
 msgid "IP addresses added for this user"
-msgstr "このユーザーに追加したIPアドレス"
+msgstr "このユーザーに追加した IP アドレス"
 
 #. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation, 3: URL of the Access Restriction tab of the settings screen
 #: inc/class-acgd-user-access.php:391
@@ -838,25 +841,25 @@ msgid ""
 "is a note. Allowed in addition to the site-wide list on the <a "
 "href=\"%3$s\">Access Restriction settings tab</a>."
 msgstr ""
-"1行に1つのIPアドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。# "
-"の後ろはメモです。<a href=\"%3$s\">「アクセス制限」設定タブ</a>のサイトの一覧"
-"に加えて許可されます。"
+"1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。"
+"# の後ろはメモです。<a href=\"%3$s\">「アクセス制限」設定タブ</a>のサイトの一"
+"覧に加えて許可されます。"
 
 #: inc/class-acgd-user-access.php:406
 msgid "BASIC authentication ID"
-msgstr "BASIC認証のID"
+msgstr "BASIC 認証の ID"
 
 #: inc/class-acgd-user-access.php:409
 msgid ""
 "Not the WordPress login name. Must be different from every other user's "
 "BASIC authentication ID on this site."
 msgstr ""
-"WordPressのログイン名とは別のものです。このサイトの他のどのユーザーのBASIC認"
-"証IDとも重複できません。"
+"WordPress のログイン名とは別のものです。このサイトの他のどのユーザーの BASIC "
+"認証 ID とも重複できません。"
 
 #: inc/class-acgd-user-access.php:413
 msgid "BASIC authentication password"
-msgstr "BASIC認証のパスワード"
+msgstr "BASIC 認証のパスワード"
 
 #: inc/class-acgd-user-access.php:419
 msgid ""
@@ -868,11 +871,11 @@ msgstr ""
 
 #: inc/class-acgd-user-access.php:421
 msgid "Required before this user can be put in BASIC authentication mode."
-msgstr "このユーザーをBASIC認証モードにする前に必須です。"
+msgstr "このユーザーを BASIC 認証モードにする前に必須です。"
 
 #: inc/class-acgd-user-access.php:429
 msgid "Verify your own BASIC authentication"
-msgstr "自分のBASIC認証を確認"
+msgstr "自分の BASIC 認証を確認"
 
 #: inc/class-acgd-user-access.php:512
 msgid "Verify"
@@ -883,8 +886,8 @@ msgid ""
 "Set the ID and password above, click Verify to confirm they work, and you "
 "will be returned here to save them."
 msgstr ""
-"上のIDとパスワードを入力し、「確認」をクリックして正しく動くことを確かめてく"
-"ださい。確認が終わるとこの画面に戻り、保存できます。"
+"上の ID とパスワードを入力し、「確認」をクリックして正しく動くことを確かめて"
+"ください。確認が終わるとこの画面に戻り、保存できます。"
 
 #: inc/class-acgd-user-access.php:568
 msgid ""
@@ -895,7 +898,7 @@ msgstr ""
 
 #: inc/class-acgd-user-access.php:571
 msgid "It is safe to leave: the ID and password entered above are not lost."
-msgstr "離れても問題ありません。上で入力したIDとパスワードは失われません。"
+msgstr "離れても問題ありません。上で入力した ID とパスワードは失われません。"
 
 #: inc/class-acgd-user-access.php:625
 msgid "Update Profile"
@@ -912,8 +915,8 @@ msgid ""
 "Verified. Your BASIC authentication ID and password work. Click \"%s\" below "
 "to save."
 msgstr ""
-"確認できました。BASIC認証のIDとパスワードは正しく動作します。保存するには下の"
-"「%s」をクリックしてください。"
+"確認できました。BASIC 認証の ID とパスワードは正しく動作します。保存するには"
+"下の「%s」をクリックしてください。"
 
 #: inc/class-acgd-user-access.php:645
 msgid ""
@@ -928,7 +931,7 @@ msgid ""
 "The verification has expired. Enter the ID and password again and click "
 "Verify."
 msgstr ""
-"確認が期限切れになりました。IDとパスワードをもう一度入力し、「確認」をクリッ"
+"確認が期限切れになりました。ID とパスワードをもう一度入力し、「確認」をクリッ"
 "クしてください。"
 
 #: inc/class-acgd-user-access.php:660
@@ -945,7 +948,7 @@ msgstr "「確認」ボタンは自分自身のアカウントでしか使えま
 
 #: inc/class-acgd-user-access.php:662
 msgid "Enter a BASIC authentication ID and password before verifying."
-msgstr "確認する前に、BASIC認証のIDとパスワードを入力してください。"
+msgstr "確認する前に、BASIC 認証の ID とパスワードを入力してください。"
 
 #. translators: 1: line number, 2: the line's content
 #: inc/class-acgd-user-access.php:790
@@ -954,8 +957,8 @@ msgid ""
 "Line %1$d of the IP addresses added for this user is not a valid IP address "
 "or range: %2$s"
 msgstr ""
-"このユーザーに追加したIPアドレスの%1$d行目が、有効なIPアドレスまたは範囲では"
-"ありません: %2$s"
+"このユーザーに追加した IP アドレスの%1$d行目が、有効な IP アドレスまたは範囲"
+"ではありません: %2$s"
 
 #. translators: %s: URL of the Access Restriction tab of the settings screen
 #: inc/class-acgd-user-access.php:810
@@ -978,32 +981,32 @@ msgid ""
 "Run it there first. Not saved."
 msgstr ""
 "<a href=\"%s\">アクセス制限の設定タブ</a>の受信診断が成功していないため、"
-"BASIC認証モードを有効にできません。先にそちらで診断を実行してください。保存さ"
-"れませんでした。"
+"BASIC 認証モードを有効にできません。先にそちらで診断を実行してください。保存"
+"されませんでした。"
 
 #: inc/class-acgd-user-access.php:867
 msgid ""
 "Enter both a BASIC authentication ID and a password before choosing \"BASIC "
 "authentication\" mode. Not saved."
 msgstr ""
-"「BASIC認証」モードを選ぶ前に、BASIC認証のIDとパスワードの両方を入力してくだ"
-"さい。保存されませんでした。"
+"「BASIC 認証」モードを選ぶ前に、BASIC 認証の ID とパスワードの両方を入力して"
+"ください。保存されませんでした。"
 
 #: inc/class-acgd-user-access.php:872 inc/class-acgd-user-access.php:933
 msgid ""
 "This BASIC authentication ID is already used by another user on this site. "
 "Choose a different one. Not saved."
 msgstr ""
-"このBASIC認証のIDは、このサイトの別のユーザーが既に使っています。別のIDを選ん"
-"でください。保存されませんでした。"
+"この BASIC 認証の ID は、このサイトの別のユーザーがすでに使っています。別の "
+"ID を選んでください。保存されませんでした。"
 
 #: inc/class-acgd-user-access.php:916
 msgid ""
 "Click \"Verify\" and confirm your new BASIC authentication ID and password "
 "before saving them for your own account. Not saved."
 msgstr ""
-"自分自身のアカウントに保存する前に、「確認」をクリックして新しいBASIC認証のID"
-"とパスワードを確かめてください。保存されませんでした。"
+"自分自身のアカウントに保存する前に、「確認」をクリックして新しい BASIC 認証"
+"の ID とパスワードを確かめてください。保存されませんでした。"
 
 #: inc/class-acgd-user-access.php:963
 msgid ""
@@ -1011,8 +1014,8 @@ msgid ""
 "this new setting. Choose a setting that does not depend on IP restriction, "
 "such as BASIC authentication or no restriction. Not saved."
 msgstr ""
-"今のあなたの接続元では、この新しい設定を満たせません。BASIC認証や制限なしな"
-"ど、IP制限に依存しない設定を選んでください。保存しませんでした。"
+"今のあなたの接続元では、この新しい設定を満たせません。BASIC 認証や制限なしな"
+"ど、IP 制限に依存しない設定を選んでください。保存しませんでした。"
 
 #. translators: %s: the current user's own IP address, to add to the IP list
 #: inc/class-acgd-user-access.php:966
@@ -1055,7 +1058,7 @@ msgstr "%1$s%2$s"
 #: inc/func.php:168
 #, php-format
 msgid "If ETBS Account Guard is useful to you, please %s."
-msgstr "ETBS Account Guardがお役に立ちましたら、%s。"
+msgstr "ETBS Account Guard がお役に立ちましたら、%s。"
 
 #: inc/func.php:169
 msgid "consider supporting its development"
@@ -1095,7 +1098,7 @@ msgstr "アクセス制限は内部の問題により停止しています。"
 
 #: inc/func.php:342
 msgid "Everyone can sign in without an IP check until this is fixed."
-msgstr "直るまでは誰でもIPの確認なしにサインインできます。"
+msgstr "直るまでは誰でも IP の確認なしにサインインできます。"
 
 #. translators: %s: PHP constant, ACGD_DISABLE_RESTRICTION
 #: inc/func.php:366
@@ -1103,7 +1106,9 @@ msgstr "直るまでは誰でもIPの確認なしにサインインできます�
 msgid ""
 "The emergency switch (%s in wp-config.php) is turned on, so Access "
 "Restriction is stopped."
-msgstr "非常用スイッチ (wp-config.phpの%s) がオンのため、アクセス制限は停止しています。"
+msgstr ""
+"非常用スイッチ (wp-config.php の %s) がオンのため、アクセス制限は停止していま"
+"す。"
 
 #: inc/func.php:369
 msgid "Login Name Protection is not affected."
