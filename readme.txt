@@ -4,7 +4,7 @@ Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
 Requires PHP:      7.3
 Tested up to:      7.1
-Stable tag:        1.2.1
+Stable tag:        1.2.2
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -96,6 +96,10 @@ Deleting the plugin removes the denial log of Access Restriction, the saved resu
 5. The Denial Log tab, listing denied sign-ins and requests with the date and time, user, IP address and where it happened.
 
 == Changelog ==
+
+= 1.2.2 =
+* [ Bug Fix ] Fixed the dates and times in the Denial Log tab and the "Last run" time of the receive diagnosis being shown in UTC instead of the site's time zone.
+* [ Other ] Updated the bundled Japanese translation to follow the WordPress.org Japanese translation style guide.
 
 = 1.2.1 =
 * [ Bug Fix ] Fixed the BASIC authentication ID being compared as submitted on servers that do not expand the Authorization header into PHP_AUTH_USER, so an ID containing repeated spaces could be saved but never accepted at the sign-in prompt.
