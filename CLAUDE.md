@@ -132,5 +132,11 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 - ★ **WordPress のテストスイート（wp-env）は使っていない。** `tests/phpunit/bootstrap.php` が `get_option()` などを
   最小限のスタブとして定義し、依存の薄いロジックだけを検査する。
   **実際の WordPress の中での動きはスタブでは確かめられない**ので、検証サイトでの実測を別に行う
+- ★★ **スタブの `date_i18n()` は `gmdate()` で、本体（5.3 以降）の内部処理を再現しない。** 本体は受け取った値を
+  時計の数字に戻し、`wp_timezone()` の現地時刻とみなして Unix 時刻へ戻してから `wp_date()` に渡す。
+  「オフセットが二重に掛からないか」はこの組み合わせでしか確かめられないので、時刻の表示を変えたら実物と突き合わせる：
+  CLI で検証サイトの `wp-load.php` を読み（呼び方は `CLAUDE.local.md`）、`pre_option_timezone_string` /
+  `pre_option_gmt_offset` のフィルターでタイムゾーンをその場だけ差し替え、`wp_date()` の結果を物差しにして比べる
+  （DB には書かない。夏時間の境目・手動オフセット・月名や曜日名を含む書式も入れる）。PR #23 はこの方法で 147 通りを比べた
 - 宣言した下限でも走らせる：`"$PHP73" vendor/bin/phpunit`（パスは `CLAUDE.local.md`）
 - `tests/` と `phpunit.xml.dist` は `.gitattributes` で配布 zip から外し、`.phpcs.xml.dist` でも対象外にしている

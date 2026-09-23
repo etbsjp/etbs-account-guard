@@ -82,7 +82,12 @@ class ACGD_Time {
 				$zone = new DateTimeZone( $timezone_string );
 			} catch ( Exception $e ) {
 				// An unknown zone name (e.g. removed from this PHP's tz database): fall back to gmt_offset below.
+				// This keeps offset_at() itself from failing, but it does not rescue the display: on WordPress 5.3+
+				// date_i18n() builds the same zone through wp_timezone() and throws for it (as before this class,
+				// and as WordPress's own screens do).
 				// 未知のタイムゾーン名（この PHP のタイムゾーンデータベースから消えたものなど）は、下の gmt_offset に任せる。
+				// これで守れるのは offset_at() 単体だけで、表示は守れない。WordPress 5.3 以降の date_i18n() は
+				// wp_timezone() で同じ名前のタイムゾーンを作り、そこで例外になる（このクラスを作る前も同じで、本体の画面も同じ）。
 				$zone = null;
 			}
 		}
