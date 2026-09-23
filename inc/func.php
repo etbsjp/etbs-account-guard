@@ -25,6 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once __DIR__ . '/class-acgd-time.php';
 require_once __DIR__ . '/class-acgd-invalid-credentials.php';
 require_once __DIR__ . '/class-acgd-login-name.php';
 require_once __DIR__ . '/class-acgd-access-restriction.php';

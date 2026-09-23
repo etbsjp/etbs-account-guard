@@ -1076,7 +1076,7 @@ class ACGD_Settings {
 				printf(
 					/* translators: %s: date and time the diagnosis was last run */
 					esc_html__( 'Last run: %s', 'etbs-account-guard' ),
-					esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $result['checked_at'] ) )
+					esc_html( ACGD_Time::format_local( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $result['checked_at'] ) )
 				);
 				?>
 			</p>
@@ -1500,9 +1500,8 @@ class ACGD_Settings {
 						<tr>
 							<td>
 								<?php
-								// date_i18n(), not wp_date() (WordPress 5.3+): this plugin declares no minimum WordPress version.
-								// date_i18n()（wp_date() は WordPress 5.3 以降のため使わない）。このプラグインは WordPress の下限を宣言していない。
-								echo esc_html( date_i18n( 'Y-m-d H:i:s', isset( $entry['time'] ) ? (int) $entry['time'] : 0 ) );
+								// Stored as time() (UTC); shown in the site's time zone. / time()（UTC）で保存している。サイトのタイムゾーンで表示する。
+								echo esc_html( ACGD_Time::format_local( 'Y-m-d H:i:s', isset( $entry['time'] ) ? (int) $entry['time'] : 0 ) );
 								?>
 							</td>
 							<td><?php echo esc_html( $user ? $user->user_login : (string) ( isset( $entry['user_id'] ) ? $entry['user_id'] : '' ) ); ?></td>

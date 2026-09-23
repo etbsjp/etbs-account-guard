@@ -311,6 +311,7 @@ wordpress.org へ提出できる形にする過程（issue #13）でダッシュ
 
 - 日時・ユーザー・接続元の IP・場面（ログイン時／ログイン後／REST／アプリケーションパスワード／BASIC）。**直近100件**。オプションに保存し **autoload しない**。
 - 設定画面の「拒否の記録」タブに表示。uninstall で消す。
+- 日時は `time()`（UTC）で保存し、**表示はサイトのタイムゾーン**（`ACGD_Time::format_local()`）。`date_i18n()` に `time()` をそのまま渡すと UTC で出る（受信診断の「前回の実行日時」も同じ）。
 
 ### 5.5 失敗したとき・戻し方
 
@@ -375,6 +376,6 @@ ID とパスワードの両方が入力されていればモードに関わら�
   ★ worktree で作業するときは、リンクの向き先を確認してから検証する（本体クローンを指したままだと、古いコードを検証することになる）。終わったら戻す。
 - ブラウザを使わない検証：`wp-load.php` を CLI で読み、フィルタ・関数を直接叩く。Local の `php.ini` を `-c` で渡す（渡さないと DB 接続エラーになり、サイトが止まっているように見える）。
 - HTTP の実測は `curl`。**HTTP のステータスだけで合否を決めない**（本文・`Location`・JSON の中身で判定する）。
-- 配布物の検証：`git archive --format=tar HEAD | tar -t | sort` を取り、追跡している開発用ファイル（`CLAUDE.md` / `docs/` / `.github/` / `composer.*` / `.phpcs.xml.dist`）と
+- 配布物の検証：`git archive --format=tar HEAD | tar -t | sort` を取り、追跡している開発用ファイル（`CLAUDE.md` / `docs/` / `.github/` / `composer.*` / `.phpcs.xml.dist` / `tests/` / `phpunit.xml.dist`）と
   `inc/plugin-update-checker/` 一式・`inc/update-checker.php` ・`inc/dashboard-widget.php`（issue #13 で外した。wordpress.org は独自の更新機構を認めず、審査で問われうる）が入っておらず、
   `languages/*.mo` が入っていることを確かめる。
