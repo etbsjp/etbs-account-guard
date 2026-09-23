@@ -125,7 +125,7 @@ class TimeTest extends TestCase {
 				'expected'            => -12600,
 			),
 			array(
-				'test_condition_name' => '地域名が未知の名前の場合 => gmt_offset に任せる',
+				'test_condition_name' => '地域名が未知の名前の場合 => gmt_offset に任せる（offset_at() 単体の話。表示は 5.3 以降の date_i18n() 側で例外になり、守れない）',
 				'timestamp'           => gmmktime( 2, 44, 0, 9, 23, 2026 ),
 				'timezone_string'     => 'Invalid/Zone',
 				'gmt_offset'          => '9',
