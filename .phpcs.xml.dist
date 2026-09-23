@@ -10,6 +10,11 @@
     <exclude-pattern>*/inc/plugin-update-checker/*</exclude-pattern>
     <exclude-pattern>*/vendor/*</exclude-pattern>
 
+    <!-- PHPUnit テスト（tests/）は配布しないコードのため対象から除外する。
+         bootstrap は WordPress の関数を最小限のスタブとして再定義しており、ファイル名の規則（class-*.php）なども
+         PHPUnit の慣習（*Test.php）と合わないため、本体と同じ WordPress-Extra を当てると本質的でない指摘が積み上がる。 -->
+    <exclude-pattern>*/tests/*</exclude-pattern>
+
     <arg value="sp"/>
     <arg name="colors"/>
 

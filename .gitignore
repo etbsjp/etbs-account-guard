@@ -56,3 +56,6 @@ CLAUDE.local.md
 
 # composer install の生成物（CI 用の開発依存。配布物には含めない）
 /vendor/
+
+# PHPUnit の実行キャッシュ
+/.phpunit.result.cache

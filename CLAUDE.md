@@ -115,9 +115,22 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
 - ★★ **Plugin Check は対象がシンボリックリンクだと `.claude/worktrees/` の中まで走査する。** 必ず
   `git archive` の展開物を、配布時と同じフォルダ名（`etbs-account-guard`）で置いて測る。フォルダ名が
   違うとテキストドメイン不一致が大量に出て、本物の指摘が埋もれる
-- `composer.json` / `composer.lock` は原本のまま（`name` は `etbsjp/widget-shortcode-tools`。**lock だけ差し替えない**）
+- `composer.json` / `composer.lock` は原本に `phpunit/phpunit ^9.6` と `config.platform.php = 7.3.0` を足したもの
+  （`name` は原本の `etbsjp/widget-shortcode-tools` のまま。**lock だけ差し替えない**。PHPUnit を足したときも
+  既存の開発依存の版は1つも動かしていない）。`platform` は、宣言した下限 PHP 7.3 でもテストを走らせられる版に lock を揃えるため
+- **CI は PHPUnit を走らせない**（`ci.yml` は7本の repo で共有しているため、この repo だけの手順を足していない）。
+  `.php` を変えたら手元で末尾の「PHPUnit」節の手順を実行し、結果を PR 本文に貼る
 - **`Requires PHP` の宣言は 7.3**（#17 で宣言。柔軟なヒアドキュメントが唯一の拘束＝これが実在する下限。仕様書 5.2）。
   CI の matrix は `['7.3','7.4','8.3']`（#19 で 7.3 を追加。**宣言した下限を CI が検査していなかった**ため）。
   ★ 7.3 のジョブだけ `runs-on: ubuntu-22.04`（新しい runner では 7.3 を用意できないことがあるため）。
   ★★ **`ci.yml` は7本の repo にコピーされる共有ファイルで、原本の matrix は `['7.4','8.3']`。同期のときに 7.3 を落とさないこと**
 - **`Requires at least` は無宣言。** WordPress 側に実在する下限を特定していないため（「実在する下限があるときだけ書く」）
+
+## PHPUnit
+
+- 実行は `composer install` のあと `vendor/bin/phpunit`（設定は `phpunit.xml.dist`、テストは `tests/phpunit/*Test.php`）
+- ★ **WordPress のテストスイート（wp-env）は使っていない。** `tests/phpunit/bootstrap.php` が `get_option()` などを
+  最小限のスタブとして定義し、依存の薄いロジックだけを検査する。
+  **実際の WordPress の中での動きはスタブでは確かめられない**ので、検証サイトでの実測を別に行う
+- 宣言した下限でも走らせる：`"$PHP73" vendor/bin/phpunit`（パスは `CLAUDE.local.md`）
+- `tests/` と `phpunit.xml.dist` は `.gitattributes` で配布 zip から外し、`.phpcs.xml.dist` でも対象外にしている
