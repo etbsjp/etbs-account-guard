@@ -32,6 +32,28 @@
  *   （1.1.0・BASIC 認証・issue #4）ユーザーメタ `acgd_basic_id`・`acgd_basic_password_hash`。
  *   ユーザー自身の BASIC 認証の ID と password_hash()。上の2つと同じ場所・同じ理由で設定される、
  *   利用者が設定した値。
+ * - `acgd_two_step` (1.3.0, Two-Step Verification, option) … the per-role methods and the number of days a
+ *   device is trusted, set by the user on the Two-Step Verification tab (docs/spec.md 7.14). Values the user
+ *   chose; kept for the same reason as the settings above. Registered with register_setting(), so it never
+ *   shows up in an update_option() search.
+ *   （1.3.0・2段階認証・オプション）権限ごとの方式と、端末を信頼する日数。利用者が「2段階認証」タブで
+ *   設定した値（docs/spec.md 7.14）。上の設定と同じ理由で残す。register_setting() で登録しているため、
+ *   update_option() を検索しても現れない。
+ * - `acgd_two_step_method` user meta (1.3.0) … one user's own method ('follow', 'none' or 'email'), set on
+ *   that user's edit screen. A value the user set, per user; kept for the same reason.
+ *   （1.3.0）ユーザーメタ `acgd_two_step_method`。ユーザー自身の方式（'follow'・'none'・'email'）。
+ *   そのユーザーの編集画面で設定した、ユーザーごとの値。同じ理由で残す。
+ *
+ * Not touched / 触らないもの:
+ * - The Two-Step Verification mark inside core's `session_tokens` user meta (1.3.0, docs/spec.md 7.6, 7.14)
+ *   … a key this plugin adds to the information of a session that went through the second step. The meta
+ *   itself belongs to WordPress core, which removes each session (and the mark with it) when the session
+ *   expires or the user logs out; rewriting core's own meta here would risk damaging sessions for a key that
+ *   does nothing once this plugin is gone.
+ *   （1.3.0・docs/spec.md 7.6・7.14）本体のユーザーメタ `session_tokens` の中に付けた2段階認証の印。
+ *   2段階目を通したセッションの情報に、このプラグインが足すキー。メタ自体は WordPress 本体のもので、
+ *   セッションの期限切れやログアウトで本体がセッションごと（印ごと）消す。このプラグインが無くなれば
+ *   何もしないキーのために本体のメタを書き換えると、セッションを壊すおそれがあるため触らない。
  *
  * Deleted / 消すもの（一時状態）:
  * - `external_updates-etbs-account-guard` (site option) … update check state left behind by
@@ -120,6 +142,28 @@
  *   誰も確認していないサイトで get_transient() クエリを省けるようにするためだけに持つ。誰かが確認する・
  *   保存するたびに実際の確認の有無から作り直される派生的な集計であり、利用者が設定したものではない
  *   （上の acgd_basic_id_count と同じ性質）。
+ * - Rows whose name starts with `acgd_2s_` (1.3.0, Two-Step Verification, options) … login attempts, their
+ *   wrong-code counters, the per-user send records and the receive check marks (docs/spec.md 7.2). Each lives
+ *   for minutes to an hour, is judged by the times inside it, and is rebuilt by the next sign-in; nothing a
+ *   user configured. The names contain hashes and user IDs, so they are removed with one LIKE whose `_` is
+ *   escaped with $wpdb->esc_like() (otherwise `_` matches any character).
+ *   （1.3.0・2段階認証・オプション）名前が `acgd_2s_` で始まる行。ログインの試行・その誤りの回数・
+ *   ユーザーごとの送信の記録・受信確認の印（docs/spec.md 7.2）。どれも数分〜1時間の寿命で、中身の時刻で
+ *   判定し、次のログインで作り直される。利用者が設定したものではない。名前にハッシュやユーザー ID を
+ *   含むので、`_` を $wpdb->esc_like() で逃がした LIKE の1回で消す（逃がさないと `_` は任意の1文字になる）。
+ * - `acgd_trusted_devices` user meta (1.3.0, docs/spec.md 7.8) … trusted devices: a temporary state with its
+ *   own expiry; deleting it only means entering a code once more.
+ *   （1.3.0・docs/spec.md 7.8）ユーザーメタ `acgd_trusted_devices`。信頼した端末。期限付きの一時状態で、
+ *   消しても害はコードをもう一度入力するだけ。
+ * - `acgd_two_step_fault` (1.3.0, option) … the fault record of Two-Step Verification (docs/spec.md 7.11),
+ *   cleared by a successful save of its tab; nothing to keep across a reinstall.
+ *   （1.3.0・オプション）2段階認証の故障の記録（docs/spec.md 7.11）。タブの保存に成功すると消える
+ *   一時状態で、入れ直す間に残す意味が無い。
+ * - The "resubmit" transients of Two-Step Verification (1.3.0, `acgd_two_step_resubmit_` and
+ *   `acgd_two_step_user_resubmit_`) are, like those of 1.1.0 below, not deleted here: they have no fixed key,
+ *   are deleted when read, and expire after one minute on their own.
+ *   （1.3.0）2段階認証の「再表示用」の transient（`acgd_two_step_resubmit_`・`acgd_two_step_user_resubmit_`）は、
+ *   下の 1.1.0 のものと同じく、ここでは消さない。固定のキーが無く、読んだ時点で消え、1分で自然に消える。
  * - Several transients exist in 1.1.0 that are not deleted here, on purpose: the "resubmit" transients
  *   (ACGD_Settings::RESUBMIT_TRANSIENT_PREFIX 'acgd_access_resubmit_' and
  *   ACGD_User_Access::RESUBMIT_TRANSIENT_PREFIX 'acgd_user_resubmit_'), which briefly hold a rejected
@@ -181,3 +225,13 @@ delete_option( 'acgd_access_restriction_fault' );
 delete_option( 'acgd_basic_diagnosis' );
 delete_option( 'acgd_basic_id_count' );
 delete_option( 'acgd_basic_confirmed_count' );
+
+// Two-Step Verification's own temporary state (1.3.0, docs/spec.md 7.14); see the docblock above.
+// esc_like() escapes the `_` of the prefix, which LIKE would otherwise treat as "any one character".
+// 2段階認証自身の一時状態（1.3.0・docs/spec.md 7.14。上の docblock を参照）。esc_like() で接頭辞の `_` を
+// 逃がす。逃がさないと LIKE はそれを「任意の1文字」として扱う。
+global $wpdb;
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- These rows are only ever written with $wpdb (never through the Options API), so no option cache holds them.
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'acgd_2s_' ) . '%' ) );
+delete_metadata( 'user', 0, 'acgd_trusted_devices', '', true );
+delete_option( 'acgd_two_step_fault' );

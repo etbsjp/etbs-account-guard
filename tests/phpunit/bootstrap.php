@@ -26,6 +26,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 	define( 'HOUR_IN_SECONDS', 3600 );
 }
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+	define( 'MINUTE_IN_SECONDS', 60 );
+}
+
+// Same value as WordPress (wp-includes/wp-db.php / class-wpdb.php). / WordPress と同じ値。
+if ( ! defined( 'ARRAY_A' ) ) {
+	define( 'ARRAY_A', 'ARRAY_A' );
+}
 
 /**
  * Clears the option store of the get_option() stub. Call it from each test's setUp().
@@ -82,4 +90,24 @@ if ( ! function_exists( 'date_i18n' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wp_check_password' ) ) {
+	/**
+	 * Minimal stub of wp_check_password(): password_verify() against the given hash (bcrypt hashes made with
+	 * password_hash() in the tests). The third argument (user ID) is accepted and ignored, like core's own
+	 * default implementation for this purpose.
+	 * wp_check_password() の最小スタブ。与えたハッシュ（テストでは password_hash() で作った bcrypt）に対して
+	 * password_verify() する。第3引数（ユーザー ID）は受け取るだけで使わない。
+	 *
+	 * @param string     $password Plain password. / 平文のパスワード。
+	 * @param string     $hash     Hash. / ハッシュ。
+	 * @param string|int $user_id  User ID (unused). / ユーザー ID（未使用）。
+	 * @return bool
+	 */
+	function wp_check_password( $password, $hash, $user_id = '' ) {
+		unset( $user_id );
+		return password_verify( $password, $hash );
+	}
+}
+
 require_once dirname( __DIR__, 2 ) . '/inc/class-acgd-time.php';
+require_once dirname( __DIR__, 2 ) . '/inc/class-acgd-two-step.php';

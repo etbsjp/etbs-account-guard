@@ -7,13 +7,15 @@
  * class-acgd-access-restriction.php (IP restriction, the shared foundation and BASIC credential storage),
  * class-acgd-basic-auth.php (BASIC authentication itself: matching, the confirmation screen and the receive
  * diagnosis) and class-acgd-user-access.php (the per-user screens). The settings screen is in
- * class-acgd-settings.php. The Access Restriction fault notice (admin_notices) and the one-time cleanup of
+ * class-acgd-settings.php. Two-Step Verification (1.3.0) lives in class-acgd-two-step.php, including its own
+ * settings tab body, user edit screen section and notices. The Access Restriction fault notice (admin_notices) and the one-time cleanup of
  * a previous self-distributed build's leftover cron event (admin_init) are defined further down in this
  * file. Neither a dashboard widget nor an update checker is bundled in this wordpress.org build (issue #13).
  * 「ログイン名の保護」（1.0.0）は class-acgd-login-name.php にある。「アクセス制限」（1.1.0）は
  * class-acgd-access-restriction.php（IP 制限・共通の土台・BASIC 資格情報の保存）、
  * class-acgd-basic-auth.php（BASIC 認証そのもの：照合・確認画面・受信の診断）、class-acgd-user-access.php
- * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。アクセス制限の故障通知
+ * （ユーザーごとの画面）にある。設定画面は class-acgd-settings.php にある。「2段階認証」（1.3.0）は、
+ * 自身の設定タブの中身・ユーザー編集画面の区画・通知を含めて class-acgd-two-step.php にある。アクセス制限の故障通知
  * （admin_notices）と、以前の自社配布版が残した cron イベントの一度きりの掃除（admin_init）は
  * このファイルの後半で定義している。この wordpress.org 版はダッシュボードのウィジェットも
  * 更新チェッカーも同梱しない（issue #13）。
@@ -32,6 +34,7 @@ require_once __DIR__ . '/class-acgd-access-restriction.php';
 require_once __DIR__ . '/class-acgd-basic-auth.php';
 require_once __DIR__ . '/class-acgd-user-access.php';
 require_once __DIR__ . '/class-acgd-settings.php';
+require_once __DIR__ . '/class-acgd-two-step.php';
 
 /*-------------------------------------------*/
 /* Translations / 翻訳
@@ -76,6 +79,11 @@ ACGD_Access_Restriction::init();
 ACGD_Basic_Auth::init();
 ACGD_User_Access::init();
 ACGD_Settings::init();
+// After ACGD_User_Access::init(): its section (and the hidden default button it prints first) must come
+// before the Two-Step Verification section on the user edit screen.
+// ACGD_User_Access::init() の後に呼ぶ。ユーザー編集画面では、その区画（と先頭に出す隠しの既定ボタン）が
+// 2段階認証の区画より前に来る必要がある。
+ACGD_Two_Step::init();
 
 /*-------------------------------------------*/
 /* Legacy plugin-update-checker cron cleanup / 旧版の plugin-update-checker が残した cron の掃除

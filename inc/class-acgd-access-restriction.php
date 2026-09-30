@@ -1334,8 +1334,10 @@ class ACGD_Access_Restriction {
 	 *
 	 * @param int         $user_id   User who was denied. / 拒否されたユーザー。
 	 * @param string|null $remote_ip Connecting address, as get_remote_addr() returns. / 接続元アドレス（get_remote_addr() の戻り値と同じ形）。
-	 * @param string      $context   One of 'login', 'session' (a later access, whose session was destroyed) or 'rest'.
-	 *                               'login'・'session'（ログイン後のアクセスで、セッションを破棄した）・'rest' のいずれか。
+	 * @param string      $context   One of 'login', 'session' (a later access, whose session was destroyed), 'rest' or
+	 *                               'basic', or a two_step_* context of Two-Step Verification (docs/spec.md 7.13).
+	 *                               'login'・'session'（ログイン後のアクセスで、セッションを破棄した）・'rest'・'basic'、
+	 *                               または2段階認証の two_step_* の場面（docs/spec.md 7.13）のいずれか。
 	 * @return void
 	 */
 	public static function log_denial( $user_id, $remote_ip, $context ) {
