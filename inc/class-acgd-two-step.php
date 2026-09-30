@@ -301,6 +301,31 @@ class ACGD_Two_Step {
 	private static $pending_error = '';
 
 	/**
+	 * Method chosen on the user edit screen, by user ID, waiting for user_profile_update_errors to validate it
+	 * against the submitted email and role (7.3). / ユーザー編集画面で選ばれた方式（ユーザー ID ごと）。
+	 * 送信後のメールアドレスと権限で user_profile_update_errors が検証するまで持つ（7.3）。
+	 *
+	 * @var string[]
+	 */
+	private static $pending_methods = array();
+
+	/**
+	 * Validated methods, by user ID, written by profile_update once core has saved the profile.
+	 * 検証を通った方式（ユーザー ID ごと）。本体がプロフィールを保存した後の profile_update で書く。
+	 *
+	 * @var string[]
+	 */
+	private static $validated_methods = array();
+
+	/**
+	 * Whether this request has already issued the login cookie after a correct code (complete_login()).
+	 * このリクエストが、正しいコードの後にログインの Cookie をもう出したか（complete_login()）。
+	 *
+	 * @var bool
+	 */
+	private static $login_completed = false;
+
+	/**
 	 * Registers the hooks. Nothing is registered on multisite (7.1: not supported there, because the login
 	 * cookie can be shared across the network and a site without Two-Step Verification would let people in).
 	 * フックを登録する。マルチサイトでは何も登録しない（7.1：非対応。ログイン Cookie がネットワークで共有され
@@ -358,7 +383,8 @@ class ACGD_Two_Step {
 		add_action( 'show_user_profile', array( __CLASS__, 'render_user_fields' ) );
 		add_action( 'edit_user_profile_update', array( __CLASS__, 'save_user_fields' ) );
 		add_action( 'personal_options_update', array( __CLASS__, 'save_user_fields' ) );
-		add_action( 'user_profile_update_errors', array( __CLASS__, 'append_pending_error' ) );
+		add_action( 'user_profile_update_errors', array( __CLASS__, 'validate_user_fields' ), 10, 3 );
+		add_action( 'profile_update', array( __CLASS__, 'write_user_fields' ), 10, 1 );
 		add_filter( 'manage_users_columns', array( __CLASS__, 'add_column' ) );
 		add_filter( 'manage_users_custom_column', array( __CLASS__, 'render_column' ), 10, 3 );
 		add_action( 'admin_notices', array( __CLASS__, 'admin_notices' ) );
@@ -569,7 +595,17 @@ class ACGD_Two_Step {
 	 * この機能の故障を記録する。既に記録があれば書き直さない（7.2：壊れたままログインが続いても毎回は
 	 * 書かない）。add_option() は行があれば何もしない。
 	 *
-	 * @param string $message What happened (shown on the settings tab only). / 何が起きたか（設定タブにだけ出す）。
+	 * Two kinds, told apart by the message (the tab words its warning accordingly, render_state_notices()):
+	 * 'broken_option' — the option is broken and targets are judged by the narrow rule until the tab is saved
+	 * again; anything else — an exception inside the second step, where that one sign-in was refused (fail
+	 * closed). Neither turns the feature off (7.11). Only the first record is kept; a successful save of the tab
+	 * clears it.
+	 * 種類は2つで、メッセージで見分ける（タブの警告の文言もそれに合わせる。render_state_notices()）：
+	 * 'broken_option'＝option が壊れていて、タブを保存し直すまで狭い規則で対象を判定している状態。
+	 * それ以外＝2段階目の処理の中の例外で、そのログインは拒否した（閉じる）。どちらも機能を止めない（7.11）。
+	 * 残るのは最初の記録だけで、タブの保存に成功すると消える。
+	 *
+	 * @param string $message 'broken_option', or the exception message. / 'broken_option' か例外のメッセージ。
 	 * @return void
 	 */
 	public static function record_fault( $message ) {
@@ -591,6 +627,17 @@ class ACGD_Two_Step {
 	 */
 	public static function has_fault() {
 		return (bool) get_option( self::FAULT_OPTION, false );
+	}
+
+	/**
+	 * Tells whether the recorded fault is the broken option (not an exception). / 記録された故障が option の破損か（例外ではないか）を返す。
+	 *
+	 * @return bool Whether the broken option. / option の破損か。
+	 */
+	private static function fault_is_broken_option() {
+		$fault = get_option( self::FAULT_OPTION, array() );
+
+		return is_array( $fault ) && isset( $fault['message'] ) && 'broken_option' === $fault['message'];
 	}
 
 	/**
@@ -984,6 +1031,15 @@ class ACGD_Two_Step {
 
 	/**
 	 * Returns the rows of this feature (name => value), at most $limit. / この機能の行を返す（名前 => 値。最大 $limit 件）。
+	 *
+	 * ★ The LIMIT can leave rows out when more exist (many users signing in at once, or an attack). That is
+	 * safe for both callers: cleanup_expired_rows() simply catches the rest next time, and an attempt that
+	 * clear_user_records() misses after a password change can still never be completed, because
+	 * complete_login() compares the attempt's password fingerprint with the current hash (7.4-5).
+	 * ★ 行がそれより多いと LIMIT で取りこぼしうる（同時に多くの人がログインする、攻撃されている）。
+	 * 呼び出し元の2つとも安全：cleanup_expired_rows() は次の回に残りを拾い、パスワード変更の後に
+	 * clear_user_records() が取りこぼした試行も、complete_login() が試行の指紋と今のハッシュを比べるので
+	 * 完了できない（7.4-5）。
 	 *
 	 * @param int $limit Maximum rows. / 最大行数。
 	 * @return string[] Name => value. / 名前 => 値。
@@ -1542,6 +1598,9 @@ class ACGD_Two_Step {
 		$slot = self::reserve_send_slot( $user->ID );
 		if ( ! $slot['ok'] ) {
 			ACGD_Access_Restriction::log_denial( $user->ID, $context['ip'], 'two_step_limit' );
+			// A cookie of an earlier attempt would otherwise show that attempt instead of this message.
+			// 前の試行の Cookie が残っていると、この案内ではなくその試行の画面が出てしまうため消す。
+			self::set_attempt_cookie( '', 0 );
 			self::redirect_to_screen( array_merge( $extra, array( 'acgd_limit' => (int) $slot['retry_at'] ) ) );
 		}
 
@@ -1550,6 +1609,7 @@ class ACGD_Two_Step {
 		$result = self::issue_attempt( $user, $context, time() + self::ATTEMPT_TTL );
 		if ( $result['mail_failed'] ) {
 			ACGD_Access_Restriction::log_denial( $user->ID, $context['ip'], 'two_step_mail_failed' );
+			self::set_attempt_cookie( '', 0 ); // See the limit branch above. / 上の上限の分岐を参照。
 			self::redirect_to_screen( array_merge( $extra, array( 'acgd_mail_failed' => 1 ) ) );
 		}
 
@@ -1733,6 +1793,7 @@ class ACGD_Two_Step {
 	 */
 	public static function handle_code_screen() {
 		self::send_screen_headers();
+		self::set_interim_global( null );
 
 		// Display-only flags from the redirects of this class; they carry no secret. / このクラスの転送が付ける表示用の目印。秘密は載っていない。
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Display only.
@@ -1741,15 +1802,21 @@ class ACGD_Two_Step {
 		$resent      = ! empty( $_GET['acgd_resent'] );
 		// phpcs:enable
 
+		// These two messages come first, whatever cookie the browser still sends (the redirect that set them
+		// also cleared the attempt cookie, start_interactive()). Only a GET shows them.
+		// この2つの案内は、ブラウザーが送ってくる Cookie に関係なく先に出す（目印を付けた転送は試行の Cookie も
+		// 消している。start_interactive()）。出すのは GET のときだけ。
+		$is_get = ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' === strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) );
+		if ( $is_get && $limit_until ) {
+			self::render_message_screen( self::limit_message( $limit_until ), self::start_over_url( null ) );
+		}
+		if ( $is_get && $mail_failed ) {
+			self::render_message_screen( self::mail_failed_message(), self::start_over_url( null ) );
+		}
+
 		$attempt_id = self::read_attempt_cookie();
 
 		if ( '' === $attempt_id ) {
-			if ( $limit_until ) {
-				self::render_message_screen( self::limit_message( $limit_until ), self::start_over_url( null ) );
-			}
-			if ( $mail_failed ) {
-				self::render_message_screen( self::mail_failed_message(), self::start_over_url( null ) );
-			}
 			self::render_message_screen( acgd_join_sentences( array( __( 'This page needs cookies.', 'etbs-account-guard' ), __( 'Enable cookies in your browser and sign in again.', 'etbs-account-guard' ) ) ), self::start_over_url( null ) );
 		}
 
@@ -1796,6 +1863,15 @@ class ACGD_Two_Step {
 
 			self::render_code_screen( $attempt_id, $attempt, $errors, $invalid, $status );
 		} catch ( Throwable $e ) {
+			if ( self::$login_completed ) {
+				// The login cookie is already issued: the sign-in itself succeeded. Showing "a problem occurred"
+				// would be wrong, and recording a two-step fault would blame this feature for someone else's
+				// exception, so it is re-thrown for WordPress to handle as it would without this plugin.
+				// ログインの Cookie はもう出ている＝ログイン自体は成功している。「問題が起きた」と出すのは誤りで、
+				// 2段階認証の故障として記録すると他人の例外をこの機能のせいにしてしまう。そのため投げ直し、
+				// このプラグインが無いときと同じく WordPress に任せる。
+				throw $e;
+			}
 			// Fail closed (7.11). / 閉じる（7.11）。
 			self::record_fault( $e->getMessage() );
 			self::render_message_screen( self::get_problem_message(), self::start_over_url( null ) );
@@ -1997,6 +2073,28 @@ class ACGD_Two_Step {
 	}
 
 	/**
+	 * Sets wp-login.php's $interim_login global, which login_header() reads for the modal layout. The
+	 * login_form_{$action} hooks run before wp-login.php sets it itself (wp-login.php: do_action(
+	 * "login_form_{$action}" ) comes before `$interim_login = isset( $_REQUEST['interim-login'] );`), so the code
+	 * screen sets it: from the attempt when there is one, from the request otherwise (the screen's own URLs and
+	 * forms carry interim-login=1, screen_args()).
+	 * login_header() がモーダルの見た目に使う wp-login.php のグローバル $interim_login を設定する。
+	 * login_form_{$action} は wp-login.php 自身がそれを設定するより前に動く（wp-login.php では
+	 * do_action( "login_form_{$action}" ) が `$interim_login = isset( $_REQUEST['interim-login'] );` より先）ため、
+	 * コード入力画面が設定する。試行があれば試行から、無ければリクエストから（画面自身の URL とフォームは
+	 * interim-login=1 を運ぶ。screen_args()）。
+	 *
+	 * @param array|null $attempt Attempt, or null. / 試行、または null。
+	 * @return void
+	 */
+	private static function set_interim_global( $attempt ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Presence only; it picks a layout.
+		$interim = is_array( $attempt ) ? ! empty( $attempt['interim'] ) : isset( $_REQUEST['interim-login'] );
+
+		$GLOBALS['interim_login'] = $interim; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- wp-login.php's own global, set as wp-login.php sets it.
+	}
+
+	/**
 	 * Prints a screen with one message and a link, then exits. / 文1つとリンクの画面を出して exit する。
 	 *
 	 * @param string $message Text, not escaped. / 文（未エスケープ）。
@@ -2004,6 +2102,7 @@ class ACGD_Two_Step {
 	 * @return void
 	 */
 	private static function render_message_screen( $message, $link ) {
+		self::set_interim_global( null );
 		$errors = new WP_Error( 'acgd_two_step', esc_html( $message ) );
 		login_header( __( 'Verification code', 'etbs-account-guard' ), '', $errors );
 		?>
@@ -2030,6 +2129,7 @@ class ACGD_Two_Step {
 		$args      = self::screen_args( $attempt );
 		$nonce_act = self::code_nonce_action( $attempt_id );
 
+		self::set_interim_global( $attempt );
 		$message = '' === $status ? '' : '<p class="message" role="status">' . esc_html( $status ) . '</p>';
 		login_header( __( 'Verification code', 'etbs-account-guard' ), $message, $errors );
 		?>
@@ -2133,6 +2233,7 @@ class ACGD_Two_Step {
 	 */
 	public static function handle_resend() {
 		self::send_screen_headers();
+		self::set_interim_global( null );
 
 		$attempt_id = self::read_attempt_cookie();
 		try {
@@ -2224,6 +2325,13 @@ class ACGD_Two_Step {
 		// The session created next carries the mark (7.6). / 次に作られるセッションに印を付ける（7.6）。
 		self::$mark_user_id = $user->ID;
 		wp_set_auth_cookie( $user->ID, ! empty( $attempt['remember'] ), ! empty( $attempt['secure'] ) );
+		// From here on the second step is done. An exception below comes from core's post-login steps or other
+		// plugins' wp_login / login_redirect callbacks, not from this feature: handle_code_screen() lets it through
+		// instead of recording a fault (see its catch).
+		// ここから先は2段階目が終わっている。下で起きる例外は本体のログイン後の処理や他のプラグインの
+		// wp_login / login_redirect から来るもので、この機能の故障ではない。handle_code_screen() は故障として
+		// 記録せずにそのまま投げ直す（その catch を参照）。
+		self::$login_completed = true;
 
 		global $wpdb;
 		if ( ! empty( $user->user_activation_key ) ) {
@@ -2865,17 +2973,30 @@ class ACGD_Two_Step {
 	 * @return bool Whether valid. / 有効か。
 	 */
 	public static function has_valid_receive_check( $user_id, $emails ) {
+		return self::receive_check_until( $user_id, $emails ) > 0;
+	}
+
+	/**
+	 * Returns until when a user's receive check mark is valid for every given address, or 0 (one read).
+	 * ユーザーの受信確認の印が、与えたすべてのアドレスについて有効な期限を返す。無効なら 0（読むのは1回）。
+	 *
+	 * @param int      $user_id User ID. / ユーザー ID。
+	 * @param string[] $emails  Addresses that must all match. / すべて一致すべきアドレス。
+	 * @return int Time, or 0. / 時刻、または 0。
+	 */
+	private static function receive_check_until( $user_id, $emails ) {
 		$check = self::decode( self::get_row( self::receive_check_row( $user_id ) ) );
-		if ( null === $check || 'verified' !== ( isset( $check['s'] ) ? $check['s'] : '' ) || (int) ( isset( $check['exp'] ) ? $check['exp'] : 0 ) <= time() ) {
-			return false;
+		$until = ( null !== $check && isset( $check['exp'] ) ) ? (int) $check['exp'] : 0;
+		if ( null === $check || 'verified' !== ( isset( $check['s'] ) ? $check['s'] : '' ) || $until <= time() ) {
+			return 0;
 		}
 		foreach ( (array) $emails as $email ) {
 			if ( ! hash_equals( (string) $check['em'], self::email_hash( $email ) ) ) {
-				return false;
+				return 0;
 			}
 		}
 
-		return true;
+		return $until;
 	}
 
 	/**
@@ -2885,12 +3006,7 @@ class ACGD_Two_Step {
 	 * @return int Time, or 0. / 時刻、または 0。
 	 */
 	private static function receive_check_valid_until( $user ) {
-		if ( ! self::has_valid_receive_check( $user->ID, array( $user->user_email ) ) ) {
-			return 0;
-		}
-		$check = self::decode( self::get_row( self::receive_check_row( $user->ID ) ) );
-
-		return null === $check ? 0 : (int) $check['exp'];
+		return self::receive_check_until( $user->ID, array( $user->user_email ) );
 	}
 
 	/**
@@ -3305,8 +3421,14 @@ ACGD_JS;
 	 * @return array Value to save. / 保存する値。
 	 */
 	public static function sanitize_settings( $input ) {
-		$existing = get_option( self::OPTION, array() );
-		$existing = is_array( $existing ) ? $existing : array();
+		// On a refusal the stored value is returned exactly as it is, even when broken: replacing a broken
+		// value with array() would turn the narrow rule (7.11) into "nobody needs a code". Only a missing option
+		// becomes array() (the Settings API adds the option on the first save either way).
+		// 拒否したときは保存値をそのまま返す（壊れていても）。壊れた値を array() に置き換えると、狭い規則
+		// （7.11）が「誰にもコードが要らない」に開いてしまう。option が無いときだけ array() にする
+		// （最初の保存では、どちらにしても Settings API がオプションを作る）。
+		$existing = get_option( self::OPTION, null );
+		$existing = null === $existing ? array() : $existing;
 		$input    = is_array( $input ) ? $input : array();
 
 		$roles    = self::sanitize_role_methods( isset( $input['roles'] ) ? $input['roles'] : array() );
@@ -3318,8 +3440,12 @@ ACGD_JS;
 			'trust_days' => $settings['trust_days'],
 		);
 
+		// While the emergency switch is on, nobody is asked for a code now, so "already a target" is not taken as
+		// proof that one's inbox works: the receive check is required (the switch will be taken off later).
+		// 非常用スイッチが有効な間は、今は誰もコードを求められていないので、「もう対象である」ことを受信箱が
+		// 使える証拠にしない。受信確認を求める（スイッチはいずれ外される）。
 		$me = wp_get_current_user();
-		if ( $me->exists() && ! self::is_target( $me ) && self::is_target( $me, $roles ) && ! self::has_valid_receive_check( $me->ID, array( $me->user_email ) ) ) {
+		if ( $me->exists() && ( self::is_switch_disabled() || ! self::is_target( $me ) ) && self::is_target( $me, $roles ) && ! self::has_valid_receive_check( $me->ID, array( $me->user_email ) ) ) {
 			self::add_settings_error_once(
 				'acgd_two_step_receive_check',
 				acgd_join_sentences(
@@ -3334,7 +3460,17 @@ ACGD_JS;
 			return $existing;
 		}
 
-		$bad = self::find_targets( $roles, 5, array( __CLASS__, 'has_bad_email' ) );
+		// Only users this save newly makes targets (7.3-3). People who already need a code under the saved
+		// settings are not re-checked, so a save that turns roles back to "None" is never blocked by them.
+		// この保存で新しく対象になる人だけ（7.3-3）。保存済みの設定で既に対象の人は確かめ直さないので、
+		// 権限を「なし」に戻す保存がその人たちのせいで塞がれることは無い。
+		$bad = self::find_targets(
+			$roles,
+			5,
+			function ( $user ) {
+				return self::has_bad_email( $user ) && ! self::is_target( $user );
+			}
+		);
 		if ( $bad ) {
 			$names = array();
 			foreach ( $bad as $user ) {
@@ -3678,8 +3814,18 @@ ACGD_JS;
 	 */
 	private static function render_state_notices() {
 		if ( self::has_fault() ) {
+			$sentences = self::fault_is_broken_option()
+				? array(
+					esc_html__( 'The settings of two-step verification are broken.', 'etbs-account-guard' ),
+					esc_html__( 'Until this tab is saved again, users set to a verification code and users who can manage options still need a code; other users can sign in with their password.', 'etbs-account-guard' ),
+				)
+				: array(
+					esc_html__( 'An unexpected error occurred while two-step verification was processing a sign-in, and that sign-in was refused.', 'etbs-account-guard' ),
+					esc_html__( 'Two-step verification keeps working.', 'etbs-account-guard' ),
+					esc_html__( 'Saving this tab clears this warning.', 'etbs-account-guard' ),
+				);
 			?>
-			<div class="notice notice-error inline"><p><?php echo wp_kses( acgd_join_sentences( array( esc_html__( 'Two-step verification has a problem with its settings or its processing.', 'etbs-account-guard' ), esc_html__( 'Until this tab is saved again, users set to a verification code and users who can manage options still need a code; other users can sign in with their password.', 'etbs-account-guard' ) ) ), array() ); ?></p></div>
+			<div class="notice notice-error inline"><p><?php echo wp_kses( acgd_join_sentences( $sentences ), array() ); ?></p></div>
 			<?php
 		}
 		if ( self::is_switch_disabled() ) {
@@ -3814,13 +3960,12 @@ ACGD_JS;
 	}
 
 	/**
-	 * Validates and saves the method of the user edit screen (7.3). / ユーザー編集画面の方式を検証して保存する（7.3）。
-	 *
-	 * Checked only when the save turns Two-Step Verification on for the user: for oneself, a valid receive
-	 * check for the stored address and for the address submitted in the same save; for someone else, a
-	 * non-empty, valid email address. / 保存でそのユーザーに2段階認証が掛かることになるときだけ確かめる：
-	 * 本人なら、保存済みのアドレスと同じ保存で送られたアドレスの両方について有効な受信確認。他人なら、
-	 * 空でない正しいメールアドレス。
+	 * Reads the method of the user edit screen, to be validated in validate_user_fields() (7.3). Hooked to
+	 * personal_options_update / edit_user_profile_update, which run before core has read the submitted email
+	 * and role, so nothing is judged or written here.
+	 * ユーザー編集画面の方式を読み、validate_user_fields() での検証に回す（7.3）。personal_options_update /
+	 * edit_user_profile_update に掛ける。これらは本体が送信されたメールアドレスと権限を読む前に動くので、
+	 * ここでは判定も書き込みもしない。
 	 *
 	 * @param int $user_id User being saved. / 保存対象のユーザー。
 	 * @return void
@@ -3833,21 +3978,60 @@ ACGD_JS;
 			return;
 		}
 
-		$user = get_userdata( (int) $user_id );
-		if ( ! $user ) {
-			return;
-		}
-
-		$method = isset( $_POST['acgd_two_step_method'] ) ? sanitize_key( wp_unslash( $_POST['acgd_two_step_method'] ) ) : self::METHOD_FOLLOW;
+		$method = ( isset( $_POST['acgd_two_step_method'] ) && is_string( $_POST['acgd_two_step_method'] ) ) ? sanitize_key( wp_unslash( $_POST['acgd_two_step_method'] ) ) : self::METHOD_FOLLOW;
 		if ( ! in_array( $method, array( self::METHOD_FOLLOW, self::METHOD_NONE, self::METHOD_EMAIL ), true ) ) {
 			$method = self::METHOD_FOLLOW;
 		}
 
-		$posted_email = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : $user->user_email;
+		self::$pending_methods[ (int) $user_id ] = $method;
+	}
 
-		if ( ! self::is_target( $user ) && self::is_target( $user, null, $method ) ) {
-			if ( get_current_user_id() === (int) $user->ID ) {
-				if ( ! self::has_valid_receive_check( $user->ID, array( $user->user_email, $posted_email ) ) ) {
+	/**
+	 * Validates the method against the profile as it is about to be saved (7.3), on user_profile_update_errors:
+	 * $user carries the submitted email address and role. Checked only when the save makes the user a target:
+	 * for oneself, a valid receive check for both the stored and the submitted address; for someone else, a
+	 * valid submitted address. An error stops core from saving anything; otherwise the method is written on
+	 * profile_update (write_user_fields()). Also attaches the error to the profile screen.
+	 * 保存されようとしているプロフィールに対して方式を検証する（7.3）。user_profile_update_errors に掛け、
+	 * $user は送信されたメールアドレスと権限を持つ。保存でそのユーザーが対象になるときだけ確かめる：本人なら
+	 * 保存済みと送信されたアドレスの両方について有効な受信確認、他人なら送信されたアドレスが正しいこと。
+	 * エラーにすると本体は何も保存しない。通れば profile_update（write_user_fields()）で方式を書く。
+	 * あわせてエラーをプロフィール画面に出す。
+	 *
+	 * ★ Only this screen is covered. A role changed in bulk from the Users list ("Change role to…", which calls
+	 * set_role() without this screen) is not checked here: it can make someone a target without a receive check
+	 * or a valid address. / ★ 守れるのはこの画面だけ。ユーザー一覧の一括の権限変更（「権限を変更…」。
+	 * この画面を通らず set_role() を呼ぶ）はここでは確かめられず、受信確認や正しいアドレス無しで対象に
+	 * なりうる。
+	 *
+	 * @param WP_Error $errors Errors, changed in place. / エラー（その場で変える）。
+	 * @param bool     $update Whether an existing user is updated. / 既存ユーザーの更新か。
+	 * @param stdClass $user   User data about to be saved. / 保存されようとしているユーザーのデータ。
+	 * @return void
+	 */
+	public static function validate_user_fields( $errors, $update = true, $user = null ) {
+		if ( ! $errors instanceof WP_Error || ! $update || ! is_object( $user ) || empty( $user->ID ) || ! isset( self::$pending_methods[ (int) $user->ID ] ) ) {
+			return;
+		}
+
+		$user_id = (int) $user->ID;
+		$method  = self::$pending_methods[ $user_id ];
+		$current = get_userdata( $user_id );
+		if ( ! $current ) {
+			return;
+		}
+
+		// The roles after the save: core puts a changed role in $user->role (user-edit.php). / 保存後の権限。変えた権限は本体が $user->role に入れる（user-edit.php）。
+		$roles    = ( isset( $user->role ) && is_string( $user->role ) && '' !== $user->role ) ? array( $user->role ) : (array) $current->roles;
+		$settings = self::get_settings();
+		$will     = self::compute_is_target( $roles, $method, $settings['roles'], $settings['broken'], $settings['broken'] && user_can( $current, 'manage_options' ) );
+		// While the switch is on, "already a target" proves nothing (see sanitize_settings()). / スイッチが有効な間は「もう対象」を証拠にしない（sanitize_settings() を参照）。
+		$was   = ! self::is_switch_disabled() && self::is_target( $current );
+		$email = isset( $user->user_email ) ? (string) $user->user_email : $current->user_email;
+
+		if ( $will && ! $was ) {
+			if ( get_current_user_id() === $user_id ) {
+				if ( ! self::has_valid_receive_check( $user_id, array( $current->user_email, $email ) ) ) {
 					self::$pending_error = esc_html(
 						acgd_join_sentences(
 							array(
@@ -3857,28 +4041,48 @@ ACGD_JS;
 							)
 						)
 					);
-					self::stash_user_resubmit( $user->ID, $method );
-					return;
 				}
-			} elseif ( ! is_email( $posted_email ) ) {
+			} elseif ( ! is_email( $email ) ) {
 				self::$pending_error = esc_html( acgd_join_sentences( array( __( 'Two-step verification cannot be turned on for this user because the account has no valid email address.', 'etbs-account-guard' ), __( 'Not saved.', 'etbs-account-guard' ) ) ) );
-				self::stash_user_resubmit( $user->ID, $method );
-				return;
 			}
 		}
 
-		update_user_meta( $user->ID, self::USER_METHOD_META, $method );
+		if ( '' !== self::$pending_error ) {
+			self::stash_user_resubmit( $user_id, $method );
+		} elseif ( ! $errors->has_errors() ) {
+			self::$validated_methods[ $user_id ] = $method;
+		}
+
+		self::append_pending_error( $errors );
 	}
 
 	/**
-	 * Attaches the validation error from save_user_fields() to the profile update's errors (core then saves
-	 * nothing). / save_user_fields() の検証エラーをプロフィール更新のエラーに足す（本体は何も保存しない）。
+	 * Writes the validated method once core has saved the profile (profile_update). Nothing is written when
+	 * the save was refused, by this section or by core. / 本体がプロフィールを保存した後（profile_update）に、
+	 * 検証を通った方式を書く。この区画か本体が保存を拒んだときは何も書かない。
+	 *
+	 * @param int $user_id Saved user. / 保存されたユーザー。
+	 * @return void
+	 */
+	public static function write_user_fields( $user_id ) {
+		$user_id = (int) $user_id;
+		if ( ! isset( self::$validated_methods[ $user_id ] ) ) {
+			return;
+		}
+		update_user_meta( $user_id, self::USER_METHOD_META, self::$validated_methods[ $user_id ] );
+		unset( self::$validated_methods[ $user_id ] );
+	}
+
+	/**
+	 * Attaches the validation error of this section to the profile update's errors (core then saves nothing).
+	 * Called from validate_user_fields(). / この区画の検証エラーをプロフィール更新のエラーに足す（本体は何も
+	 * 保存しない）。validate_user_fields() から呼ぶ。
 	 *
 	 * @param WP_Error $errors Errors, changed in place. / エラー（その場で変える）。
 	 * @return void
 	 */
 	public static function append_pending_error( $errors ) {
-		if ( '' !== self::$pending_error && $errors instanceof WP_Error ) {
+		if ( '' !== self::$pending_error && $errors instanceof WP_Error && ! $errors->get_error_message( 'acgd_two_step' ) ) {
 			$errors->add( 'acgd_two_step', self::$pending_error );
 		}
 	}

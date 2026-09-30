@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: ETBS Account Guard 1.0.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/etbs-account-"
 "guard\n"
-"POT-Creation-Date: 2026-09-30T03:08:54+00:00\n"
+"POT-Creation-Date: 2026-09-30T03:28:29+00:00\n"
 "PO-Revision-Date: 2026-09-30 12:00+0900\n"
 "Last-Translator: ETBS\n"
 "Language-Team: Japanese\n"
@@ -91,8 +91,8 @@ msgid "%s Staff Access"
 msgstr "%s 関係者専用"
 
 #: inc/class-acgd-basic-auth.php:1237 inc/class-acgd-basic-auth.php:1531
-#: inc/class-acgd-basic-auth.php:1940 inc/class-acgd-two-step.php:2974
-#: inc/class-acgd-two-step.php:3000
+#: inc/class-acgd-basic-auth.php:1940 inc/class-acgd-two-step.php:3094
+#: inc/class-acgd-two-step.php:3120
 msgid "You do not have permission to do this."
 msgstr "この操作を行う権限がありません。"
 
@@ -106,8 +106,8 @@ msgstr "診断リクエストへの応答が想定外でした (ステータス:
 msgid "The username or password you entered is incorrect."
 msgstr "ユーザー名またはパスワードが正しくありません。"
 
-#: inc/class-acgd-invalid-credentials.php:102 inc/class-acgd-two-step.php:1459
-#: inc/class-acgd-two-step.php:1898 inc/class-acgd-two-step.php:2155
+#: inc/class-acgd-invalid-credentials.php:102 inc/class-acgd-two-step.php:1515
+#: inc/class-acgd-two-step.php:1978 inc/class-acgd-two-step.php:2260
 msgid "Error:"
 msgstr "エラー:"
 
@@ -124,8 +124,8 @@ msgstr "ログイン名の保護"
 msgid "Access Restriction"
 msgstr "アクセス制限"
 
-#: inc/class-acgd-settings.php:150 inc/class-acgd-two-step.php:3756
-#: inc/class-acgd-two-step.php:3919
+#: inc/class-acgd-settings.php:150 inc/class-acgd-two-step.php:3906
+#: inc/class-acgd-two-step.php:4127
 msgid "Two-Step Verification"
 msgstr "2段階認証"
 
@@ -410,7 +410,7 @@ msgid "Showing the first %1$d of %2$d users."
 msgstr "%2$d人中、最初の%1$d人を表示しています。"
 
 #: inc/class-acgd-settings.php:614 inc/class-acgd-settings.php:1438
-#: inc/class-acgd-two-step.php:3604
+#: inc/class-acgd-two-step.php:3744
 msgid "Login name (Username)"
 msgstr "ログイン名 (ユーザー名)"
 
@@ -708,7 +708,7 @@ msgstr ""
 "とパスワードを設定している必要があります。権限をこのモードに変えても、その手"
 "順を省略することはできません。"
 
-#: inc/class-acgd-settings.php:1288 inc/class-acgd-two-step.php:3556
+#: inc/class-acgd-settings.php:1288 inc/class-acgd-two-step.php:3696
 msgid "Role"
 msgstr "権限"
 
@@ -789,7 +789,7 @@ msgstr "現在制限されているユーザー"
 msgid "No user is restricted right now."
 msgstr "現在、制限されているユーザーはいません。"
 
-#: inc/class-acgd-settings.php:1465 inc/class-acgd-two-step.php:3648
+#: inc/class-acgd-settings.php:1465 inc/class-acgd-two-step.php:3788
 msgid "Emergency switch"
 msgstr "非常用スイッチ"
 
@@ -865,170 +865,170 @@ msgstr "2段階認証: メールの送信失敗"
 msgid "Two-step verification: unverified session discarded"
 msgstr "2段階認証: 印の無いセッションを破棄"
 
-#: inc/class-acgd-two-step.php:1471
+#: inc/class-acgd-two-step.php:1527
 msgid "A problem occurred while confirming your sign-in."
 msgstr "ログインの確認で問題が起きました。"
 
-#: inc/class-acgd-two-step.php:1471
+#: inc/class-acgd-two-step.php:1527
 msgid "Please contact your site administrator."
 msgstr "サイトの管理者に連絡してください。"
 
-#: inc/class-acgd-two-step.php:1749
+#: inc/class-acgd-two-step.php:1820
 msgid "This page needs cookies."
 msgstr "この画面には Cookie が必要です。"
 
-#: inc/class-acgd-two-step.php:1749
+#: inc/class-acgd-two-step.php:1820
 msgid "Enable cookies in your browser and sign in again."
 msgstr "ブラウザーで Cookie を有効にして、もう一度ログインしてください。"
 
-#: inc/class-acgd-two-step.php:1759 inc/class-acgd-two-step.php:2137
-#: inc/class-acgd-two-step.php:2144 inc/class-acgd-two-step.php:2210
-#: inc/class-acgd-two-step.php:2216
+#: inc/class-acgd-two-step.php:1830 inc/class-acgd-two-step.php:2242
+#: inc/class-acgd-two-step.php:2249 inc/class-acgd-two-step.php:2315
+#: inc/class-acgd-two-step.php:2321
 msgid "This sign-in can no longer be completed."
 msgstr "このログインはもう続けられません。"
 
-#: inc/class-acgd-two-step.php:1759 inc/class-acgd-two-step.php:1768
-#: inc/class-acgd-two-step.php:2137 inc/class-acgd-two-step.php:2144
-#: inc/class-acgd-two-step.php:2210 inc/class-acgd-two-step.php:2216
+#: inc/class-acgd-two-step.php:1830 inc/class-acgd-two-step.php:1839
+#: inc/class-acgd-two-step.php:2242 inc/class-acgd-two-step.php:2249
+#: inc/class-acgd-two-step.php:2315 inc/class-acgd-two-step.php:2321
 msgid "Please sign in again."
 msgstr "もう一度ログインしてください。"
 
-#: inc/class-acgd-two-step.php:1764
+#: inc/class-acgd-two-step.php:1835
 msgid "A new verification code has been sent."
 msgstr "新しい確認コードを送りました。"
 
-#: inc/class-acgd-two-step.php:1764
+#: inc/class-acgd-two-step.php:1835
 msgid "The previous code no longer works."
 msgstr "前のコードはもう使えません。"
 
-#: inc/class-acgd-two-step.php:1768
+#: inc/class-acgd-two-step.php:1839
 msgid "This request could not be accepted."
 msgstr "このリクエストは受け付けられませんでした。"
 
-#: inc/class-acgd-two-step.php:1785 inc/class-acgd-two-step.php:2957
+#: inc/class-acgd-two-step.php:1856 inc/class-acgd-two-step.php:3077
 msgid "The code was entered incorrectly too many times."
 msgstr "コードの誤りが上限に達しました。"
 
-#: inc/class-acgd-two-step.php:1785
+#: inc/class-acgd-two-step.php:1856
 msgid "Please sign in again with your password."
 msgstr "パスワードからもう一度ログインしてください。"
 
-#: inc/class-acgd-two-step.php:1857 inc/class-acgd-two-step.php:1950
+#: inc/class-acgd-two-step.php:1937 inc/class-acgd-two-step.php:2030
 msgid "The verification code is incorrect."
 msgstr "確認コードが正しくありません。"
 
-#: inc/class-acgd-two-step.php:1889 inc/class-acgd-two-step.php:2955
+#: inc/class-acgd-two-step.php:1969 inc/class-acgd-two-step.php:3075
 msgid "This verification code has expired."
 msgstr "この確認コードは有効期限が切れています。"
 
-#: inc/class-acgd-two-step.php:1889
+#: inc/class-acgd-two-step.php:1969
 msgid "Send a new code from this screen."
 msgstr "この画面から新しいコードを送ってください。"
 
-#: inc/class-acgd-two-step.php:1892 inc/class-acgd-two-step.php:2953
+#: inc/class-acgd-two-step.php:1972 inc/class-acgd-two-step.php:3073
 msgid "Enter the 6-digit verification code from the email."
 msgstr "メールに記載された6桁の確認コードを入力してください。"
 
-#: inc/class-acgd-two-step.php:1911 inc/class-acgd-two-step.php:2941
+#: inc/class-acgd-two-step.php:1991 inc/class-acgd-two-step.php:3061
 msgid "Too many verification codes have been sent."
 msgstr "確認コードの送信回数が上限に達しました。"
 
 #. translators: %s: date and time when a new code can be sent
-#: inc/class-acgd-two-step.php:1914
+#: inc/class-acgd-two-step.php:1994
 #, php-format
 msgid "You can sign in again after %s."
 msgstr "%s 以降に、もう一度ログインできます。"
 
-#: inc/class-acgd-two-step.php:1917
+#: inc/class-acgd-two-step.php:1997
 msgid "Your account is not locked."
 msgstr "アカウントはロックされていません。"
 
-#: inc/class-acgd-two-step.php:1917
+#: inc/class-acgd-two-step.php:1997
 msgid "Changing your password releases this limit."
 msgstr "パスワードを変更すると、この制限は解除されます。"
 
-#: inc/class-acgd-two-step.php:1935
+#: inc/class-acgd-two-step.php:2015
 msgid ""
 "The email with your verification code could not be sent, so you have not "
 "been signed in."
 msgstr "確認コードのメールを送れなかったため、ログインしていません。"
 
-#: inc/class-acgd-two-step.php:1936
+#: inc/class-acgd-two-step.php:2016
 msgid "Please try again later or contact your site administrator."
 msgstr ""
 "しばらくしてからもう一度お試しいただくか、サイトの管理者に連絡してください。"
 
 #. translators: %d: number of tries left
-#: inc/class-acgd-two-step.php:1953
+#: inc/class-acgd-two-step.php:2033
 #, php-format
 msgid "You can try %d more time."
 msgid_plural "You can try %d more times."
 msgstr[0] "あと%d回入力できます。"
 
-#: inc/class-acgd-two-step.php:1969
+#: inc/class-acgd-two-step.php:2049
 msgid "Please wait a moment before sending another code."
 msgstr "次のコードを送るまで、少し待ってください。"
 
 #. translators: %s: time (or date and time) when a new code can be sent
-#: inc/class-acgd-two-step.php:1972 inc/class-acgd-two-step.php:2943
+#: inc/class-acgd-two-step.php:2052 inc/class-acgd-two-step.php:3063
 #, php-format
 msgid "You can send a new code after %s."
 msgstr "%s 以降に新しいコードを送れます。"
 
-#: inc/class-acgd-two-step.php:2004 inc/class-acgd-two-step.php:2030
+#: inc/class-acgd-two-step.php:2107 inc/class-acgd-two-step.php:2134
 msgid "Verification code"
 msgstr "確認コード"
 
-#: inc/class-acgd-two-step.php:2006
+#: inc/class-acgd-two-step.php:2109
 msgid "Back to the login screen"
 msgstr "ログイン画面に戻る"
 
 #. translators: 1: masked email address, such as t•••@example.com, 2: date and time the code was sent
-#: inc/class-acgd-two-step.php:2040
+#: inc/class-acgd-two-step.php:2144
 #, php-format
 msgid "We sent a verification code to %1$s at %2$s."
 msgstr "%2$s に %1$s へ確認コードを送りました。"
 
 #. translators: %s: date and time the code expires
-#: inc/class-acgd-two-step.php:2046
+#: inc/class-acgd-two-step.php:2150
 #, php-format
 msgid "It expires at %s."
 msgstr "有効期限は %s です。"
 
-#: inc/class-acgd-two-step.php:2057
+#: inc/class-acgd-two-step.php:2161
 msgid "Verification code (6 digits)"
 msgstr "確認コード (6桁)"
 
-#: inc/class-acgd-two-step.php:2063 inc/class-acgd-user-access.php:512
+#: inc/class-acgd-two-step.php:2167 inc/class-acgd-user-access.php:512
 msgid "Verify"
 msgstr "確認"
 
-#: inc/class-acgd-two-step.php:2069
+#: inc/class-acgd-two-step.php:2173
 msgid "Send a new code"
 msgstr "コードを再送する"
 
-#: inc/class-acgd-two-step.php:2074
+#: inc/class-acgd-two-step.php:2178
 msgid "Start over"
 msgstr "最初からやり直す"
 
-#: inc/class-acgd-two-step.php:2077
+#: inc/class-acgd-two-step.php:2181
 msgid "If the email does not arrive"
 msgstr "メールが届かないとき"
 
-#: inc/class-acgd-two-step.php:2079
+#: inc/class-acgd-two-step.php:2183
 msgid "Wait a few minutes."
 msgstr "数分待ってください。"
 
-#: inc/class-acgd-two-step.php:2079
+#: inc/class-acgd-two-step.php:2183
 msgid "Delivery can take a little time."
 msgstr "届くまでに少し時間がかかることがあります。"
 
-#: inc/class-acgd-two-step.php:2080
+#: inc/class-acgd-two-step.php:2184
 msgid "Check your spam or junk folder."
 msgstr "迷惑メールのフォルダーを確認してください。"
 
 #. translators: %s: email address the message is expected to come from
-#: inc/class-acgd-two-step.php:2085
+#: inc/class-acgd-two-step.php:2189
 #, php-format
 msgid ""
 "Look for an email from %s (this may differ if your site uses a mail plugin)."
@@ -1036,73 +1036,73 @@ msgstr ""
 "%s から届くメールを探してください (サイトでメール送信のプラグインを使っている"
 "場合は、これと異なることがあります)。"
 
-#: inc/class-acgd-two-step.php:2090
+#: inc/class-acgd-two-step.php:2194
 msgid "Send a new code with the button above."
 msgstr "上のボタンでコードを再送してください。"
 
-#: inc/class-acgd-two-step.php:2091
+#: inc/class-acgd-two-step.php:2195
 msgid "If it still does not arrive, contact your site administrator."
 msgstr "それでも届かない場合は、サイトの管理者に連絡してください。"
 
-#: inc/class-acgd-two-step.php:2272
+#: inc/class-acgd-two-step.php:2384
 msgid "You have logged in successfully."
 msgstr "ログインしました。"
 
 #. translators: %s: site name
-#: inc/class-acgd-two-step.php:2629
+#: inc/class-acgd-two-step.php:2741
 #, php-format
 msgid "[%s] Your verification code"
 msgstr "[%s] 確認コード"
 
 #. translators: 1: site name, 2: site domain (plain text)
-#: inc/class-acgd-two-step.php:2632
+#: inc/class-acgd-two-step.php:2744
 #, php-format
 msgid "Your username and password were just entered to sign in to %1$s (%2$s)."
 msgstr ""
 "%1$s (%2$s) へのログインで、あなたのユーザー名とパスワードが入力されました。"
 
 #. translators: %s: 6-digit verification code
-#: inc/class-acgd-two-step.php:2635 inc/class-acgd-two-step.php:2679
+#: inc/class-acgd-two-step.php:2747 inc/class-acgd-two-step.php:2791
 #, php-format
 msgid "Verification code: %s"
 msgstr "確認コード: %s"
 
 #. translators: %s: date and time the code expires
-#: inc/class-acgd-two-step.php:2637 inc/class-acgd-two-step.php:2681
+#: inc/class-acgd-two-step.php:2749 inc/class-acgd-two-step.php:2793
 #, php-format
 msgid "This code expires at %s."
 msgstr "このコードの有効期限は %s です。"
 
-#: inc/class-acgd-two-step.php:2639
+#: inc/class-acgd-two-step.php:2751
 msgid "Do not share this code with anyone."
 msgstr "このコードをほかの人に教えないでください。"
 
-#: inc/class-acgd-two-step.php:2640
+#: inc/class-acgd-two-step.php:2752
 msgid "Administrators and support staff will never ask you for it."
 msgstr "管理者やサポートがこのコードを尋ねることはありません。"
 
 #. translators: %s: date and time of the sign-in
-#: inc/class-acgd-two-step.php:2643 inc/class-acgd-two-step.php:2713
+#: inc/class-acgd-two-step.php:2755 inc/class-acgd-two-step.php:2825
 #, php-format
 msgid "Date and time: %s"
 msgstr "日時: %s"
 
 #. translators: %s: IP address of the sign-in
-#: inc/class-acgd-two-step.php:2645 inc/class-acgd-two-step.php:2715
+#: inc/class-acgd-two-step.php:2757 inc/class-acgd-two-step.php:2827
 #, php-format
 msgid "IP address: %s"
 msgstr "IP アドレス: %s"
 
-#: inc/class-acgd-two-step.php:2647
+#: inc/class-acgd-two-step.php:2759
 msgid "If this was not you, your password may be known to someone else."
 msgstr ""
 "心当たりが無い場合は、パスワードがほかの人に知られているおそれがあります。"
 
-#: inc/class-acgd-two-step.php:2648
+#: inc/class-acgd-two-step.php:2760
 msgid "Nobody can sign in without this code."
 msgstr "このコードを入力しなければ、ログインはされません。"
 
-#: inc/class-acgd-two-step.php:2649
+#: inc/class-acgd-two-step.php:2761
 msgid ""
 "Sign in the usual way and change your password, or contact your site "
 "administrator."
@@ -1111,104 +1111,104 @@ msgstr ""
 "ださい。"
 
 #. translators: %s: site name
-#: inc/class-acgd-two-step.php:2672
+#: inc/class-acgd-two-step.php:2784
 #, php-format
 msgid "[%s] Verification code for setting up two-step verification"
 msgstr "[%s] 2段階認証の設定のための確認コード"
 
 #. translators: 1: site name, 2: site domain (plain text)
-#: inc/class-acgd-two-step.php:2675
+#: inc/class-acgd-two-step.php:2787
 #, php-format
 msgid ""
 "This is a verification code for setting up two-step verification on %1$s "
 "(%2$s)."
 msgstr "%1$s (%2$s) で2段階認証を設定するための確認コードです。"
 
-#: inc/class-acgd-two-step.php:2676
+#: inc/class-acgd-two-step.php:2788
 msgid "This email is not for signing in."
 msgstr "ログインのためのメールではありません。"
 
-#: inc/class-acgd-two-step.php:2683
+#: inc/class-acgd-two-step.php:2795
 msgid "If you did not set this up, contact your site administrator."
 msgstr "設定をしていないのに届いた場合は、サイトの管理者に連絡してください。"
 
 #. translators: %s: site name
-#: inc/class-acgd-two-step.php:2706
+#: inc/class-acgd-two-step.php:2818
 #, php-format
 msgid "[%s] A sign-in with your password was stopped"
 msgstr "[%s] あなたのパスワードでのログインを止めました"
 
 #. translators: 1: site name, 2: site domain (plain text)
-#: inc/class-acgd-two-step.php:2709
+#: inc/class-acgd-two-step.php:2821
 #, php-format
 msgid "Someone tried to sign in to %1$s (%2$s) with your correct password."
 msgstr "%1$s (%2$s) に、正しいパスワードでログインが試みられました。"
 
-#: inc/class-acgd-two-step.php:2710
+#: inc/class-acgd-two-step.php:2822
 msgid ""
 "The sign-in was stopped, because two-step verification cannot be completed "
 "that way."
 msgstr "この方法では2段階認証を通れないため、ログインを止めました。"
 
-#: inc/class-acgd-two-step.php:2717
+#: inc/class-acgd-two-step.php:2829
 msgid "If this was not you, change your password."
 msgstr "心当たりが無い場合は、パスワードを変更してください。"
 
-#: inc/class-acgd-two-step.php:2923
+#: inc/class-acgd-two-step.php:3043
 msgid "A verification code has been sent to your email address."
 msgstr "あなたのメールアドレスに確認コードを送りました。"
 
 #. translators: %s: time the code expires
-#: inc/class-acgd-two-step.php:2925
+#: inc/class-acgd-two-step.php:3045
 #, php-format
 msgid "Enter it below before %s."
 msgstr "%s までに下に入力してください。"
 
-#: inc/class-acgd-two-step.php:2931
+#: inc/class-acgd-two-step.php:3051
 msgid "Confirmed."
 msgstr "確認しました。"
 
 #. translators: %s: time until which the confirmation is valid
-#: inc/class-acgd-two-step.php:2933
+#: inc/class-acgd-two-step.php:3053
 #, php-format
 msgid ""
 "You can now save settings that turn on two-step verification for your own "
 "account until %s."
 msgstr "%s まで、あなた自身に2段階認証が掛かる設定を保存できます。"
 
-#: inc/class-acgd-two-step.php:2947
+#: inc/class-acgd-two-step.php:3067
 msgid "Your account has no valid email address."
 msgstr "あなたのアカウントには正しいメールアドレスがありません。"
 
-#: inc/class-acgd-two-step.php:2947
+#: inc/class-acgd-two-step.php:3067
 msgid "Set one on your profile first."
 msgstr "先にプロフィールで設定してください。"
 
-#: inc/class-acgd-two-step.php:2949
+#: inc/class-acgd-two-step.php:3069
 msgid "The email could not be sent."
 msgstr "メールを送れませんでした。"
 
-#: inc/class-acgd-two-step.php:2949
+#: inc/class-acgd-two-step.php:3069
 msgid "Check the email settings of this site."
 msgstr "このサイトのメールの設定を確認してください。"
 
-#: inc/class-acgd-two-step.php:2955 inc/class-acgd-two-step.php:2957
-#: inc/class-acgd-two-step.php:2959
+#: inc/class-acgd-two-step.php:3075 inc/class-acgd-two-step.php:3077
+#: inc/class-acgd-two-step.php:3079
 msgid "Send a new code."
 msgstr "新しいコードを送ってください。"
 
-#: inc/class-acgd-two-step.php:2959
+#: inc/class-acgd-two-step.php:3079
 msgid "There is no code waiting to be confirmed."
 msgstr "確認を待っているコードはありません。"
 
 #. translators: %s: masked email address
-#: inc/class-acgd-two-step.php:3188
+#: inc/class-acgd-two-step.php:3308
 #, php-format
 msgid "Your email address %s has been confirmed."
 msgstr "メールアドレス %s を確認済みです。"
 
 #. translators: %s: time until which the confirmation is valid
-#: inc/class-acgd-two-step.php:3193
+#: inc/class-acgd-two-step.php:3313
 #, php-format
 msgid ""
 "Settings that turn on two-step verification for your own account can be "
@@ -1216,7 +1216,7 @@ msgid ""
 msgstr "%s まで、あなた自身に2段階認証が掛かる設定を保存できます。"
 
 #. translators: %s: masked email address
-#: inc/class-acgd-two-step.php:3203
+#: inc/class-acgd-two-step.php:3323
 #, php-format
 msgid ""
 "Before turning on two-step verification for your own account, confirm that "
@@ -1225,11 +1225,11 @@ msgstr ""
 "あなた自身に2段階認証を掛ける前に、メールアドレス %s にコードが届くことを確か"
 "めてください。"
 
-#: inc/class-acgd-two-step.php:3213 inc/class-acgd-two-step.php:3221
+#: inc/class-acgd-two-step.php:3333 inc/class-acgd-two-step.php:3341
 msgid "Send a confirmation code"
 msgstr "確認コードを送る"
 
-#: inc/class-acgd-two-step.php:3223
+#: inc/class-acgd-two-step.php:3343
 msgid ""
 "Without JavaScript, these buttons reload this screen without saving your "
 "other changes on it; the Two-Step Verification and Access Restriction "
@@ -1238,20 +1238,20 @@ msgstr ""
 "JavaScript が無効な場合、これらのボタンはこの画面の他の変更を保存せずに画面を"
 "読み込み直します。「2段階認証」と「アクセス制限」で選んだ内容は残ります。"
 
-#: inc/class-acgd-two-step.php:3238
+#: inc/class-acgd-two-step.php:3358
 msgid "Confirmation code (6 digits)"
 msgstr "確認コード (6桁)"
 
-#: inc/class-acgd-two-step.php:3240
+#: inc/class-acgd-two-step.php:3360
 msgid "Confirm"
 msgstr "確認する"
 
-#: inc/class-acgd-two-step.php:3323
+#: inc/class-acgd-two-step.php:3453
 msgid ""
 "These settings would turn on two-step verification for your own account."
 msgstr "この設定では、あなた自身に2段階認証が掛かります。"
 
-#: inc/class-acgd-two-step.php:3324
+#: inc/class-acgd-two-step.php:3454
 msgid ""
 "Confirm your email address with \"Send a confirmation code\" at the top of "
 "this tab first (the confirmation is valid for 10 minutes)."
@@ -1259,13 +1259,13 @@ msgstr ""
 "先にこのタブの上部の「確認コードを送る」でメールアドレスを確かめてください "
 "(確認は10分間有効です)。"
 
-#: inc/class-acgd-two-step.php:3325 inc/class-acgd-two-step.php:3349
-#: inc/class-acgd-two-step.php:3852 inc/class-acgd-two-step.php:3860
+#: inc/class-acgd-two-step.php:3455 inc/class-acgd-two-step.php:3489
+#: inc/class-acgd-two-step.php:4040 inc/class-acgd-two-step.php:4046
 msgid "Not saved."
 msgstr "保存しませんでした。"
 
 #. translators: %s: login names of users without a valid email address, separated by commas
-#: inc/class-acgd-two-step.php:3345
+#: inc/class-acgd-two-step.php:3485
 #, php-format
 msgid ""
 "These users would need a verification code but have no valid email address: "
@@ -1274,11 +1274,11 @@ msgstr ""
 "次のユーザーは確認コードが必要になりますが、正しいメールアドレスがありませ"
 "ん: %s。"
 
-#: inc/class-acgd-two-step.php:3348
+#: inc/class-acgd-two-step.php:3488
 msgid "Set their email addresses first."
 msgstr "先にメールアドレスを設定してください。"
 
-#: inc/class-acgd-two-step.php:3517
+#: inc/class-acgd-two-step.php:3657
 msgid ""
 "Two-step verification asks for a verification code sent to the user's "
 "registered email address after the password has been accepted."
@@ -1286,7 +1286,7 @@ msgstr ""
 "2段階認証は、パスワードが合った後に、登録メールアドレスへ送った確認コードの入"
 "力を求めます。"
 
-#: inc/class-acgd-two-step.php:3518
+#: inc/class-acgd-two-step.php:3658
 msgid ""
 "It is set separately from Access Restriction, and a user held to both goes "
 "through both: first the password and IP restriction, then the verification "
@@ -1295,13 +1295,13 @@ msgstr ""
 "アクセス制限とは別に設定し、両方が掛かる人は両方を通ります。順番は、パスワー"
 "ドと IP 制限、確認コード、次の画面での BASIC 認証です。"
 
-#: inc/class-acgd-two-step.php:3519
+#: inc/class-acgd-two-step.php:3659
 msgid ""
 "Unlike Access Restriction, it can also be turned on for the administrator "
 "role."
 msgstr "アクセス制限と違い、管理者の権限にも設定できます。"
 
-#: inc/class-acgd-two-step.php:3526
+#: inc/class-acgd-two-step.php:3666
 msgid ""
 "Its strength depends on the email account: anyone who can read the user's "
 "inbox can also reset the password."
@@ -1309,25 +1309,25 @@ msgstr ""
 "強さはメールアカウントの強さで決まります。受信箱を読める人は、パスワードの再"
 "発行もできるためです。"
 
-#: inc/class-acgd-two-step.php:3526
+#: inc/class-acgd-two-step.php:3666
 msgid ""
 "Use it for users whose email account is protected with multi-factor "
 "authentication."
 msgstr "メールアカウントが多要素認証で守られているユーザーに使ってください。"
 
-#: inc/class-acgd-two-step.php:3528
+#: inc/class-acgd-two-step.php:3668
 msgid "Your own email address"
 msgstr "あなた自身のメールアドレス"
 
-#: inc/class-acgd-two-step.php:3533
+#: inc/class-acgd-two-step.php:3673
 msgid "Two-step verification by role"
 msgstr "権限ごとの2段階認証"
 
-#: inc/class-acgd-two-step.php:3534
+#: inc/class-acgd-two-step.php:3674
 msgid "A user's own setting on their user edit screen wins over the role."
 msgstr "ユーザー編集画面でのユーザーごとの設定が、権限の設定より優先されます。"
 
-#: inc/class-acgd-two-step.php:3534
+#: inc/class-acgd-two-step.php:3674
 msgid ""
 "A user who holds more than one role needs a verification code if any of them "
 "requires one."
@@ -1335,32 +1335,32 @@ msgstr ""
 "複数の権限を持つユーザーは、どれか1つが確認コードを求めていれば確認コードが必"
 "要です。"
 
-#: inc/class-acgd-two-step.php:3557
+#: inc/class-acgd-two-step.php:3697
 msgid "Two-step verification"
 msgstr "2段階認証"
 
 #. translators: %s: role name, such as Editor
-#: inc/class-acgd-two-step.php:3569
+#: inc/class-acgd-two-step.php:3709
 #, php-format
 msgid "Two-step verification for %s"
 msgstr "%s の2段階認証"
 
 #. translators: %s: role name, such as Editor
-#: inc/class-acgd-two-step.php:3570 inc/class-acgd-two-step.php:3768
-#: inc/class-acgd-two-step.php:3773
+#: inc/class-acgd-two-step.php:3710 inc/class-acgd-two-step.php:3918
+#: inc/class-acgd-two-step.php:3923
 msgid "None"
 msgstr "なし"
 
-#: inc/class-acgd-two-step.php:3571 inc/class-acgd-two-step.php:3768
-#: inc/class-acgd-two-step.php:3774
+#: inc/class-acgd-two-step.php:3711 inc/class-acgd-two-step.php:3918
+#: inc/class-acgd-two-step.php:3924
 msgid "Verification code (email)"
 msgstr "確認コード (メール)"
 
-#: inc/class-acgd-two-step.php:3592
+#: inc/class-acgd-two-step.php:3732
 msgid "Users who need a verification code"
 msgstr "確認コードが必要なユーザー"
 
-#: inc/class-acgd-two-step.php:3593
+#: inc/class-acgd-two-step.php:3733
 msgid ""
 "Application passwords made before two-step verification was turned on keep "
 "working without a code."
@@ -1368,32 +1368,32 @@ msgstr ""
 "2段階認証を有効にする前に発行したアプリケーションパスワードは、コードなしで使"
 "えるままです。"
 
-#: inc/class-acgd-two-step.php:3593
+#: inc/class-acgd-two-step.php:3733
 msgid "Review them on each user's edit screen."
 msgstr "各ユーザーの編集画面で見直してください。"
 
-#: inc/class-acgd-two-step.php:3595
+#: inc/class-acgd-two-step.php:3735
 msgid "No user needs a verification code right now."
 msgstr "今は確認コードが必要なユーザーはいません。"
 
-#: inc/class-acgd-two-step.php:3605
+#: inc/class-acgd-two-step.php:3745
 msgid "Email address"
 msgstr "メールアドレス"
 
-#: inc/class-acgd-two-step.php:3606 inc/class-acgd-two-step.php:3786
+#: inc/class-acgd-two-step.php:3746 inc/class-acgd-two-step.php:3936
 msgid "Application passwords"
 msgstr "アプリケーションパスワード"
 
-#: inc/class-acgd-two-step.php:3623
+#: inc/class-acgd-two-step.php:3763
 msgid "Set"
 msgstr "設定済み"
 
-#: inc/class-acgd-two-step.php:3623
+#: inc/class-acgd-two-step.php:3763
 msgid "Missing or invalid"
 msgstr "未設定または不正"
 
 #. translators: %s: PHP constant to add to wp-config.php, ACGD_DISABLE_TWO_STEP
-#: inc/class-acgd-two-step.php:3656
+#: inc/class-acgd-two-step.php:3796
 #, php-format
 msgid ""
 "If nobody can sign in because codes do not arrive, add %s to wp-config.php."
@@ -1401,24 +1401,23 @@ msgstr ""
 "コードが届かず誰もログインできなくなった場合は、wp-config.php に %s を追加し"
 "てください。"
 
-#: inc/class-acgd-two-step.php:3659
+#: inc/class-acgd-two-step.php:3799
 msgid ""
 "This stops two-step verification only; Access Restriction and Login Name "
 "Protection keep working."
 msgstr ""
 "止まるのは2段階認証だけで、アクセス制限とログイン名の保護は動き続けます。"
 
-#: inc/class-acgd-two-step.php:3660
+#: inc/class-acgd-two-step.php:3800
 msgid ""
 "Define it also on a copy of this site whose email sending is turned off."
 msgstr "メールの送信を止めた、このサイトの複製にも定義してください。"
 
-#: inc/class-acgd-two-step.php:3678 inc/class-acgd-two-step.php:3723
-msgid ""
-"Two-step verification has a problem with its settings or its processing."
-msgstr "2段階認証の設定または処理に問題があります。"
+#: inc/class-acgd-two-step.php:3819
+msgid "The settings of two-step verification are broken."
+msgstr "2段階認証の設定が壊れています。"
 
-#: inc/class-acgd-two-step.php:3678
+#: inc/class-acgd-two-step.php:3820
 msgid ""
 "Until this tab is saved again, users set to a verification code and users "
 "who can manage options still need a code; other users can sign in with their "
@@ -1428,8 +1427,24 @@ msgstr ""
 "管理できるユーザーには引き続きコードが必要で、それ以外のユーザーはパスワード"
 "でログインできます。"
 
+#: inc/class-acgd-two-step.php:3823
+msgid ""
+"An unexpected error occurred while two-step verification was processing a "
+"sign-in, and that sign-in was refused."
+msgstr ""
+"2段階認証がログインを処理する途中で想定外のエラーが起きたため、そのログインを"
+"拒否しました。"
+
+#: inc/class-acgd-two-step.php:3824
+msgid "Two-step verification keeps working."
+msgstr "2段階認証は動作し続けています。"
+
+#: inc/class-acgd-two-step.php:3825
+msgid "Saving this tab clears this warning."
+msgstr "このタブを保存すると、この警告は消えます。"
+
 #. translators: %s: PHP constant, ACGD_DISABLE_TWO_STEP
-#: inc/class-acgd-two-step.php:3683 inc/class-acgd-two-step.php:3728
+#: inc/class-acgd-two-step.php:3833 inc/class-acgd-two-step.php:3878
 #, php-format
 msgid ""
 "The emergency switch (%s in wp-config.php) is turned on, so two-step "
@@ -1439,7 +1454,7 @@ msgstr ""
 "す。"
 
 #. translators: %s: URL of the Two-Step Verification tab of the settings screen
-#: inc/class-acgd-two-step.php:3713
+#: inc/class-acgd-two-step.php:3863
 #, php-format
 msgid ""
 "Open the <a href=\"%s\">Two-Step Verification tab</a> of the settings screen "
@@ -1447,43 +1462,48 @@ msgid ""
 msgstr ""
 "詳しくは、設定画面の<a href=\"%s\">「2段階認証」タブ</a>を開いてください。"
 
-#: inc/class-acgd-two-step.php:3759
+#: inc/class-acgd-two-step.php:3873
+msgid ""
+"Two-step verification has a problem with its settings or its processing."
+msgstr "2段階認証の設定または処理に問題があります。"
+
+#: inc/class-acgd-two-step.php:3909
 msgid "Verification code for this user"
 msgstr "このユーザーの確認コード"
 
 #. translators: %s: what the role setting currently means for this user, such as "Verification code (email)" or "None"
-#: inc/class-acgd-two-step.php:3767
+#: inc/class-acgd-two-step.php:3917
 #, php-format
 msgid "Follow the role setting (currently: %s)"
 msgstr "権限の設定に従う (いまは: %s)"
 
-#: inc/class-acgd-two-step.php:3776
+#: inc/class-acgd-two-step.php:3926
 msgid "The code is sent to the email address of this account."
 msgstr "コードは、このアカウントのメールアドレスに送ります。"
 
-#: inc/class-acgd-two-step.php:3781
+#: inc/class-acgd-two-step.php:3931
 msgid "Confirm your email address"
 msgstr "メールアドレスの確認"
 
 #. translators: %s: number of application passwords
-#: inc/class-acgd-two-step.php:3794
+#: inc/class-acgd-two-step.php:3944
 #, php-format
 msgid "Application passwords: %s."
 msgstr "アプリケーションパスワード: %s 件。"
 
-#: inc/class-acgd-two-step.php:3797
+#: inc/class-acgd-two-step.php:3947
 msgid "They work without a verification code."
 msgstr "確認コードなしで使えます。"
 
-#: inc/class-acgd-two-step.php:3803
+#: inc/class-acgd-two-step.php:3953
 msgid "Review them"
 msgstr "見直す"
 
-#: inc/class-acgd-two-step.php:3850
+#: inc/class-acgd-two-step.php:4038
 msgid "This would turn on two-step verification for your own account."
 msgstr "この保存では、あなた自身に2段階認証が掛かります。"
 
-#: inc/class-acgd-two-step.php:3851
+#: inc/class-acgd-two-step.php:4039
 msgid ""
 "Confirm your email address with \"Send a confirmation code\" in the Two-Step "
 "Verification section first (the confirmation is valid for 10 minutes, and "
@@ -1492,7 +1512,7 @@ msgstr ""
 "先に「2段階認証」の区画の「確認コードを送る」でメールアドレスを確かめてくださ"
 "い (確認は10分間有効で、同じ保存でアドレスを変えることはできません)。"
 
-#: inc/class-acgd-two-step.php:3860
+#: inc/class-acgd-two-step.php:4046
 msgid ""
 "Two-step verification cannot be turned on for this user because the account "
 "has no valid email address."
@@ -1500,7 +1520,7 @@ msgstr ""
 "このアカウントには正しいメールアドレスが無いため、このユーザーに2段階認証を掛"
 "けられません。"
 
-#: inc/class-acgd-two-step.php:3939
+#: inc/class-acgd-two-step.php:4147
 msgid "Email"
 msgstr "メール"
 
