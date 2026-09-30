@@ -1574,13 +1574,17 @@ class ACGD_Two_Step {
 	 */
 	private static function build_attempt_context( $user ) {
 		// phpcs:disable WordPress.Security.NonceVerification -- Read while the login form's own request is being processed: wp-login.php has no nonce, and WooCommerce verified its own before calling wp_signon(). The values are only stored and replayed through wp_safe_redirect() / wp_validate_redirect().
+		// Destinations go through wp_sanitize_redirect() (what wp_redirect() itself applies), not esc_url_raw(), which
+		// would turn a relative "wp-admin/" into "http://wp-admin/" and defeat wp-login.php's default-destination check.
+		// 行き先は esc_url_raw() ではなく wp_sanitize_redirect()（wp_redirect() 自身が掛けるもの）に通す。esc_url_raw() は
+		// 相対の "wp-admin/" を "http://wp-admin/" にしてしまい、wp-login.php の既定の行き先の判定が効かなくなる。
 		$origin   = ( isset( $GLOBALS['pagenow'] ) && 'wp-login.php' === $GLOBALS['pagenow'] ) ? 'login' : 'other';
 		$redirect = '';
 
 		if ( 'login' === $origin ) {
 			// The requested redirect_to, as wp-login.php reads it (wp-login.php: $requested_redirect_to).
 			// wp-login.php と同じく、要求された redirect_to（wp-login.php の $requested_redirect_to）。
-			$redirect = ( isset( $_REQUEST['redirect_to'] ) && is_string( $_REQUEST['redirect_to'] ) ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect_to'] ) ) : '';
+			$redirect = ( isset( $_REQUEST['redirect_to'] ) && is_string( $_REQUEST['redirect_to'] ) ) ? wp_sanitize_redirect( wp_unslash( $_REQUEST['redirect_to'] ) ) : '';
 		} elseif ( isset( $_POST['woocommerce-login-nonce'] ) && function_exists( 'wc_get_page_permalink' ) ) {
 			// WooCommerce's WC_Form_Handler::process_login(): 'redirect', else the referer, else My Account,
 			// through the woocommerce_login_redirect filter and wp_validate_redirect().
@@ -1588,7 +1592,7 @@ class ACGD_Two_Step {
 			// マイアカウント。woocommerce_login_redirect フィルタと wp_validate_redirect() を通す。
 			$my_account = wc_get_page_permalink( 'myaccount' );
 			if ( ! empty( $_POST['redirect'] ) && is_string( $_POST['redirect'] ) ) {
-				$redirect = esc_url_raw( wp_unslash( $_POST['redirect'] ) );
+				$redirect = wp_sanitize_redirect( wp_unslash( $_POST['redirect'] ) );
 			} elseif ( wp_get_raw_referer() ) {
 				$redirect = wp_get_raw_referer();
 			} else {
@@ -1596,7 +1600,7 @@ class ACGD_Two_Step {
 			}
 			$redirect = wp_validate_redirect( apply_filters( 'woocommerce_login_redirect', remove_query_arg( 'wc_error', $redirect ), $user ), $my_account ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce's own filter, applied as WooCommerce applies it.
 		} else {
-			$raw      = ( isset( $_REQUEST['redirect_to'] ) && is_string( $_REQUEST['redirect_to'] ) ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect_to'] ) ) : (string) wp_get_raw_referer();
+			$raw      = ( isset( $_REQUEST['redirect_to'] ) && is_string( $_REQUEST['redirect_to'] ) ) ? wp_sanitize_redirect( wp_unslash( $_REQUEST['redirect_to'] ) ) : (string) wp_get_raw_referer();
 			$redirect = wp_validate_redirect( $raw, home_url( '/' ) );
 		}
 
