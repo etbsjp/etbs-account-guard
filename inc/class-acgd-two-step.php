@@ -1601,7 +1601,11 @@ class ACGD_Two_Step {
 			// A cookie of an earlier attempt would otherwise show that attempt instead of this message.
 			// 前の試行の Cookie が残っていると、この案内ではなくその試行の画面が出てしまうため消す。
 			self::set_attempt_cookie( '', 0 );
-			self::redirect_to_screen( array_merge( $extra, array( 'acgd_limit' => (int) $slot['retry_at'] ) ) );
+			$flags = array( 'acgd_limit' => (int) $slot['retry_at'] );
+			if ( 'gap' === $slot['reason'] ) {
+				$flags['acgd_limit_gap'] = 1; // The 60-second gap, not the hourly limit. / 1時間の上限ではなく60秒の間隔。
+			}
+			self::redirect_to_screen( array_merge( $extra, $flags ) );
 		}
 
 		self::cleanup_expired_rows();
@@ -1638,7 +1642,15 @@ class ACGD_Two_Step {
 		// would turn a relative "wp-admin/" into "http://wp-admin/" and defeat wp-login.php's default-destination check.
 		// 行き先は esc_url_raw() ではなく wp_sanitize_redirect()（wp_redirect() 自身が掛けるもの）に通す。esc_url_raw() は
 		// 相対の "wp-admin/" を "http://wp-admin/" にしてしまい、wp-login.php の既定の行き先の判定が効かなくなる。
-		$origin   = ( isset( $GLOBALS['pagenow'] ) && 'wp-login.php' === $GLOBALS['pagenow'] ) ? 'login' : 'other';
+		// wp-login.php is recognized by its own login_init action (wp-login.php fires it before handling any
+		// action, and nothing else in core does), not by $pagenow: a renamed login page that includes
+		// wp-login.php from a stub file (SiteGuard WP Plugin's "Rename Login", login_XXXXX.php) runs the same code
+		// under another $pagenow. WooCommerce and other forms call wp_signon() without it.
+		// wp-login.php は $pagenow ではなく、それ自身の login_init アクションで見分ける（wp-login.php はどの
+		// アクションを処理するより前にこれを発火させ、本体の他の場所では発火しない）。wp-login.php を別名の
+		// ファイルから読み込むログインページ（SiteGuard WP Plugin の「ログインページ変更」の login_XXXXX.php）では、
+		// 同じコードが別の $pagenow で動くため。WooCommerce などのフォームはこれを発火させずに wp_signon() を呼ぶ。
+		$origin   = did_action( 'login_init' ) ? 'login' : 'other';
 		$redirect = '';
 
 		if ( 'login' === $origin ) {
@@ -1802,6 +1814,7 @@ class ACGD_Two_Step {
 		// Display-only flags from the redirects of this class; they carry no secret. / このクラスの転送が付ける表示用の目印。秘密は載っていない。
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Display only.
 		$limit_until = isset( $_GET['acgd_limit'] ) ? absint( $_GET['acgd_limit'] ) : 0;
+		$limit_gap   = ! empty( $_GET['acgd_limit_gap'] );
 		$mail_failed = ! empty( $_GET['acgd_mail_failed'] );
 		$resent      = ! empty( $_GET['acgd_resent'] );
 		// phpcs:enable
@@ -1812,7 +1825,10 @@ class ACGD_Two_Step {
 		// 消している。start_interactive()）。出すのは GET のときだけ。
 		$is_get = ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' === strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) );
 		if ( $is_get && $limit_until ) {
-			self::render_message_screen( self::limit_message( $limit_until ), self::start_over_url( null ) );
+			$text = $limit_gap
+				? acgd_join_sentences( array( self::gap_message( $limit_until ), __( 'Then sign in again.', 'etbs-account-guard' ) ) )
+				: self::limit_message( $limit_until );
+			self::render_message_screen( $text, self::start_over_url( null ) );
 		}
 		if ( $is_get && $mail_failed ) {
 			self::render_message_screen( self::mail_failed_message(), self::start_over_url( null ) );
@@ -2048,13 +2064,19 @@ class ACGD_Two_Step {
 	 * @return string Text, not escaped. / 文（未エスケープ）。
 	 */
 	private static function gap_message( $retry_at ) {
+		$wait = max( 1, (int) $retry_at - time() );
+
 		return acgd_join_sentences(
 			array(
-				__( 'Please wait a moment before sending another code.', 'etbs-account-guard' ),
 				sprintf(
-					/* translators: %s: time (or date and time) when a new code can be sent */
-					__( 'You can send a new code after %s.', 'etbs-account-guard' ),
-					ACGD_Time::format_local( get_option( 'time_format' ), (int) $retry_at )
+					/* translators: %d: minimum number of seconds between two codes (60) */
+					__( 'A new code can be sent %d seconds after the previous one.', 'etbs-account-guard' ),
+					self::SEND_GAP
+				),
+				sprintf(
+					/* translators: %d: seconds left before a new code can be sent */
+					_n( 'Please wait %d more second.', 'Please wait %d more seconds.', $wait, 'etbs-account-guard' ),
+					$wait
 				),
 			)
 		);
@@ -3352,7 +3374,15 @@ ACGD_JS;
 				</form>
 			<?php else : ?>
 				<p><button type="submit" class="button" name="<?php echo esc_attr( self::RC_DO_FIELD ); ?>" value="send" data-acgd-rc="send"><?php esc_html_e( 'Send a confirmation code', 'etbs-account-guard' ); ?></button></p>
-				<?php self::render_receive_check_code_field(); ?>
+				<?php
+				// Without JavaScript, Enter in the code field submits core's profile form through the hidden default
+				// button (ACGD_User_Access, #acgd-default-submit), i.e. a normal profile save: the code is not
+				// checked and only the admin's own settings are saved. The receive check runs only from the buttons.
+				// JavaScript が無いとき、コード欄での Enter は隠しの既定ボタン（ACGD_User_Access の
+				// #acgd-default-submit）経由で本体のプロフィールのフォームを送る＝普通のプロフィールの保存になる。
+				// コードは照合されず、保存されるのは管理者自身の設定だけ。受信確認はボタンからだけ行う。
+				self::render_receive_check_code_field();
+				?>
 				<p class="description"><?php esc_html_e( 'Without JavaScript, these buttons reload this screen without saving your other changes on it; the Two-Step Verification and Access Restriction choices are kept.', 'etbs-account-guard' ); ?></p>
 			<?php endif; ?>
 			<p data-acgd-rc-status role="status"><?php echo esc_html( $status ); ?></p>
@@ -3533,10 +3563,15 @@ ACGD_JS;
 	 * @return void
 	 */
 	private static function add_settings_error_once( $code, $message ) {
-		// These live in wp-admin/includes/template.php: present on options.php, absent when the option is
-		// updated from elsewhere (WP-CLI, for example), where there is no screen to show the error on anyway.
-		// これらは wp-admin/includes/template.php にある。options.php では読み込まれているが、他の経路
-		// （WP-CLI など）でオプションを更新するときは無い。そのときはエラーを見せる画面もそもそも無い。
+		// A safeguard that normally never triggers: these live in wp-admin/includes/template.php, which is loaded
+		// wherever this sanitize callback runs today (it is registered on admin_init, so options.php and the other
+		// admin entry points; WP-CLI also loads wp-admin/includes/admin.php, but its option update never reaches
+		// this callback, since admin_init has not run). It only matters if the setting were ever registered in a
+		// context without the admin includes.
+		// 通常は働かない保険。これらは wp-admin/includes/template.php にあり、この sanitize が今動く場面では
+		// 必ず読み込まれている（登録は admin_init なので options.php などの管理画面の入口。WP-CLI も
+		// wp-admin/includes/admin.php を読むが、admin_init が走らないので option の更新でこのコールバックに
+		// 来ない）。管理画面のファイルが無い文脈で設定を登録するようなことがあったときのためだけにある。
 		if ( ! function_exists( 'add_settings_error' ) || ! function_exists( 'get_settings_errors' ) ) {
 			return;
 		}
