@@ -3865,14 +3865,18 @@ ACGD_JS;
 
 	/**
 	 * Reads the submitted number of days a device is trusted (7.8): one of TRUST_DAYS_CHOICES, otherwise the
-	 * saved value (default 30) is kept. / 送信された、端末を信頼する日数を読む（7.8）。TRUST_DAYS_CHOICES の
-	 * どれかでなければ、保存済みの値（既定 30）のままにする。
+	 * saved value (default 30) is kept. An integer is accepted as well as a string: on the very first save the
+	 * Settings API runs the sanitize callback a second time on its own output (add_option()), where it is an int.
+	 * 送信された、端末を信頼する日数を読む（7.8）。TRUST_DAYS_CHOICES のどれかでなければ、保存済みの値
+	 * （既定 30）のままにする。文字列だけでなく整数も受け付ける：最初の保存では Settings API が sanitize を
+	 * 自分の出力に対してもう一度呼ぶ（add_option()）ので、そのときは整数で来る。
 	 *
 	 * @param mixed $input Submitted value, or null when the field was not sent. / 送信された値。欄が無ければ null。
 	 * @return int 0, 7 or 30. / 0・7・30。
 	 */
-	private static function sanitize_trust_days( $input ) {
-		if ( is_string( $input ) && preg_match( '/\A[0-9]{1,3}\z/', $input ) && in_array( (int) $input, self::TRUST_DAYS_CHOICES, true ) ) {
+	public static function sanitize_trust_days( $input ) {
+		$is_number = is_int( $input ) || ( is_string( $input ) && preg_match( '/\A[0-9]{1,3}\z/', $input ) );
+		if ( $is_number && in_array( (int) $input, self::TRUST_DAYS_CHOICES, true ) ) {
 			return (int) $input;
 		}
 		$settings = self::get_settings();

@@ -1285,4 +1285,79 @@ class TwoStepTest extends TestCase {
 			$this->assertSame( $case['expected'], ACGD_Two_Step::ua_hint( $case['raw'] ), $case['test_condition_name'] );
 		}
 	}
+
+	/**
+	 * Tests ACGD_Two_Step::sanitize_trust_days() (7.8): 0, 7 or 30 as a string (the form) or an int (the second
+	 * sanitize call of the very first save); anything else keeps the saved value.
+	 * ACGD_Two_Step::sanitize_trust_days() のテスト（7.8）。0・7・30 を文字列（フォーム）でも整数（最初の保存で
+	 * 2回目に呼ばれる sanitize）でも受け付け、それ以外は保存済みの値のままにする。
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_trust_days() {
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'フォームの "7" => 7',
+				'saved'               => null,
+				'input'               => '7',
+				'expected'            => 7,
+			),
+			array(
+				'test_condition_name' => '最初の保存の2回目（整数 7） => 7（保存済みの 30 に戻さない）',
+				'saved'               => null,
+				'input'               => 7,
+				'expected'            => 7,
+			),
+			array(
+				'test_condition_name' => 'フォームの "0"（信頼しない） => 0',
+				'saved'               => array( 'trust_days' => 30 ),
+				'input'               => '0',
+				'expected'            => 0,
+			),
+			array(
+				'test_condition_name' => '整数 0 => 0',
+				'saved'               => array( 'trust_days' => 30 ),
+				'input'               => 0,
+				'expected'            => 0,
+			),
+			array(
+				'test_condition_name' => '選択肢に無い "99" => 保存済みの 7 のまま',
+				'saved'               => array( 'trust_days' => 7 ),
+				'input'               => '99',
+				'expected'            => 7,
+			),
+			array(
+				'test_condition_name' => '選択肢に無い "99"・option 無し => 既定の 30',
+				'saved'               => null,
+				'input'               => '99',
+				'expected'            => 30,
+			),
+			array(
+				'test_condition_name' => '数字でない・小数・配列・欄なし => 保存済みの値',
+				'saved'               => array( 'trust_days' => 0 ),
+				'input'               => '7.0',
+				'expected'            => 0,
+			),
+			array(
+				'test_condition_name' => '配列 => 保存済みの値',
+				'saved'               => array( 'trust_days' => 0 ),
+				'input'               => array( '7' ),
+				'expected'            => 0,
+			),
+			array(
+				'test_condition_name' => '欄なし（null） => 保存済みの値',
+				'saved'               => array( 'trust_days' => 7 ),
+				'input'               => null,
+				'expected'            => 7,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			acgd_test_reset_options();
+			if ( null !== $case['saved'] ) {
+				acgd_test_set_option( 'acgd_two_step', $case['saved'] );
+			}
+			$this->assertSame( $case['expected'], ACGD_Two_Step::sanitize_trust_days( $case['input'] ), $case['test_condition_name'] );
+		}
+	}
 }
