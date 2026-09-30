@@ -444,6 +444,10 @@ class ACGD_Two_Step {
 		add_action( 'profile_update', array( __CLASS__, 'on_profile_update' ), 10, 2 );
 		add_action( 'wp_set_password', array( __CLASS__, 'on_wp_set_password' ), 10, 3 );
 
+		// Saving "do not trust devices" revokes every trusted device (7.8). / 「信頼しない」の保存で全員の信頼した端末を消す（7.8）。
+		add_action( 'add_option_' . self::OPTION, array( __CLASS__, 'on_settings_added' ), 10, 2 );
+		add_action( 'update_option_' . self::OPTION, array( __CLASS__, 'on_settings_updated' ), 10, 2 );
+
 		// Receive check (7.3). / 受信確認（7.3）。
 		add_action( 'wp_ajax_' . self::RC_NONCE_ACTION, array( __CLASS__, 'ajax_receive_check' ) );
 		add_action( 'admin_post_' . self::RC_NONCE_ACTION, array( __CLASS__, 'handle_receive_check_post' ) );
@@ -1694,10 +1698,12 @@ class ACGD_Two_Step {
 
 			// 2-6: a trusted device (7.8). Only the second step is skipped: the password (and IP restriction,
 			// before this filter) was already required, and BASIC authentication still follows. The session gets
-			// the mark like after a code (7.6).
+			// the mark like after a code (7.6). Not for XML-RPC: the ordinary password is always refused there
+			// (7.7), trusted cookie or not.
 			// 2-6：信頼した端末（7.8）。省略するのは2段階目だけ：パスワード（とこのフィルタより前の IP 制限）は
 			// もう求めており、BASIC 認証もこの後に効く。セッションにはコードの後と同じく印を付ける（7.6）。
-			if ( self::is_trusted_device( $user ) ) {
+			// XML-RPC は除く：そこでは普段のパスワードは信頼 Cookie の有無にかかわらず常に拒否する（7.7）。
+			if ( ! ( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST ) && self::is_trusted_device( $user ) ) {
 				self::$mark_user_id = (int) $user->ID;
 				return $user;
 			}
@@ -1949,6 +1955,60 @@ class ACGD_Two_Step {
 					'samesite' => 'Lax',
 				)
 			);
+		}
+	}
+
+	/**
+	 * Tells whether a stored value of OPTION says "do not trust devices" (trust_days saved as 0). Only the saved
+	 * value counts: a broken option, which get_trust_days() treats as 0, does not. Pure.
+	 * OPTION の保存値が「端末を信頼しない」（trust_days が 0 で保存されている）かを返す。見るのは保存された値
+	 * だけで、get_trust_days() が 0 とみなす壊れた option は当たらない。副作用なし。
+	 *
+	 * @param mixed $value Stored value. / 保存値。
+	 * @return bool Whether trusting is turned off by the saved value. / 保存値で信頼しない設定か。
+	 */
+	public static function saved_trust_is_off( $value ) {
+		return is_array( $value ) && array_key_exists( 'trust_days', $value ) && 0 === $value['trust_days'];
+	}
+
+	/**
+	 * Revokes every trusted device of every user (7.8: saving "do not trust devices" clears the lists, so turning
+	 * it on again does not bring old devices back). / 全ユーザーの信頼した端末を解除する（7.8：「信頼しない」を
+	 * 保存した時点で一覧を消す。再び有効にしても古い端末は戻らない）。
+	 *
+	 * @return void
+	 */
+	public static function clear_all_trusted_devices() {
+		delete_metadata( 'user', 0, self::TRUSTED_META, '', true );
+	}
+
+	/**
+	 * add_option_{OPTION}: the very first save of the tab (the option did not exist). Hooked here and not in the
+	 * sanitize callback, which runs twice on the first save. / add_option_{OPTION}：タブの最初の保存（option が
+	 * 無かった）。sanitize は最初の保存で2回呼ばれるので、そこではなくここに掛ける。
+	 *
+	 * @param string $option Option name. / オプション名。
+	 * @param mixed  $value  Saved value. / 保存した値。
+	 * @return void
+	 */
+	public static function on_settings_added( $option, $value ) {
+		unset( $option );
+		if ( self::saved_trust_is_off( $value ) ) {
+			self::clear_all_trusted_devices();
+		}
+	}
+
+	/**
+	 * update_option_{OPTION}: a later save of the tab. / update_option_{OPTION}：2回目以降のタブの保存。
+	 *
+	 * @param mixed $old_value Previous value. / 前の値。
+	 * @param mixed $value     Saved value. / 保存した値。
+	 * @return void
+	 */
+	public static function on_settings_updated( $old_value, $value ) {
+		unset( $old_value );
+		if ( self::saved_trust_is_off( $value ) ) {
+			self::clear_all_trusted_devices();
 		}
 	}
 
@@ -4271,6 +4331,7 @@ ACGD_JS;
 									__( 'On the verification code screen, a user can choose to skip the code on that browser for this many days.', 'etbs-account-guard' ),
 									__( 'The password is still needed every time, and IP restriction and BASIC authentication still apply.', 'etbs-account-guard' ),
 									__( 'A change here applies at once to devices that are already trusted.', 'etbs-account-guard' ),
+									__( 'Saving "Do not trust devices" revokes every trusted device of every user.', 'etbs-account-guard' ),
 								)
 							)
 						);

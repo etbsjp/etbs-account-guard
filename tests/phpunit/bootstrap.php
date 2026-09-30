@@ -170,6 +170,35 @@ if ( ! function_exists( 'delete_user_meta' ) ) {
 	}
 }
 
+if ( ! function_exists( 'delete_metadata' ) ) {
+	/**
+	 * Minimal stub of delete_metadata() for the user meta store; only $delete_all = true with an empty value is
+	 * reproduced (every user's key). / ユーザーメタのストア用の delete_metadata() の最小スタブ。再現するのは
+	 * $delete_all = true・値が空の形（全ユーザーのキー）だけ。
+	 *
+	 * @param string $meta_type  Only 'user'. / 'user' だけ。
+	 * @param int    $object_id  Ignored when $delete_all. / $delete_all なら無視。
+	 * @param string $meta_key   Meta key. / メタキー。
+	 * @param mixed  $meta_value Ignored. / 無視。
+	 * @param bool   $delete_all Must be true. / true であること。
+	 * @return bool Whether something was deleted. / 消したか。
+	 */
+	function delete_metadata( $meta_type, $object_id, $meta_key, $meta_value = '', $delete_all = false ) {
+		unset( $object_id, $meta_value );
+		$deleted = false;
+		if ( 'user' !== $meta_type || ! $delete_all || empty( $GLOBALS['acgd_test_user_meta'] ) ) {
+			return false;
+		}
+		foreach ( $GLOBALS['acgd_test_user_meta'] as $user_id => $meta ) {
+			if ( isset( $meta[ $meta_key ] ) ) {
+				unset( $GLOBALS['acgd_test_user_meta'][ $user_id ][ $meta_key ] );
+				$deleted = true;
+			}
+		}
+		return $deleted;
+	}
+}
+
 if ( ! function_exists( 'wp_strip_all_tags' ) ) {
 	/**
 	 * Same as core's wp_strip_all_tags() (without $remove_breaks). / 本体の wp_strip_all_tags() と同じ（$remove_breaks なし）。

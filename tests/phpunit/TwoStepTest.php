@@ -1360,4 +1360,69 @@ class TwoStepTest extends TestCase {
 			$this->assertSame( $case['expected'], ACGD_Two_Step::sanitize_trust_days( $case['input'] ), $case['test_condition_name'] );
 		}
 	}
+
+	/**
+	 * Tests ACGD_Two_Step::on_settings_updated() / on_settings_added() through saved_trust_is_off() (7.8:
+	 * saving "do not trust devices" clears every user's list; 7 or 30, a broken or a missing value does not).
+	 * ACGD_Two_Step::on_settings_updated() / on_settings_added() のテスト（saved_trust_is_off() を通す）。
+	 * 7.8：「信頼しない」を保存すると全員の一覧を消す。7・30・壊れた値・キーの無い値では消さない。
+	 *
+	 * @return void
+	 */
+	public function test_on_settings_updated() {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '更新で trust_days=0 => 全員の一覧を消す',
+				'hook'                => 'on_settings_updated',
+				'value'               => array( 'roles' => array(), 'trust_days' => 0 ),
+				'expected_cleared'    => true,
+			),
+			array(
+				'test_condition_name' => '最初の保存（add_option）で trust_days=0 => 全員の一覧を消す',
+				'hook'                => 'on_settings_added',
+				'value'               => array( 'roles' => array(), 'trust_days' => 0 ),
+				'expected_cleared'    => true,
+			),
+			array(
+				'test_condition_name' => '更新で trust_days=7 => 消さない（陽性対照）',
+				'hook'                => 'on_settings_updated',
+				'value'               => array( 'roles' => array(), 'trust_days' => 7 ),
+				'expected_cleared'    => false,
+			),
+			array(
+				'test_condition_name' => '壊れた値（文字列 "0"・配列でない） => 消さない（壊れた間の0扱いでは消さない）',
+				'hook'                => 'on_settings_updated',
+				'value'               => array( 'trust_days' => '0' ),
+				'expected_cleared'    => false,
+			),
+			array(
+				'test_condition_name' => '配列でない => 消さない',
+				'hook'                => 'on_settings_updated',
+				'value'               => 'broken',
+				'expected_cleared'    => false,
+			),
+			array(
+				'test_condition_name' => 'trust_days の無い値 => 消さない',
+				'hook'                => 'on_settings_added',
+				'value'               => array( 'roles' => array() ),
+				'expected_cleared'    => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			acgd_test_reset_user_meta();
+			update_user_meta( 5, 'acgd_trusted_devices', array( 'x' ) );
+			update_user_meta( 6, 'acgd_trusted_devices', array( 'y' ) );
+			update_user_meta( 6, 'acgd_two_step_method', 'email' );
+
+			if ( 'on_settings_added' === $case['hook'] ) {
+				ACGD_Two_Step::on_settings_added( 'acgd_two_step', $case['value'] );
+			} else {
+				ACGD_Two_Step::on_settings_updated( array(), $case['value'] );
+			}
+
+			$this->assertSame( $case['expected_cleared'], '' === get_user_meta( 5, 'acgd_trusted_devices', true ) && '' === get_user_meta( 6, 'acgd_trusted_devices', true ), $case['test_condition_name'] );
+			$this->assertSame( 'email', get_user_meta( 6, 'acgd_two_step_method', true ), $case['test_condition_name'] . '（他のメタは消さない）' );
+		}
+	}
 }
