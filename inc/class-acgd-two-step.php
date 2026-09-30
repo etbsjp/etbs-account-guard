@@ -1857,8 +1857,10 @@ class ACGD_Two_Step {
 			do_action( 'wp_login_failed', $user->user_login, new WP_Error( 'acgd_two_step_wrong_code', __( 'The verification code is incorrect.', 'etbs-account-guard' ) ) ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core's own action.
 		}
 
-		$used      = (int) self::get_row( self::counter_row( $hash ) );
-		$remaining = max( 0, self::MAX_WRONG - $used );
+		// A counter already gone means a parallel request used up the last try and discarded the attempt.
+		// 回数の行がもう無いのは、並列のリクエストが最後の1回を使って試行を捨てた後だということ。
+		$used      = self::get_row( self::counter_row( $hash ) );
+		$remaining = null === $used ? 0 : max( 0, self::MAX_WRONG - (int) $used );
 		if ( $remaining < 1 ) {
 			self::delete_attempt( $attempt_id );
 			self::set_attempt_cookie( '', 0 );
@@ -1966,7 +1968,7 @@ class ACGD_Two_Step {
 			array(
 				__( 'Please wait a moment before sending another code.', 'etbs-account-guard' ),
 				sprintf(
-					/* translators: %s: time when a new code can be sent */
+					/* translators: %s: time (or date and time) when a new code can be sent */
 					__( 'You can send a new code after %s.', 'etbs-account-guard' ),
 					ACGD_Time::format_local( get_option( 'time_format' ), (int) $retry_at )
 				),
@@ -2815,7 +2817,8 @@ class ACGD_Two_Step {
 		}
 
 		if ( ! hash_equals( (string) $check['hmac'], self::receive_check_hmac( $user->ID, (string) $check['rid'], $code, wp_salt( 'auth' ) ) ) ) {
-			$remaining = max( 0, self::MAX_WRONG - (int) self::get_row( $counter ) );
+			$used      = self::get_row( $counter );
+			$remaining = null === $used ? 0 : max( 0, self::MAX_WRONG - (int) $used );
 			if ( $remaining < 1 ) {
 				self::delete_row( $row, $raw );
 				self::delete_row( $counter );
@@ -2936,7 +2939,7 @@ class ACGD_Two_Step {
 				return acgd_join_sentences(
 					array(
 						__( 'Too many verification codes have been sent.', 'etbs-account-guard' ),
-						/* translators: %s: date and time when a new code can be sent */
+						/* translators: %s: time (or date and time) when a new code can be sent */
 						sprintf( __( 'You can send a new code after %s.', 'etbs-account-guard' ), ACGD_Time::format_local( get_option( 'date_format' ) . ' ' . $format, $time ) ),
 					)
 				);
@@ -3377,6 +3380,13 @@ ACGD_JS;
 	 * @return void
 	 */
 	private static function add_settings_error_once( $code, $message ) {
+		// These live in wp-admin/includes/template.php: present on options.php, absent when the option is
+		// updated from elsewhere (WP-CLI, for example), where there is no screen to show the error on anyway.
+		// これらは wp-admin/includes/template.php にある。options.php では読み込まれているが、他の経路
+		// （WP-CLI など）でオプションを更新するときは無い。そのときはエラーを見せる画面もそもそも無い。
+		if ( ! function_exists( 'add_settings_error' ) || ! function_exists( 'get_settings_errors' ) ) {
+			return;
+		}
 		foreach ( get_settings_errors( self::OPTION ) as $error ) {
 			if ( isset( $error['code'] ) && $code === $error['code'] ) {
 				return;
@@ -3521,7 +3531,7 @@ ACGD_JS;
 		<form method="post" action="options.php">
 			<?php settings_fields( self::SETTINGS_GROUP ); ?>
 			<h2><?php esc_html_e( 'Two-step verification by role', 'etbs-account-guard' ); ?></h2>
-			<p><?php esc_html_e( 'A user\'s own setting on their user edit screen wins over the role. A user who holds more than one role needs a verification code if any of them requires one.', 'etbs-account-guard' ); ?></p>
+			<p><?php echo esc_html( acgd_join_sentences( array( __( 'A user\'s own setting on their user edit screen wins over the role.', 'etbs-account-guard' ), __( 'A user who holds more than one role needs a verification code if any of them requires one.', 'etbs-account-guard' ) ) ) ); ?></p>
 			<?php self::render_role_table(); ?>
 			<?php submit_button(); ?>
 		</form>

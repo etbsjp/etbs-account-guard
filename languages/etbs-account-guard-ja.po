@@ -3,8 +3,8 @@ msgstr ""
 "Project-Id-Version: ETBS Account Guard 1.0.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/etbs-account-"
 "guard\n"
-"POT-Creation-Date: 2026-09-15T12:54:38+00:00\n"
-"PO-Revision-Date: 2026-09-15 12:00+0900\n"
+"POT-Creation-Date: 2026-09-30T03:08:54+00:00\n"
+"PO-Revision-Date: 2026-09-30 12:00+0900\n"
 "Last-Translator: ETBS\n"
 "Language-Team: Japanese\n"
 "Language: ja\n"
@@ -15,15 +15,15 @@ msgstr ""
 "X-Domain: etbs-account-guard\n"
 
 #. Plugin Name of the plugin
-#: etbs-account-guard.php inc/class-acgd-settings.php:186
-#: inc/class-acgd-settings.php:187
+#: etbs-account-guard.php inc/class-acgd-settings.php:194
+#: inc/class-acgd-settings.php:195
 msgid "ETBS Account Guard"
 msgstr "ETBS Account Guard"
 
 #. Plugin URI of the plugin
 #: etbs-account-guard.php
-msgid "https://etbs.jp/product-category/wordpress-tools/"
-msgstr "https://etbs.jp/product-category/wordpress-tools/"
+msgid "https://etbs.jp/product/etbs-account-guard/"
+msgstr "https://etbs.jp/product/etbs-account-guard/"
 
 #. Description of the plugin
 #: etbs-account-guard.php
@@ -44,11 +44,11 @@ msgstr "ETBS (DAI)"
 msgid "https://etbs.jp"
 msgstr "https://etbs.jp"
 
-#: inc/class-acgd-basic-auth.php:942
+#: inc/class-acgd-basic-auth.php:986
 msgid "The username or password was not accepted"
 msgstr "ユーザー名またはパスワードが受け付けられませんでした"
 
-#: inc/class-acgd-basic-auth.php:943 inc/class-acgd-basic-auth.php:946
+#: inc/class-acgd-basic-auth.php:987 inc/class-acgd-basic-auth.php:990
 msgid ""
 "This screen protects your account with a second username and password (BASIC "
 "authentication), separate from your WordPress login."
@@ -56,11 +56,11 @@ msgstr ""
 "この画面は、WordPress のログインとは別の2つ目のユーザー名とパスワード (BASIC "
 "認証) でアカウントを守っています。"
 
-#: inc/class-acgd-basic-auth.php:945
+#: inc/class-acgd-basic-auth.php:989
 msgid "A second sign-in is required"
 msgstr "2つ目のサインインが必要です"
 
-#: inc/class-acgd-basic-auth.php:951
+#: inc/class-acgd-basic-auth.php:995
 msgid ""
 "If a username/password prompt did not appear, use the link below to try "
 "again."
@@ -68,7 +68,7 @@ msgstr ""
 "ユーザー名とパスワードの入力欄が表示されなかった場合は、下のリンクからもう一"
 "度お試しください。"
 
-#: inc/class-acgd-basic-auth.php:952
+#: inc/class-acgd-basic-auth.php:996
 msgid ""
 "If you no longer have the second username and password, contact your site "
 "administrator."
@@ -76,27 +76,28 @@ msgstr ""
 "2つ目のユーザー名とパスワードが分からなくなった場合は、サイトの管理者にお問い"
 "合わせください。"
 
-#: inc/class-acgd-basic-auth.php:963
+#: inc/class-acgd-basic-auth.php:1007
 msgid "Try again"
 msgstr "もう一度試す"
 
-#: inc/class-acgd-basic-auth.php:968
+#: inc/class-acgd-basic-auth.php:1012
 msgid "Log out"
 msgstr "ログアウト"
 
 #. translators: %s: site name, used as the realm shown in the browser's BASIC authentication prompt
-#: inc/class-acgd-basic-auth.php:1001
+#: inc/class-acgd-basic-auth.php:1045
 #, php-format
 msgid "%s Staff Access"
 msgstr "%s 関係者専用"
 
-#: inc/class-acgd-basic-auth.php:1193 inc/class-acgd-basic-auth.php:1475
-#: inc/class-acgd-basic-auth.php:1847
+#: inc/class-acgd-basic-auth.php:1237 inc/class-acgd-basic-auth.php:1531
+#: inc/class-acgd-basic-auth.php:1940 inc/class-acgd-two-step.php:2974
+#: inc/class-acgd-two-step.php:3000
 msgid "You do not have permission to do this."
 msgstr "この操作を行う権限がありません。"
 
 #. translators: %d: HTTP status code of the diagnosis request's response
-#: inc/class-acgd-basic-auth.php:1933
+#: inc/class-acgd-basic-auth.php:2026
 #, php-format
 msgid "Unexpected response to the diagnosis request (status: %d)."
 msgstr "診断リクエストへの応答が想定外でした (ステータス: %d)。"
@@ -105,7 +106,8 @@ msgstr "診断リクエストへの応答が想定外でした (ステータス:
 msgid "The username or password you entered is incorrect."
 msgstr "ユーザー名またはパスワードが正しくありません。"
 
-#: inc/class-acgd-invalid-credentials.php:102
+#: inc/class-acgd-invalid-credentials.php:102 inc/class-acgd-two-step.php:1459
+#: inc/class-acgd-two-step.php:1898 inc/class-acgd-two-step.php:2155
 msgid "Error:"
 msgstr "エラー:"
 
@@ -113,29 +115,34 @@ msgstr "エラー:"
 msgid "Lost your password?"
 msgstr "パスワードをお忘れですか ?"
 
-#: inc/class-acgd-settings.php:143
+#: inc/class-acgd-settings.php:145
 msgid "Login Name Protection"
 msgstr "ログイン名の保護"
 
-#: inc/class-acgd-settings.php:144 inc/class-acgd-user-access.php:366
-#: inc/class-acgd-user-access.php:1107
+#: inc/class-acgd-settings.php:146 inc/class-acgd-user-access.php:366
+#: inc/class-acgd-user-access.php:1118
 msgid "Access Restriction"
 msgstr "アクセス制限"
 
-#: inc/class-acgd-settings.php:145
+#: inc/class-acgd-settings.php:150 inc/class-acgd-two-step.php:3756
+#: inc/class-acgd-two-step.php:3919
+msgid "Two-Step Verification"
+msgstr "2段階認証"
+
+#: inc/class-acgd-settings.php:152
 msgid "Denial Log"
 msgstr "拒否の記録"
 
-#: inc/class-acgd-settings.php:222
+#: inc/class-acgd-settings.php:230
 msgid "Protection items"
 msgstr "保護する項目"
 
-#: inc/class-acgd-settings.php:283 inc/class-acgd-settings.php:1526
+#: inc/class-acgd-settings.php:291 inc/class-acgd-settings.php:1560
 msgid "REST API"
 msgstr "REST API"
 
 #. translators: %s: REST API route of the users, such as /wp/v2/users
-#: inc/class-acgd-settings.php:286
+#: inc/class-acgd-settings.php:294
 #, php-format
 msgid ""
 "Hide the user information of the REST API (%s) from visitors who are not "
@@ -143,7 +150,7 @@ msgid ""
 msgstr "REST API のユーザー情報 (%s) を、ログインしていない訪問者には返さない"
 
 #. translators: %s: address of the user list of the REST API, such as /wp-json/wp/v2/users
-#: inc/class-acgd-settings.php:292
+#: inc/class-acgd-settings.php:300
 #, php-format
 msgid ""
 "While this is off, anyone can see the list of users and their login names by "
@@ -152,7 +159,7 @@ msgstr ""
 "オフの間は、ブラウザーで %s を開くだけで、誰でもユーザーの一覧とログイン名を"
 "見られます。"
 
-#: inc/class-acgd-settings.php:295
+#: inc/class-acgd-settings.php:303
 msgid ""
 "Themes and apps that read author names through the REST API without logging "
 "in, such as headless sites, will no longer get them."
@@ -160,19 +167,19 @@ msgstr ""
 "ログインせずに REST API から投稿者名を読み込むテーマやアプリ (ヘッドレス構成"
 "など) では、投稿者名が表示されなくなります。"
 
-#: inc/class-acgd-settings.php:296
+#: inc/class-acgd-settings.php:304
 msgid "Logged-in users, including the block editor, can use them as before."
 msgstr "ログイン中のユーザー (ブロックエディターを含む) は従来どおり使えます。"
 
-#: inc/class-acgd-settings.php:300
+#: inc/class-acgd-settings.php:308
 msgid "Embeds (oEmbed)"
 msgstr "埋め込み (oEmbed)"
 
-#: inc/class-acgd-settings.php:301
+#: inc/class-acgd-settings.php:309
 msgid "Use the site name and home page URL as the author of embedded posts"
 msgstr "埋め込まれた投稿の投稿者を、サイト名とトップページの URL にする"
 
-#: inc/class-acgd-settings.php:303
+#: inc/class-acgd-settings.php:311
 msgid ""
 "While this is off, a post embedded on another site carries the address of "
 "the author page, which contains the login name."
@@ -180,17 +187,17 @@ msgstr ""
 "オフの間は、他のサイトに埋め込まれた投稿の情報に、ログイン名を含む投稿者ペー"
 "ジのアドレスが入ります。"
 
-#: inc/class-acgd-settings.php:307
+#: inc/class-acgd-settings.php:315
 msgid "Sitemap"
 msgstr "サイトマップ"
 
 #. translators: %s: file name of the user sitemap, such as wp-sitemap-users-1.xml
-#: inc/class-acgd-settings.php:310
+#: inc/class-acgd-settings.php:318
 #, php-format
 msgid "Remove the user sitemap (%s)"
 msgstr "ユーザーのサイトマップ (%s) を出さない"
 
-#: inc/class-acgd-settings.php:314
+#: inc/class-acgd-settings.php:322
 msgid ""
 "While this is off, the user sitemap lists author page addresses, which "
 "contain login names."
@@ -198,19 +205,19 @@ msgstr ""
 "オフの間は、ユーザーのサイトマップに、ログイン名を含む投稿者ページのアドレス"
 "が並びます。"
 
-#: inc/class-acgd-settings.php:315
+#: inc/class-acgd-settings.php:323
 msgid "Sitemaps of posts and pages are not affected."
 msgstr "投稿と固定ページのサイトマップには影響しません。"
 
-#: inc/class-acgd-settings.php:319
+#: inc/class-acgd-settings.php:327
 msgid "HTML class names"
 msgstr "HTML のクラス名"
 
-#: inc/class-acgd-settings.php:320
+#: inc/class-acgd-settings.php:328
 msgid "Remove class names that contain the login name"
 msgstr "ログイン名を含むクラス名を外す"
 
-#: inc/class-acgd-settings.php:322
+#: inc/class-acgd-settings.php:330
 msgid ""
 "While this is off, the HTML of comments by registered users and of author "
 "pages contains class names with the login name."
@@ -219,7 +226,7 @@ msgstr ""
 "クラス名が付きます。"
 
 #. translators: 1: class name added to comments by registered users, 2: class name added to author pages
-#: inc/class-acgd-settings.php:325
+#: inc/class-acgd-settings.php:333
 #, php-format
 msgid ""
 "This removes %1$s from comments by registered users and %2$s from author "
@@ -227,29 +234,29 @@ msgid ""
 msgstr "登録ユーザーのコメントから %1$s を、投稿者ページから %2$s を外します。"
 
 #. translators: %s: example of a class name that contains the user ID
-#: inc/class-acgd-settings.php:331
+#: inc/class-acgd-settings.php:339
 #, php-format
 msgid "Class names that contain the user ID, such as %s, are kept."
 msgstr "%s のようなユーザー ID を含むクラス名は残します。"
 
-#: inc/class-acgd-settings.php:334
+#: inc/class-acgd-settings.php:342
 msgid ""
 "If your custom CSS uses these class names, that CSS will no longer apply."
 msgstr ""
 "これらのクラス名を使った CSS を書いている場合は、その CSS が効かなくなりま"
 "す。"
 
-#: inc/class-acgd-settings.php:338
+#: inc/class-acgd-settings.php:346
 msgid "Author ID links"
 msgstr "投稿者 ID のリンク"
 
 #. translators: %s: example of a link by author number, such as /?author=1
-#: inc/class-acgd-settings.php:341
+#: inc/class-acgd-settings.php:349
 #, php-format
 msgid "Redirect links by author number, such as %s, to the home page"
 msgstr "%s のような投稿者番号のリンクをトップページへ転送する"
 
-#: inc/class-acgd-settings.php:345
+#: inc/class-acgd-settings.php:353
 msgid ""
 "While this is off, WordPress sends these links to the author page, whose "
 "address contains the login name."
@@ -257,25 +264,25 @@ msgstr ""
 "オフの間は、WordPress がこのリンクを、アドレスにログイン名を含む投稿者ページ"
 "へ転送します。"
 
-#: inc/class-acgd-settings.php:346
+#: inc/class-acgd-settings.php:354
 msgid "Filtering by author in the admin screens is not affected."
 msgstr "管理画面での投稿者による絞り込みには影響しません。"
 
-#: inc/class-acgd-settings.php:350
+#: inc/class-acgd-settings.php:358
 msgid "Login errors"
 msgstr "ログインエラー"
 
-#: inc/class-acgd-settings.php:351
+#: inc/class-acgd-settings.php:359
 msgid "Show the same error for an unknown username and a wrong password"
 msgstr "存在しないユーザー名とパスワードの誤りで、同じエラーを出す"
 
-#: inc/class-acgd-settings.php:353
+#: inc/class-acgd-settings.php:361
 msgid "While this is off, the error message tells whether the username exists."
 msgstr ""
 "オフの間は、エラーの文言の違いから、そのユーザー名が登録されているかどうかが"
 "分かります。"
 
-#: inc/class-acgd-settings.php:354
+#: inc/class-acgd-settings.php:362
 msgid ""
 "On the lost password screen, an unknown username or email address shows the "
 "same screen as a registered one."
@@ -283,23 +290,23 @@ msgstr ""
 "パスワード再発行の画面では、登録されていないユーザー名やメールアドレスを入力"
 "しても、登録済みのときと同じ画面を表示します。"
 
-#: inc/class-acgd-settings.php:355
+#: inc/class-acgd-settings.php:363
 msgid "Registered users receive the password reset email as before."
 msgstr "登録済みのユーザーには、従来どおり再設定のメールが届きます。"
 
-#: inc/class-acgd-settings.php:356
+#: inc/class-acgd-settings.php:364
 msgid ""
 "Errors from other plugins, such as CAPTCHA or login lockout, are shown as "
 "they are."
 msgstr ""
 "画像認証やログインロックなど、他のプラグインのエラーはそのまま表示します。"
 
-#: inc/class-acgd-settings.php:360
+#: inc/class-acgd-settings.php:368
 msgid "Author pages"
 msgstr "投稿者ページ"
 
 #. translators: %s: URL of an author page, such as /author/{name}
-#: inc/class-acgd-settings.php:363
+#: inc/class-acgd-settings.php:371
 #, php-format
 msgid ""
 "Show a \"Page not found\" screen instead of author pages (%s) to visitors "
@@ -308,7 +315,7 @@ msgstr ""
 "ログインしていない訪問者には、投稿者ページ (%s) の代わりに「ページが見つかり"
 "ません」を表示する"
 
-#: inc/class-acgd-settings.php:367
+#: inc/class-acgd-settings.php:375
 msgid ""
 "While this is off, the address of each author page contains the login name, "
 "so anyone who follows a link to it can see the login name."
@@ -316,13 +323,13 @@ msgstr ""
 "オフの間は、投稿者ページのアドレスにログイン名が含まれるため、そのページへの"
 "リンクからログイン名が分かります。"
 
-#: inc/class-acgd-settings.php:368
+#: inc/class-acgd-settings.php:376
 msgid ""
 "Before turning this on, open a post on your site and click the author name."
 msgstr "オンにする前に、サイトの投稿で投稿者名をクリックしてみてください。"
 
 #. translators: %s: the part that the address of every author page contains, such as /author
-#: inc/class-acgd-settings.php:371
+#: inc/class-acgd-settings.php:379
 #, php-format
 msgid ""
 "If a page whose address contains %s opens, your theme links to author pages, "
@@ -331,7 +338,7 @@ msgstr ""
 "アドレスに %s を含むページが開く場合は、テーマが投稿者ページへリンクしている"
 "ため、オンにするとそのリンク先が「ページが見つかりません」になります。"
 
-#: inc/class-acgd-settings.php:374
+#: inc/class-acgd-settings.php:382
 msgid ""
 "While you are logged in, author pages are shown as before, so check the "
 "result in a private window of your browser."
@@ -339,11 +346,11 @@ msgstr ""
 "ログイン中は従来どおり表示されるため、結果はブラウザーのプライベートウィンド"
 "ウで確かめてください。"
 
-#: inc/class-acgd-settings.php:436
+#: inc/class-acgd-settings.php:444
 msgid "Settings tabs"
 msgstr "設定のタブ"
 
-#: inc/class-acgd-settings.php:504
+#: inc/class-acgd-settings.php:514
 msgid ""
 "WordPress reveals login names to visitors who are not logged in at several "
 "places, and each item below closes one of them."
@@ -351,7 +358,7 @@ msgstr ""
 "WordPress には、ログインしていない訪問者にもログイン名が分かってしまう場所が"
 "複数あり、下の各項目がそれぞれ1か所を塞ぎます。"
 
-#: inc/class-acgd-settings.php:505
+#: inc/class-acgd-settings.php:515
 msgid ""
 "Keep them on, and turn one off only if your theme or another plugin stops "
 "working as expected after you activate this plugin."
@@ -359,18 +366,18 @@ msgstr ""
 "通常はオンのままにし、有効化した後にテーマや他のプラグインの表示・動作がおか"
 "しくなった場合にだけ、関係する項目をオフにしてください。"
 
-#: inc/class-acgd-settings.php:512
+#: inc/class-acgd-settings.php:522
 msgid ""
 "\"Author pages\" is off by default; read its description before turning it "
 "on."
 msgstr ""
 "「投稿者ページ」は既定でオフのため、説明を読んだうえでオンにしてください。"
 
-#: inc/class-acgd-settings.php:563
+#: inc/class-acgd-settings.php:573
 msgid "Users whose public name is their login name"
 msgstr "公開される名前がログイン名と同じユーザー"
 
-#: inc/class-acgd-settings.php:569
+#: inc/class-acgd-settings.php:579
 msgid ""
 "Display names and nicknames are shown to visitors, for example as the author "
 "of posts and comments and in feeds."
@@ -378,7 +385,7 @@ msgstr ""
 "表示名とニックネームは、投稿やコメントの投稿者、フィードなどで訪問者に表示さ"
 "れます。"
 
-#: inc/class-acgd-settings.php:570
+#: inc/class-acgd-settings.php:580
 msgid ""
 "For each user below, open the profile, change the nickname, and choose a "
 "different name in \"Display name publicly as\"."
@@ -386,62 +393,63 @@ msgstr ""
 "下の各ユーザーのプロフィールを開き、ニックネームを変えたうえで「ブログ上の表"
 "示名」で別の名前を選んでください。"
 
-#: inc/class-acgd-settings.php:571
+#: inc/class-acgd-settings.php:581
 msgid "This plugin does not change them automatically."
 msgstr "このプラグインは自動では変更しません。"
 
-#: inc/class-acgd-settings.php:581
+#: inc/class-acgd-settings.php:591
 msgid ""
 "No users have a display name or nickname that is the same as their login "
 "name."
 msgstr "表示名またはニックネームがログイン名と同じユーザーはいません。"
 
 #. translators: 1: number of users shown, 2: number of matching users
-#: inc/class-acgd-settings.php:592
+#: inc/class-acgd-settings.php:602
 #, php-format
 msgid "Showing the first %1$d of %2$d users."
 msgstr "%2$d人中、最初の%1$d人を表示しています。"
 
-#: inc/class-acgd-settings.php:604 inc/class-acgd-settings.php:1405
+#: inc/class-acgd-settings.php:614 inc/class-acgd-settings.php:1438
+#: inc/class-acgd-two-step.php:3604
 msgid "Login name (Username)"
 msgstr "ログイン名 (ユーザー名)"
 
-#: inc/class-acgd-settings.php:605
+#: inc/class-acgd-settings.php:615
 msgid "Display name"
 msgstr "表示名"
 
-#: inc/class-acgd-settings.php:606
+#: inc/class-acgd-settings.php:616
 msgid "Nickname"
 msgstr "ニックネーム"
 
-#: inc/class-acgd-settings.php:621
+#: inc/class-acgd-settings.php:631
 msgid "Edit"
 msgstr "編集"
 
 #. translators: %s: display name or nickname that is the same as the login name
-#: inc/class-acgd-settings.php:652
+#: inc/class-acgd-settings.php:662
 #, php-format
 msgid "%s (same as the login name)"
 msgstr "%s (ログイン名と同じ)"
 
-#: inc/class-acgd-settings.php:685
+#: inc/class-acgd-settings.php:695
 msgid "Restriction by role"
 msgstr "権限による制限"
 
-#: inc/class-acgd-settings.php:691
+#: inc/class-acgd-settings.php:701
 msgid "Roles"
 msgstr "権限"
 
-#: inc/class-acgd-settings.php:699
+#: inc/class-acgd-settings.php:709
 msgid "Site-wide IP list"
 msgstr "サイトの IP 一覧"
 
-#: inc/class-acgd-settings.php:705
+#: inc/class-acgd-settings.php:715
 msgid "Allowed IP addresses"
 msgstr "許可する IP アドレス"
 
 #. translators: 1: line number, 2: the line's content
-#: inc/class-acgd-settings.php:751
+#: inc/class-acgd-settings.php:767
 #, php-format
 msgid ""
 "Line %1$d of the site-wide IP list is not a valid IP address or range: %2$s"
@@ -449,7 +457,7 @@ msgstr ""
 "サイトの IP 一覧の%1$d行目が、有効な IP アドレスまたは範囲ではありません: "
 "%2$s"
 
-#: inc/class-acgd-settings.php:778
+#: inc/class-acgd-settings.php:794
 msgid ""
 "This would leave no administrator (or other user who can manage options) "
 "without a restriction. Change one of them back to \"No restriction\" here or "
@@ -459,7 +467,7 @@ msgstr ""
 "ザー) が1人もいなくなります。どちらかを、ここかそのユーザー自身の編集画面で"
 "「制限なし」に戻してください。保存しませんでした。"
 
-#: inc/class-acgd-settings.php:796
+#: inc/class-acgd-settings.php:812
 msgid ""
 "Your own account, from where you are connecting right now, would not satisfy "
 "these new settings. Not saved."
@@ -467,7 +475,7 @@ msgstr ""
 "今のあなたの接続元では、この新しい設定を満たせません。保存しませんでした。"
 
 #. translators: %s: the current user's own IP address, to add to the site-wide IP list
-#: inc/class-acgd-settings.php:799
+#: inc/class-acgd-settings.php:815
 #, php-format
 msgid ""
 "Your own account would not satisfy these new settings: your current "
@@ -478,7 +486,7 @@ msgstr ""
 "覧に入っていません。この住所を一覧に追加するか、この住所からでも許可される設"
 "定にしてください。保存しませんでした。"
 
-#: inc/class-acgd-settings.php:820
+#: inc/class-acgd-settings.php:836
 msgid ""
 "BASIC authentication mode cannot be turned on for a role because the receive "
 "diagnosis below has not succeeded. Run it first. Not saved."
@@ -487,7 +495,7 @@ msgstr ""
 "断を実行してください。保存されませんでした。"
 
 #. translators: 1: login name of a user who would end up in BASIC mode without credentials, 2: URL of that user's edit screen
-#: inc/class-acgd-settings.php:841
+#: inc/class-acgd-settings.php:857
 #, php-format
 msgid ""
 "This would put %1$s in BASIC authentication mode without their own ID and "
@@ -499,7 +507,7 @@ msgstr ""
 "モードを選んでください。保存されませんでした。"
 
 #. translators: %s: login name of a user who would end up in BASIC mode without credentials
-#: inc/class-acgd-settings.php:847
+#: inc/class-acgd-settings.php:863
 #, php-format
 msgid ""
 "This would put %s in BASIC authentication mode without their own ID and "
@@ -510,11 +518,19 @@ msgstr ""
 "ドになります。先にそのユーザーの編集画面で設定するか、別のモードを選んでくだ"
 "さい。保存されませんでした。"
 
-#: inc/class-acgd-settings.php:1005
+#. translators: %s: URL of the Two-Step Verification tab of the settings screen
+#: inc/class-acgd-settings.php:988
+#, php-format
+msgid ""
+"Two-step verification is set on its own <a href=\"%s\">Two-Step Verification "
+"tab</a>."
+msgstr "2段階認証は、別の<a href=\"%s\">「2段階認証」タブ</a>で設定します。"
+
+#: inc/class-acgd-settings.php:1038
 msgid "BASIC authentication receive diagnosis"
 msgstr "BASIC 認証の受信診断"
 
-#: inc/class-acgd-settings.php:1006
+#: inc/class-acgd-settings.php:1039
 msgid ""
 "Some server setups do not pass the username and password of BASIC "
 "authentication through to WordPress, or already use BASIC authentication for "
@@ -527,7 +543,7 @@ msgstr ""
 "あります (1回のリクエストに載せられる資格情報は1つだけです)。権限やユーザー"
 "を BASIC 認証モードにする前に、下の診断でこのサイトを確認してください。"
 
-#: inc/class-acgd-settings.php:1012
+#: inc/class-acgd-settings.php:1045
 msgid ""
 "This connection is not HTTPS. BASIC authentication sends the username and "
 "password with every request; using HTTPS is strongly recommended (this does "
@@ -536,11 +552,11 @@ msgstr ""
 "この接続は HTTPS ではありません。BASIC 認証は毎回のリクエストでユーザー名とパ"
 "スワードを送るため、HTTPS の利用を強く推奨します (保存は止めません)。"
 
-#: inc/class-acgd-settings.php:1019
+#: inc/class-acgd-settings.php:1052
 msgid "Run diagnosis"
 msgstr "診断を実行"
 
-#: inc/class-acgd-settings.php:1040
+#: inc/class-acgd-settings.php:1073
 msgid ""
 "The diagnosis has not been run yet. BASIC authentication mode cannot be "
 "turned on until it succeeds."
@@ -548,11 +564,11 @@ msgstr ""
 "診断はまだ実行されていません。成功するまで BASIC 認証モードを有効にできませ"
 "ん。"
 
-#: inc/class-acgd-settings.php:1049
+#: inc/class-acgd-settings.php:1082
 msgid "Received. BASIC authentication can be turned on for this site."
 msgstr "受信できています。このサイトで BASIC 認証を有効にできます。"
 
-#: inc/class-acgd-settings.php:1053
+#: inc/class-acgd-settings.php:1086
 msgid ""
 "Not received. The username and password do not reach WordPress, so BASIC "
 "authentication cannot be turned on until this is fixed."
@@ -560,7 +576,7 @@ msgstr ""
 "受信できていません。ユーザー名とパスワードが WordPress まで届いていないため、"
 "直すまで BASIC 認証を有効にできません。"
 
-#: inc/class-acgd-settings.php:1057
+#: inc/class-acgd-settings.php:1090
 msgid ""
 "This server already requires a BASIC authentication sign-in of its own for "
 "this address. Only one such credential can be sent per request, so this "
@@ -570,7 +586,7 @@ msgstr ""
 "ています。1回のリクエストに送れる資格情報は1つだけのため、このプラグインの "
 "BASIC 認証を同時に有効にはできません。"
 
-#: inc/class-acgd-settings.php:1061
+#: inc/class-acgd-settings.php:1094
 msgid ""
 "Could not determine whether the username and password reach WordPress. BASIC "
 "authentication cannot be turned on until the diagnosis succeeds."
@@ -579,20 +595,20 @@ msgstr ""
 "断が成功するまで BASIC 認証を有効にできません。"
 
 #. translators: %s: date and time the diagnosis was last run
-#: inc/class-acgd-settings.php:1072
+#: inc/class-acgd-settings.php:1105
 #, php-format
 msgid "Last run: %s"
 msgstr "前回の実行日時: %s"
 
-#: inc/class-acgd-settings.php:1080
+#: inc/class-acgd-settings.php:1113
 msgid "Show technical detail"
 msgstr "技術的な詳細を表示"
 
-#: inc/class-acgd-settings.php:1112
+#: inc/class-acgd-settings.php:1145
 msgid "Depending on your server, one of the snippets below may fix this."
 msgstr "サーバーによっては、以下のいずれかの記述で解決できる場合があります。"
 
-#: inc/class-acgd-settings.php:1113
+#: inc/class-acgd-settings.php:1146
 msgid ""
 "This plugin never edits .htaccess automatically. Review it and add it "
 "yourself."
@@ -600,7 +616,7 @@ msgstr ""
 "このプラグインが .htaccess を自動で書き換えることはありません。内容を確認のう"
 "え、ご自身で追記してください。"
 
-#: inc/class-acgd-settings.php:1115
+#: inc/class-acgd-settings.php:1148
 msgid ""
 "Back up your current .htaccess before editing it. Depending on your server "
 "and other plugins, this may not work or may affect how your site is "
@@ -610,12 +626,12 @@ msgstr ""
 "の組み合わせによっては、うまく動かない場合やサイトの表示に影響する場合があり"
 "ます。不安な場合はレンタルサーバーの管理会社にご相談ください。"
 
-#: inc/class-acgd-settings.php:1143
+#: inc/class-acgd-settings.php:1176
 msgid "Your own account"
 msgstr "自分自身のアカウント"
 
 #. translators: %s: link to the current admin's own standard WordPress "Profile" screen
-#: inc/class-acgd-settings.php:1149
+#: inc/class-acgd-settings.php:1182
 #, php-format
 msgid ""
 "To restrict your own account, or to set up your own BASIC authentication ID "
@@ -630,7 +646,7 @@ msgstr ""
 "るのと同じ「アクセス制限」の区画が、オプションを管理できる人にはそちらにも表"
 "示されます。"
 
-#: inc/class-acgd-settings.php:1170
+#: inc/class-acgd-settings.php:1203
 msgid ""
 "Access Restriction is stopped because of an internal problem, and everyone "
 "can sign in without an IP check until this is fixed. Saving this tab again, "
@@ -641,7 +657,7 @@ msgstr ""
 "消えます。"
 
 #. translators: %s: PHP constant name, ACGD_DISABLE_RESTRICTION
-#: inc/class-acgd-settings.php:1175
+#: inc/class-acgd-settings.php:1208
 #, php-format
 msgid ""
 "The emergency switch (%s in wp-config.php) is turned on, so Access "
@@ -650,7 +666,7 @@ msgstr ""
 "非常用スイッチ (wp-config.php の %s) がオンのため、アクセス制限は停止していま"
 "す。ログイン名の保護には影響しません。"
 
-#: inc/class-acgd-settings.php:1204
+#: inc/class-acgd-settings.php:1237
 msgid ""
 "Choose a mode for each role. Everyone with that role is restricted, unless "
 "their own user setting overrides it."
@@ -658,13 +674,13 @@ msgstr ""
 "権限ごとにモードを選んでください。その権限を持つ全員が対象になりますが、ユー"
 "ザー自身の設定があればそちらが優先します。"
 
-#: inc/class-acgd-settings.php:1205
+#: inc/class-acgd-settings.php:1238
 msgid ""
 "A user who holds more than one role, with different modes, is held to all of "
 "them."
 msgstr "複数の権限を持ち、モードが食い違うユーザーには、そのすべてを課します。"
 
-#: inc/class-acgd-settings.php:1220
+#: inc/class-acgd-settings.php:1253
 msgid ""
 "administrator is always unrestricted at the role level; restrict a specific "
 "administrator from their own user edit screen instead."
@@ -673,7 +689,7 @@ msgstr ""
 "は、そのユーザーの編集画面で設定してください。"
 
 #. translators: %s: link to the current admin's own standard WordPress "Profile" screen
-#: inc/class-acgd-settings.php:1223
+#: inc/class-acgd-settings.php:1256
 #, php-format
 msgid ""
 "To restrict your own account, use the Access Restriction section on your own "
@@ -682,7 +698,7 @@ msgstr ""
 "ご自身のアカウントを制限する場合は、ご自身の<a href=\"%s\">プロフィール</a>画"
 "面にある「アクセス制限」の区画をお使いください。"
 
-#: inc/class-acgd-settings.php:1232
+#: inc/class-acgd-settings.php:1265
 msgid ""
 "BASIC authentication requires every affected user to set up their own ID and "
 "password first, on their user edit screen; a role cannot be switched to it "
@@ -692,41 +708,41 @@ msgstr ""
 "とパスワードを設定している必要があります。権限をこのモードに変えても、その手"
 "順を省略することはできません。"
 
-#: inc/class-acgd-settings.php:1255
+#: inc/class-acgd-settings.php:1288 inc/class-acgd-two-step.php:3556
 msgid "Role"
 msgstr "権限"
 
-#: inc/class-acgd-settings.php:1256 inc/class-acgd-settings.php:1406
+#: inc/class-acgd-settings.php:1289 inc/class-acgd-settings.php:1439
 msgid "Mode"
 msgstr "モード"
 
-#: inc/class-acgd-settings.php:1266
+#: inc/class-acgd-settings.php:1299
 msgid "No restriction (fixed)"
 msgstr "制限なし (固定)"
 
 #. translators: %s: role name, such as Editor
-#: inc/class-acgd-settings.php:1273
+#: inc/class-acgd-settings.php:1306
 #, php-format
 msgid "Mode for %s"
 msgstr "%s のモード"
 
 #. translators: %s: role name, such as Editor
-#: inc/class-acgd-settings.php:1274 inc/class-acgd-user-access.php:376
-#: inc/class-acgd-user-access.php:1144
+#: inc/class-acgd-settings.php:1307 inc/class-acgd-user-access.php:376
+#: inc/class-acgd-user-access.php:1155
 msgid "No restriction"
 msgstr "制限なし"
 
-#: inc/class-acgd-settings.php:1275 inc/class-acgd-user-access.php:377
+#: inc/class-acgd-settings.php:1308 inc/class-acgd-user-access.php:377
 msgid "IP restriction"
 msgstr "IP 制限"
 
-#: inc/class-acgd-settings.php:1276 inc/class-acgd-settings.php:1528
+#: inc/class-acgd-settings.php:1309 inc/class-acgd-settings.php:1562
 #: inc/class-acgd-user-access.php:378
 msgid "BASIC authentication"
 msgstr "BASIC 認証"
 
 #. translators: 1: example of a single IP address, 2: example of an IP range in CIDR notation
-#: inc/class-acgd-settings.php:1308
+#: inc/class-acgd-settings.php:1341
 #, php-format
 msgid ""
 "One IP address or range (CIDR) per line, such as %1$s or %2$s. Text after # "
@@ -735,7 +751,7 @@ msgstr ""
 "1行に1つの IP アドレスまたは範囲 (CIDR) を入力してください (例: %1$s、%2$s)。"
 "# の後ろはメモで、空行は無視します。"
 
-#: inc/class-acgd-settings.php:1312
+#: inc/class-acgd-settings.php:1345
 msgid ""
 "A restricted user is let in from any address on this list, plus any address "
 "added just for them on their own user edit screen."
@@ -743,7 +759,7 @@ msgstr ""
 "制限対象のユーザーは、この一覧にあるアドレスと、そのユーザー自身の編集画面で"
 "個別に追加したアドレスのどちらからでも入れます。"
 
-#: inc/class-acgd-settings.php:1313
+#: inc/class-acgd-settings.php:1346
 msgid ""
 "Judged from the address the server sees for this connection only; headers "
 "such as X-Forwarded-For are never used."
@@ -751,34 +767,34 @@ msgstr ""
 "判定は、この接続についてサーバーから見えているアドレスだけで行います。X-"
 "Forwarded-For などのヘッダーは一切使いません。"
 
-#: inc/class-acgd-settings.php:1356
+#: inc/class-acgd-settings.php:1389
 msgid "Your current connection:"
 msgstr "今のあなたの接続:"
 
-#: inc/class-acgd-settings.php:1359
+#: inc/class-acgd-settings.php:1392
 msgid "The server cannot tell what address you are connecting from right now."
 msgstr "サーバーは今のあなたの接続元のアドレスを判別できません。"
 
 #. translators: %s: the visitor's IP address, as the server sees it for this connection
-#: inc/class-acgd-settings.php:1364
+#: inc/class-acgd-settings.php:1397
 #, php-format
 msgid "The server sees this connection as coming from %s."
 msgstr "サーバーには、この接続は %s から来ているように見えています。"
 
-#: inc/class-acgd-settings.php:1393
+#: inc/class-acgd-settings.php:1426
 msgid "Users who are currently restricted"
 msgstr "現在制限されているユーザー"
 
-#: inc/class-acgd-settings.php:1395
+#: inc/class-acgd-settings.php:1428
 msgid "No user is restricted right now."
 msgstr "現在、制限されているユーザーはいません。"
 
-#: inc/class-acgd-settings.php:1432
+#: inc/class-acgd-settings.php:1465 inc/class-acgd-two-step.php:3648
 msgid "Emergency switch"
 msgstr "非常用スイッチ"
 
 #. translators: %s: PHP constant to add to wp-config.php, ACGD_DISABLE_RESTRICTION
-#: inc/class-acgd-settings.php:1438
+#: inc/class-acgd-settings.php:1471
 #, php-format
 msgid ""
 "If Access Restriction locks everyone out, add %s to wp-config.php. This "
@@ -788,38 +804,705 @@ msgstr ""
 "い。止まるのはアクセス制限だけで、ログイン名の保護は動作し続けます。"
 
 #. translators: %d: maximum number of entries kept in the denial log
-#: inc/class-acgd-settings.php:1467
+#: inc/class-acgd-settings.php:1500
 #, php-format
 msgid "The most recent %d denials are kept here."
 msgstr "直近の%d件の拒否をここに保持します。"
 
-#: inc/class-acgd-settings.php:1473
+#: inc/class-acgd-settings.php:1506
 msgid "No denials have been recorded."
 msgstr "記録された拒否はありません。"
 
-#: inc/class-acgd-settings.php:1483
+#: inc/class-acgd-settings.php:1516
 msgid "Date and time"
 msgstr "日時"
 
-#: inc/class-acgd-settings.php:1484
+#: inc/class-acgd-settings.php:1517
 msgid "User"
 msgstr "ユーザー"
 
-#: inc/class-acgd-settings.php:1485
+#: inc/class-acgd-settings.php:1518
 msgid "IP address"
 msgstr "IP アドレス"
 
-#: inc/class-acgd-settings.php:1486
+#: inc/class-acgd-settings.php:1519
 msgid "Where"
 msgstr "場面"
 
-#: inc/class-acgd-settings.php:1522
+#: inc/class-acgd-settings.php:1556
 msgid "Login"
 msgstr "ログイン"
 
-#: inc/class-acgd-settings.php:1524
+#: inc/class-acgd-settings.php:1558
 msgid "After login"
 msgstr "ログイン後"
+
+#: inc/class-acgd-settings.php:1564
+msgid "Two-step verification: wrong code"
+msgstr "2段階認証: コードの誤り"
+
+#: inc/class-acgd-settings.php:1566
+msgid "Two-step verification: expired code"
+msgstr "2段階認証: 期限切れ"
+
+#: inc/class-acgd-settings.php:1568
+msgid "Two-step verification: limit reached"
+msgstr "2段階認証: 回数の上限"
+
+#: inc/class-acgd-settings.php:1570
+msgid "Two-step verification: sign-in without a screen"
+msgstr "2段階認証: 画面遷移できないログイン"
+
+#: inc/class-acgd-settings.php:1572
+msgid "Two-step verification: XML-RPC"
+msgstr "2段階認証: XML-RPC"
+
+#: inc/class-acgd-settings.php:1574
+msgid "Two-step verification: email not sent"
+msgstr "2段階認証: メールの送信失敗"
+
+#: inc/class-acgd-settings.php:1576
+msgid "Two-step verification: unverified session discarded"
+msgstr "2段階認証: 印の無いセッションを破棄"
+
+#: inc/class-acgd-two-step.php:1471
+msgid "A problem occurred while confirming your sign-in."
+msgstr "ログインの確認で問題が起きました。"
+
+#: inc/class-acgd-two-step.php:1471
+msgid "Please contact your site administrator."
+msgstr "サイトの管理者に連絡してください。"
+
+#: inc/class-acgd-two-step.php:1749
+msgid "This page needs cookies."
+msgstr "この画面には Cookie が必要です。"
+
+#: inc/class-acgd-two-step.php:1749
+msgid "Enable cookies in your browser and sign in again."
+msgstr "ブラウザーで Cookie を有効にして、もう一度ログインしてください。"
+
+#: inc/class-acgd-two-step.php:1759 inc/class-acgd-two-step.php:2137
+#: inc/class-acgd-two-step.php:2144 inc/class-acgd-two-step.php:2210
+#: inc/class-acgd-two-step.php:2216
+msgid "This sign-in can no longer be completed."
+msgstr "このログインはもう続けられません。"
+
+#: inc/class-acgd-two-step.php:1759 inc/class-acgd-two-step.php:1768
+#: inc/class-acgd-two-step.php:2137 inc/class-acgd-two-step.php:2144
+#: inc/class-acgd-two-step.php:2210 inc/class-acgd-two-step.php:2216
+msgid "Please sign in again."
+msgstr "もう一度ログインしてください。"
+
+#: inc/class-acgd-two-step.php:1764
+msgid "A new verification code has been sent."
+msgstr "新しい確認コードを送りました。"
+
+#: inc/class-acgd-two-step.php:1764
+msgid "The previous code no longer works."
+msgstr "前のコードはもう使えません。"
+
+#: inc/class-acgd-two-step.php:1768
+msgid "This request could not be accepted."
+msgstr "このリクエストは受け付けられませんでした。"
+
+#: inc/class-acgd-two-step.php:1785 inc/class-acgd-two-step.php:2957
+msgid "The code was entered incorrectly too many times."
+msgstr "コードの誤りが上限に達しました。"
+
+#: inc/class-acgd-two-step.php:1785
+msgid "Please sign in again with your password."
+msgstr "パスワードからもう一度ログインしてください。"
+
+#: inc/class-acgd-two-step.php:1857 inc/class-acgd-two-step.php:1950
+msgid "The verification code is incorrect."
+msgstr "確認コードが正しくありません。"
+
+#: inc/class-acgd-two-step.php:1889 inc/class-acgd-two-step.php:2955
+msgid "This verification code has expired."
+msgstr "この確認コードは有効期限が切れています。"
+
+#: inc/class-acgd-two-step.php:1889
+msgid "Send a new code from this screen."
+msgstr "この画面から新しいコードを送ってください。"
+
+#: inc/class-acgd-two-step.php:1892 inc/class-acgd-two-step.php:2953
+msgid "Enter the 6-digit verification code from the email."
+msgstr "メールに記載された6桁の確認コードを入力してください。"
+
+#: inc/class-acgd-two-step.php:1911 inc/class-acgd-two-step.php:2941
+msgid "Too many verification codes have been sent."
+msgstr "確認コードの送信回数が上限に達しました。"
+
+#. translators: %s: date and time when a new code can be sent
+#: inc/class-acgd-two-step.php:1914
+#, php-format
+msgid "You can sign in again after %s."
+msgstr "%s 以降に、もう一度ログインできます。"
+
+#: inc/class-acgd-two-step.php:1917
+msgid "Your account is not locked."
+msgstr "アカウントはロックされていません。"
+
+#: inc/class-acgd-two-step.php:1917
+msgid "Changing your password releases this limit."
+msgstr "パスワードを変更すると、この制限は解除されます。"
+
+#: inc/class-acgd-two-step.php:1935
+msgid ""
+"The email with your verification code could not be sent, so you have not "
+"been signed in."
+msgstr "確認コードのメールを送れなかったため、ログインしていません。"
+
+#: inc/class-acgd-two-step.php:1936
+msgid "Please try again later or contact your site administrator."
+msgstr ""
+"しばらくしてからもう一度お試しいただくか、サイトの管理者に連絡してください。"
+
+#. translators: %d: number of tries left
+#: inc/class-acgd-two-step.php:1953
+#, php-format
+msgid "You can try %d more time."
+msgid_plural "You can try %d more times."
+msgstr[0] "あと%d回入力できます。"
+
+#: inc/class-acgd-two-step.php:1969
+msgid "Please wait a moment before sending another code."
+msgstr "次のコードを送るまで、少し待ってください。"
+
+#. translators: %s: time (or date and time) when a new code can be sent
+#: inc/class-acgd-two-step.php:1972 inc/class-acgd-two-step.php:2943
+#, php-format
+msgid "You can send a new code after %s."
+msgstr "%s 以降に新しいコードを送れます。"
+
+#: inc/class-acgd-two-step.php:2004 inc/class-acgd-two-step.php:2030
+msgid "Verification code"
+msgstr "確認コード"
+
+#: inc/class-acgd-two-step.php:2006
+msgid "Back to the login screen"
+msgstr "ログイン画面に戻る"
+
+#. translators: 1: masked email address, such as t•••@example.com, 2: date and time the code was sent
+#: inc/class-acgd-two-step.php:2040
+#, php-format
+msgid "We sent a verification code to %1$s at %2$s."
+msgstr "%2$s に %1$s へ確認コードを送りました。"
+
+#. translators: %s: date and time the code expires
+#: inc/class-acgd-two-step.php:2046
+#, php-format
+msgid "It expires at %s."
+msgstr "有効期限は %s です。"
+
+#: inc/class-acgd-two-step.php:2057
+msgid "Verification code (6 digits)"
+msgstr "確認コード (6桁)"
+
+#: inc/class-acgd-two-step.php:2063 inc/class-acgd-user-access.php:512
+msgid "Verify"
+msgstr "確認"
+
+#: inc/class-acgd-two-step.php:2069
+msgid "Send a new code"
+msgstr "コードを再送する"
+
+#: inc/class-acgd-two-step.php:2074
+msgid "Start over"
+msgstr "最初からやり直す"
+
+#: inc/class-acgd-two-step.php:2077
+msgid "If the email does not arrive"
+msgstr "メールが届かないとき"
+
+#: inc/class-acgd-two-step.php:2079
+msgid "Wait a few minutes."
+msgstr "数分待ってください。"
+
+#: inc/class-acgd-two-step.php:2079
+msgid "Delivery can take a little time."
+msgstr "届くまでに少し時間がかかることがあります。"
+
+#: inc/class-acgd-two-step.php:2080
+msgid "Check your spam or junk folder."
+msgstr "迷惑メールのフォルダーを確認してください。"
+
+#. translators: %s: email address the message is expected to come from
+#: inc/class-acgd-two-step.php:2085
+#, php-format
+msgid ""
+"Look for an email from %s (this may differ if your site uses a mail plugin)."
+msgstr ""
+"%s から届くメールを探してください (サイトでメール送信のプラグインを使っている"
+"場合は、これと異なることがあります)。"
+
+#: inc/class-acgd-two-step.php:2090
+msgid "Send a new code with the button above."
+msgstr "上のボタンでコードを再送してください。"
+
+#: inc/class-acgd-two-step.php:2091
+msgid "If it still does not arrive, contact your site administrator."
+msgstr "それでも届かない場合は、サイトの管理者に連絡してください。"
+
+#: inc/class-acgd-two-step.php:2272
+msgid "You have logged in successfully."
+msgstr "ログインしました。"
+
+#. translators: %s: site name
+#: inc/class-acgd-two-step.php:2629
+#, php-format
+msgid "[%s] Your verification code"
+msgstr "[%s] 確認コード"
+
+#. translators: 1: site name, 2: site domain (plain text)
+#: inc/class-acgd-two-step.php:2632
+#, php-format
+msgid "Your username and password were just entered to sign in to %1$s (%2$s)."
+msgstr ""
+"%1$s (%2$s) へのログインで、あなたのユーザー名とパスワードが入力されました。"
+
+#. translators: %s: 6-digit verification code
+#: inc/class-acgd-two-step.php:2635 inc/class-acgd-two-step.php:2679
+#, php-format
+msgid "Verification code: %s"
+msgstr "確認コード: %s"
+
+#. translators: %s: date and time the code expires
+#: inc/class-acgd-two-step.php:2637 inc/class-acgd-two-step.php:2681
+#, php-format
+msgid "This code expires at %s."
+msgstr "このコードの有効期限は %s です。"
+
+#: inc/class-acgd-two-step.php:2639
+msgid "Do not share this code with anyone."
+msgstr "このコードをほかの人に教えないでください。"
+
+#: inc/class-acgd-two-step.php:2640
+msgid "Administrators and support staff will never ask you for it."
+msgstr "管理者やサポートがこのコードを尋ねることはありません。"
+
+#. translators: %s: date and time of the sign-in
+#: inc/class-acgd-two-step.php:2643 inc/class-acgd-two-step.php:2713
+#, php-format
+msgid "Date and time: %s"
+msgstr "日時: %s"
+
+#. translators: %s: IP address of the sign-in
+#: inc/class-acgd-two-step.php:2645 inc/class-acgd-two-step.php:2715
+#, php-format
+msgid "IP address: %s"
+msgstr "IP アドレス: %s"
+
+#: inc/class-acgd-two-step.php:2647
+msgid "If this was not you, your password may be known to someone else."
+msgstr ""
+"心当たりが無い場合は、パスワードがほかの人に知られているおそれがあります。"
+
+#: inc/class-acgd-two-step.php:2648
+msgid "Nobody can sign in without this code."
+msgstr "このコードを入力しなければ、ログインはされません。"
+
+#: inc/class-acgd-two-step.php:2649
+msgid ""
+"Sign in the usual way and change your password, or contact your site "
+"administrator."
+msgstr ""
+"いつもの方法でログインしてパスワードを変更するか、サイトの管理者に連絡してく"
+"ださい。"
+
+#. translators: %s: site name
+#: inc/class-acgd-two-step.php:2672
+#, php-format
+msgid "[%s] Verification code for setting up two-step verification"
+msgstr "[%s] 2段階認証の設定のための確認コード"
+
+#. translators: 1: site name, 2: site domain (plain text)
+#: inc/class-acgd-two-step.php:2675
+#, php-format
+msgid ""
+"This is a verification code for setting up two-step verification on %1$s "
+"(%2$s)."
+msgstr "%1$s (%2$s) で2段階認証を設定するための確認コードです。"
+
+#: inc/class-acgd-two-step.php:2676
+msgid "This email is not for signing in."
+msgstr "ログインのためのメールではありません。"
+
+#: inc/class-acgd-two-step.php:2683
+msgid "If you did not set this up, contact your site administrator."
+msgstr "設定をしていないのに届いた場合は、サイトの管理者に連絡してください。"
+
+#. translators: %s: site name
+#: inc/class-acgd-two-step.php:2706
+#, php-format
+msgid "[%s] A sign-in with your password was stopped"
+msgstr "[%s] あなたのパスワードでのログインを止めました"
+
+#. translators: 1: site name, 2: site domain (plain text)
+#: inc/class-acgd-two-step.php:2709
+#, php-format
+msgid "Someone tried to sign in to %1$s (%2$s) with your correct password."
+msgstr "%1$s (%2$s) に、正しいパスワードでログインが試みられました。"
+
+#: inc/class-acgd-two-step.php:2710
+msgid ""
+"The sign-in was stopped, because two-step verification cannot be completed "
+"that way."
+msgstr "この方法では2段階認証を通れないため、ログインを止めました。"
+
+#: inc/class-acgd-two-step.php:2717
+msgid "If this was not you, change your password."
+msgstr "心当たりが無い場合は、パスワードを変更してください。"
+
+#: inc/class-acgd-two-step.php:2923
+msgid "A verification code has been sent to your email address."
+msgstr "あなたのメールアドレスに確認コードを送りました。"
+
+#. translators: %s: time the code expires
+#: inc/class-acgd-two-step.php:2925
+#, php-format
+msgid "Enter it below before %s."
+msgstr "%s までに下に入力してください。"
+
+#: inc/class-acgd-two-step.php:2931
+msgid "Confirmed."
+msgstr "確認しました。"
+
+#. translators: %s: time until which the confirmation is valid
+#: inc/class-acgd-two-step.php:2933
+#, php-format
+msgid ""
+"You can now save settings that turn on two-step verification for your own "
+"account until %s."
+msgstr "%s まで、あなた自身に2段階認証が掛かる設定を保存できます。"
+
+#: inc/class-acgd-two-step.php:2947
+msgid "Your account has no valid email address."
+msgstr "あなたのアカウントには正しいメールアドレスがありません。"
+
+#: inc/class-acgd-two-step.php:2947
+msgid "Set one on your profile first."
+msgstr "先にプロフィールで設定してください。"
+
+#: inc/class-acgd-two-step.php:2949
+msgid "The email could not be sent."
+msgstr "メールを送れませんでした。"
+
+#: inc/class-acgd-two-step.php:2949
+msgid "Check the email settings of this site."
+msgstr "このサイトのメールの設定を確認してください。"
+
+#: inc/class-acgd-two-step.php:2955 inc/class-acgd-two-step.php:2957
+#: inc/class-acgd-two-step.php:2959
+msgid "Send a new code."
+msgstr "新しいコードを送ってください。"
+
+#: inc/class-acgd-two-step.php:2959
+msgid "There is no code waiting to be confirmed."
+msgstr "確認を待っているコードはありません。"
+
+#. translators: %s: masked email address
+#: inc/class-acgd-two-step.php:3188
+#, php-format
+msgid "Your email address %s has been confirmed."
+msgstr "メールアドレス %s を確認済みです。"
+
+#. translators: %s: time until which the confirmation is valid
+#: inc/class-acgd-two-step.php:3193
+#, php-format
+msgid ""
+"Settings that turn on two-step verification for your own account can be "
+"saved until %s."
+msgstr "%s まで、あなた自身に2段階認証が掛かる設定を保存できます。"
+
+#. translators: %s: masked email address
+#: inc/class-acgd-two-step.php:3203
+#, php-format
+msgid ""
+"Before turning on two-step verification for your own account, confirm that "
+"codes reach your email address %s."
+msgstr ""
+"あなた自身に2段階認証を掛ける前に、メールアドレス %s にコードが届くことを確か"
+"めてください。"
+
+#: inc/class-acgd-two-step.php:3213 inc/class-acgd-two-step.php:3221
+msgid "Send a confirmation code"
+msgstr "確認コードを送る"
+
+#: inc/class-acgd-two-step.php:3223
+msgid ""
+"Without JavaScript, these buttons reload this screen without saving your "
+"other changes on it; the Two-Step Verification and Access Restriction "
+"choices are kept."
+msgstr ""
+"JavaScript が無効な場合、これらのボタンはこの画面の他の変更を保存せずに画面を"
+"読み込み直します。「2段階認証」と「アクセス制限」で選んだ内容は残ります。"
+
+#: inc/class-acgd-two-step.php:3238
+msgid "Confirmation code (6 digits)"
+msgstr "確認コード (6桁)"
+
+#: inc/class-acgd-two-step.php:3240
+msgid "Confirm"
+msgstr "確認する"
+
+#: inc/class-acgd-two-step.php:3323
+msgid ""
+"These settings would turn on two-step verification for your own account."
+msgstr "この設定では、あなた自身に2段階認証が掛かります。"
+
+#: inc/class-acgd-two-step.php:3324
+msgid ""
+"Confirm your email address with \"Send a confirmation code\" at the top of "
+"this tab first (the confirmation is valid for 10 minutes)."
+msgstr ""
+"先にこのタブの上部の「確認コードを送る」でメールアドレスを確かめてください "
+"(確認は10分間有効です)。"
+
+#: inc/class-acgd-two-step.php:3325 inc/class-acgd-two-step.php:3349
+#: inc/class-acgd-two-step.php:3852 inc/class-acgd-two-step.php:3860
+msgid "Not saved."
+msgstr "保存しませんでした。"
+
+#. translators: %s: login names of users without a valid email address, separated by commas
+#: inc/class-acgd-two-step.php:3345
+#, php-format
+msgid ""
+"These users would need a verification code but have no valid email address: "
+"%s."
+msgstr ""
+"次のユーザーは確認コードが必要になりますが、正しいメールアドレスがありませ"
+"ん: %s。"
+
+#: inc/class-acgd-two-step.php:3348
+msgid "Set their email addresses first."
+msgstr "先にメールアドレスを設定してください。"
+
+#: inc/class-acgd-two-step.php:3517
+msgid ""
+"Two-step verification asks for a verification code sent to the user's "
+"registered email address after the password has been accepted."
+msgstr ""
+"2段階認証は、パスワードが合った後に、登録メールアドレスへ送った確認コードの入"
+"力を求めます。"
+
+#: inc/class-acgd-two-step.php:3518
+msgid ""
+"It is set separately from Access Restriction, and a user held to both goes "
+"through both: first the password and IP restriction, then the verification "
+"code, then BASIC authentication on the next screen."
+msgstr ""
+"アクセス制限とは別に設定し、両方が掛かる人は両方を通ります。順番は、パスワー"
+"ドと IP 制限、確認コード、次の画面での BASIC 認証です。"
+
+#: inc/class-acgd-two-step.php:3519
+msgid ""
+"Unlike Access Restriction, it can also be turned on for the administrator "
+"role."
+msgstr "アクセス制限と違い、管理者の権限にも設定できます。"
+
+#: inc/class-acgd-two-step.php:3526
+msgid ""
+"Its strength depends on the email account: anyone who can read the user's "
+"inbox can also reset the password."
+msgstr ""
+"強さはメールアカウントの強さで決まります。受信箱を読める人は、パスワードの再"
+"発行もできるためです。"
+
+#: inc/class-acgd-two-step.php:3526
+msgid ""
+"Use it for users whose email account is protected with multi-factor "
+"authentication."
+msgstr "メールアカウントが多要素認証で守られているユーザーに使ってください。"
+
+#: inc/class-acgd-two-step.php:3528
+msgid "Your own email address"
+msgstr "あなた自身のメールアドレス"
+
+#: inc/class-acgd-two-step.php:3533
+msgid "Two-step verification by role"
+msgstr "権限ごとの2段階認証"
+
+#: inc/class-acgd-two-step.php:3534
+msgid "A user's own setting on their user edit screen wins over the role."
+msgstr "ユーザー編集画面でのユーザーごとの設定が、権限の設定より優先されます。"
+
+#: inc/class-acgd-two-step.php:3534
+msgid ""
+"A user who holds more than one role needs a verification code if any of them "
+"requires one."
+msgstr ""
+"複数の権限を持つユーザーは、どれか1つが確認コードを求めていれば確認コードが必"
+"要です。"
+
+#: inc/class-acgd-two-step.php:3557
+msgid "Two-step verification"
+msgstr "2段階認証"
+
+#. translators: %s: role name, such as Editor
+#: inc/class-acgd-two-step.php:3569
+#, php-format
+msgid "Two-step verification for %s"
+msgstr "%s の2段階認証"
+
+#. translators: %s: role name, such as Editor
+#: inc/class-acgd-two-step.php:3570 inc/class-acgd-two-step.php:3768
+#: inc/class-acgd-two-step.php:3773
+msgid "None"
+msgstr "なし"
+
+#: inc/class-acgd-two-step.php:3571 inc/class-acgd-two-step.php:3768
+#: inc/class-acgd-two-step.php:3774
+msgid "Verification code (email)"
+msgstr "確認コード (メール)"
+
+#: inc/class-acgd-two-step.php:3592
+msgid "Users who need a verification code"
+msgstr "確認コードが必要なユーザー"
+
+#: inc/class-acgd-two-step.php:3593
+msgid ""
+"Application passwords made before two-step verification was turned on keep "
+"working without a code."
+msgstr ""
+"2段階認証を有効にする前に発行したアプリケーションパスワードは、コードなしで使"
+"えるままです。"
+
+#: inc/class-acgd-two-step.php:3593
+msgid "Review them on each user's edit screen."
+msgstr "各ユーザーの編集画面で見直してください。"
+
+#: inc/class-acgd-two-step.php:3595
+msgid "No user needs a verification code right now."
+msgstr "今は確認コードが必要なユーザーはいません。"
+
+#: inc/class-acgd-two-step.php:3605
+msgid "Email address"
+msgstr "メールアドレス"
+
+#: inc/class-acgd-two-step.php:3606 inc/class-acgd-two-step.php:3786
+msgid "Application passwords"
+msgstr "アプリケーションパスワード"
+
+#: inc/class-acgd-two-step.php:3623
+msgid "Set"
+msgstr "設定済み"
+
+#: inc/class-acgd-two-step.php:3623
+msgid "Missing or invalid"
+msgstr "未設定または不正"
+
+#. translators: %s: PHP constant to add to wp-config.php, ACGD_DISABLE_TWO_STEP
+#: inc/class-acgd-two-step.php:3656
+#, php-format
+msgid ""
+"If nobody can sign in because codes do not arrive, add %s to wp-config.php."
+msgstr ""
+"コードが届かず誰もログインできなくなった場合は、wp-config.php に %s を追加し"
+"てください。"
+
+#: inc/class-acgd-two-step.php:3659
+msgid ""
+"This stops two-step verification only; Access Restriction and Login Name "
+"Protection keep working."
+msgstr ""
+"止まるのは2段階認証だけで、アクセス制限とログイン名の保護は動き続けます。"
+
+#: inc/class-acgd-two-step.php:3660
+msgid ""
+"Define it also on a copy of this site whose email sending is turned off."
+msgstr "メールの送信を止めた、このサイトの複製にも定義してください。"
+
+#: inc/class-acgd-two-step.php:3678 inc/class-acgd-two-step.php:3723
+msgid ""
+"Two-step verification has a problem with its settings or its processing."
+msgstr "2段階認証の設定または処理に問題があります。"
+
+#: inc/class-acgd-two-step.php:3678
+msgid ""
+"Until this tab is saved again, users set to a verification code and users "
+"who can manage options still need a code; other users can sign in with their "
+"password."
+msgstr ""
+"このタブをもう一度保存するまでは、確認コードを設定したユーザーとオプションを"
+"管理できるユーザーには引き続きコードが必要で、それ以外のユーザーはパスワード"
+"でログインできます。"
+
+#. translators: %s: PHP constant, ACGD_DISABLE_TWO_STEP
+#: inc/class-acgd-two-step.php:3683 inc/class-acgd-two-step.php:3728
+#, php-format
+msgid ""
+"The emergency switch (%s in wp-config.php) is turned on, so two-step "
+"verification is stopped."
+msgstr ""
+"非常用スイッチ (wp-config.php の %s) が有効なため、2段階認証は止まっていま"
+"す。"
+
+#. translators: %s: URL of the Two-Step Verification tab of the settings screen
+#: inc/class-acgd-two-step.php:3713
+#, php-format
+msgid ""
+"Open the <a href=\"%s\">Two-Step Verification tab</a> of the settings screen "
+"for details."
+msgstr ""
+"詳しくは、設定画面の<a href=\"%s\">「2段階認証」タブ</a>を開いてください。"
+
+#: inc/class-acgd-two-step.php:3759
+msgid "Verification code for this user"
+msgstr "このユーザーの確認コード"
+
+#. translators: %s: what the role setting currently means for this user, such as "Verification code (email)" or "None"
+#: inc/class-acgd-two-step.php:3767
+#, php-format
+msgid "Follow the role setting (currently: %s)"
+msgstr "権限の設定に従う (いまは: %s)"
+
+#: inc/class-acgd-two-step.php:3776
+msgid "The code is sent to the email address of this account."
+msgstr "コードは、このアカウントのメールアドレスに送ります。"
+
+#: inc/class-acgd-two-step.php:3781
+msgid "Confirm your email address"
+msgstr "メールアドレスの確認"
+
+#. translators: %s: number of application passwords
+#: inc/class-acgd-two-step.php:3794
+#, php-format
+msgid "Application passwords: %s."
+msgstr "アプリケーションパスワード: %s 件。"
+
+#: inc/class-acgd-two-step.php:3797
+msgid "They work without a verification code."
+msgstr "確認コードなしで使えます。"
+
+#: inc/class-acgd-two-step.php:3803
+msgid "Review them"
+msgstr "見直す"
+
+#: inc/class-acgd-two-step.php:3850
+msgid "This would turn on two-step verification for your own account."
+msgstr "この保存では、あなた自身に2段階認証が掛かります。"
+
+#: inc/class-acgd-two-step.php:3851
+msgid ""
+"Confirm your email address with \"Send a confirmation code\" in the Two-Step "
+"Verification section first (the confirmation is valid for 10 minutes, and "
+"the address must not change in the same save)."
+msgstr ""
+"先に「2段階認証」の区画の「確認コードを送る」でメールアドレスを確かめてくださ"
+"い (確認は10分間有効で、同じ保存でアドレスを変えることはできません)。"
+
+#: inc/class-acgd-two-step.php:3860
+msgid ""
+"Two-step verification cannot be turned on for this user because the account "
+"has no valid email address."
+msgstr ""
+"このアカウントには正しいメールアドレスが無いため、このユーザーに2段階認証を掛"
+"けられません。"
+
+#: inc/class-acgd-two-step.php:3939
+msgid "Email"
+msgstr "メール"
 
 #: inc/class-acgd-user-access.php:372
 msgid "Mode for this user"
@@ -876,10 +1559,6 @@ msgstr "このユーザーを BASIC 認証モードにする前に必須です�
 #: inc/class-acgd-user-access.php:429
 msgid "Verify your own BASIC authentication"
 msgstr "自分の BASIC 認証を確認"
-
-#: inc/class-acgd-user-access.php:512
-msgid "Verify"
-msgstr "確認"
 
 #: inc/class-acgd-user-access.php:515
 msgid ""
@@ -951,7 +1630,7 @@ msgid "Enter a BASIC authentication ID and password before verifying."
 msgstr "確認する前に、BASIC 認証の ID とパスワードを入力してください。"
 
 #. translators: 1: line number, 2: the line's content
-#: inc/class-acgd-user-access.php:790
+#: inc/class-acgd-user-access.php:801
 #, php-format
 msgid ""
 "Line %1$d of the IP addresses added for this user is not a valid IP address "
@@ -961,7 +1640,7 @@ msgstr ""
 "ではありません: %2$s"
 
 #. translators: %s: URL of the Access Restriction tab of the settings screen
-#: inc/class-acgd-user-access.php:810
+#: inc/class-acgd-user-access.php:821
 #, php-format
 msgid ""
 "This would leave no administrator (or other user who can manage options) "
@@ -973,7 +1652,7 @@ msgstr ""
 "限」設定タブ</a>で「制限なし」に戻してください。保存しませんでした。"
 
 #. translators: %s: URL of the Access Restriction tab of the settings screen
-#: inc/class-acgd-user-access.php:824
+#: inc/class-acgd-user-access.php:835
 #, php-format
 msgid ""
 "BASIC authentication mode cannot be turned on because the receive diagnosis "
@@ -984,7 +1663,7 @@ msgstr ""
 "BASIC 認証モードを有効にできません。先にそちらで診断を実行してください。保存"
 "されませんでした。"
 
-#: inc/class-acgd-user-access.php:867
+#: inc/class-acgd-user-access.php:878
 msgid ""
 "Enter both a BASIC authentication ID and a password before choosing \"BASIC "
 "authentication\" mode. Not saved."
@@ -992,7 +1671,7 @@ msgstr ""
 "「BASIC 認証」モードを選ぶ前に、BASIC 認証の ID とパスワードの両方を入力して"
 "ください。保存されませんでした。"
 
-#: inc/class-acgd-user-access.php:872 inc/class-acgd-user-access.php:933
+#: inc/class-acgd-user-access.php:883 inc/class-acgd-user-access.php:944
 msgid ""
 "This BASIC authentication ID is already used by another user on this site. "
 "Choose a different one. Not saved."
@@ -1000,7 +1679,7 @@ msgstr ""
 "この BASIC 認証の ID は、このサイトの別のユーザーがすでに使っています。別の "
 "ID を選んでください。保存されませんでした。"
 
-#: inc/class-acgd-user-access.php:916
+#: inc/class-acgd-user-access.php:927
 msgid ""
 "Click \"Verify\" and confirm your new BASIC authentication ID and password "
 "before saving them for your own account. Not saved."
@@ -1008,7 +1687,7 @@ msgstr ""
 "自分自身のアカウントに保存する前に、「確認」をクリックして新しい BASIC 認証"
 "の ID とパスワードを確かめてください。保存されませんでした。"
 
-#: inc/class-acgd-user-access.php:963
+#: inc/class-acgd-user-access.php:974
 msgid ""
 "Your own account, from where you are connecting right now, would not satisfy "
 "this new setting. Choose a setting that does not depend on IP restriction, "
@@ -1018,7 +1697,7 @@ msgstr ""
 "ど、IP 制限に依存しない設定を選んでください。保存しませんでした。"
 
 #. translators: %s: the current user's own IP address, to add to the IP list
-#: inc/class-acgd-user-access.php:966
+#: inc/class-acgd-user-access.php:977
 #, php-format
 msgid ""
 "Your own account would not satisfy this new setting: your current connection "
@@ -1029,61 +1708,61 @@ msgstr ""
 "覧に入っていません。この住所を一覧に追加するか、この住所からでも許可される設"
 "定にしてください。保存しませんでした。"
 
-#: inc/class-acgd-user-access.php:1149
+#: inc/class-acgd-user-access.php:1160
 msgid "IP"
 msgstr "IP"
 
-#: inc/class-acgd-user-access.php:1152
+#: inc/class-acgd-user-access.php:1163
 msgid "BASIC"
 msgstr "BASIC"
 
 #. translators: joins the restriction modes that apply to a user, such as "IP" and "IP + BASIC"
-#: inc/class-acgd-user-access.php:1156
+#: inc/class-acgd-user-access.php:1167
 msgctxt "joins two access restriction modes"
 msgid " + "
 msgstr " + "
 
-#: inc/func.php:122
+#: inc/func.php:177
 msgid "(opens in a new tab)"
 msgstr "(新しいタブで開く)"
 
 #. translators: Joins two sentences of the same paragraph. 1: first sentence, 2: next sentence. Remove the space in languages that do not put a space between sentences.
-#: inc/func.php:146
+#: inc/func.php:201
 #, php-format
 msgctxt "sentences in a row"
 msgid "%1$s %2$s"
 msgstr "%1$s%2$s"
 
 #. translators: %s: link inviting the reader to support the development of this plugin
-#: inc/func.php:168
+#: inc/func.php:223
 #, php-format
 msgid "If ETBS Account Guard is useful to you, please %s."
 msgstr "ETBS Account Guard がお役に立ちましたら、%s。"
 
-#: inc/func.php:169
+#: inc/func.php:224
 msgid "consider supporting its development"
 msgstr "開発の支援をご検討ください"
 
 #. translators: %s: link for requesting new features or custom development
-#: inc/func.php:173
+#: inc/func.php:228
 #, php-format
 msgid "For new features or custom development, please %s."
 msgstr "機能の追加や独自の開発をご希望の場合は、%s。"
 
-#: inc/func.php:174
+#: inc/func.php:229
 msgid "send us a request"
 msgstr "開発をご依頼ください"
 
-#: inc/func.php:225
+#: inc/func.php:280
 msgid "Support development"
 msgstr "開発を支援"
 
-#: inc/func.php:226
+#: inc/func.php:281
 msgid "Request development"
 msgstr "開発のご依頼"
 
 #. translators: %s: URL of the Access Restriction tab of the settings screen
-#: inc/func.php:325
+#: inc/func.php:377
 #, php-format
 msgid ""
 "Open the <a href=\"%s\">Access Restriction tab</a> of the settings screen "
@@ -1092,16 +1771,16 @@ msgstr ""
 "詳しくは設定画面の<a href=\"%s\">「アクセス制限」タブ</a>を開いて確認してくだ"
 "さい。"
 
-#: inc/func.php:341
+#: inc/func.php:393
 msgid "Access Restriction is stopped because of an internal problem."
 msgstr "アクセス制限は内部の問題により停止しています。"
 
-#: inc/func.php:342
+#: inc/func.php:394
 msgid "Everyone can sign in without an IP check until this is fixed."
 msgstr "直るまでは誰でも IP の確認なしにサインインできます。"
 
 #. translators: %s: PHP constant, ACGD_DISABLE_RESTRICTION
-#: inc/func.php:366
+#: inc/func.php:418
 #, php-format
 msgid ""
 "The emergency switch (%s in wp-config.php) is turned on, so Access "
@@ -1110,6 +1789,6 @@ msgstr ""
 "非常用スイッチ (wp-config.php の %s) がオンのため、アクセス制限は停止していま"
 "す。"
 
-#: inc/func.php:369
+#: inc/func.php:421
 msgid "Login Name Protection is not affected."
 msgstr "ログイン名の保護には影響しません。"
