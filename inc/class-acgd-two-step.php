@@ -2645,12 +2645,14 @@ class ACGD_Two_Step {
 				// ボックスとラベルを横に並べる（「ログイン状態を保存する」と同じ。.forgetmenot はボタンの横に回り込むため流用しない）。
 				// 長いラベルは自身の頭に揃えて折り返し、注意書きもラベルの列に置く。ボックスの枠はラベル1行分の高さ
 				// （.login label：14px × 1.5）にして中央に置く。狭い画面ではボックスの大きさが変わるため（16px／25px）。
+				// word-break: auto-phrase breaks Japanese at phrase boundaries (Chrome/Edge 119+; others keep the current wrapping).
+				// word-break: auto-phrase で日本語を文節の境目で折り返す（Chrome/Edge 119 以降。非対応のブラウザは今の折り返しのまま）。
 				?>
 				<div style="display:flex;align-items:flex-start;gap:4px;margin-bottom:16px;">
 					<span style="display:flex;flex:none;align-items:center;height:21px;">
 						<input type="checkbox" name="<?php echo esc_attr( self::TRUST_FIELD ); ?>" id="acgd-trust-device" value="1" aria-describedby="acgd-trust-device-note" style="margin:0;" />
 					</span>
-					<div>
+					<div style="word-break:auto-phrase;">
 						<label for="acgd-trust-device" style="margin:0;">
 							<?php
 							echo esc_html(
