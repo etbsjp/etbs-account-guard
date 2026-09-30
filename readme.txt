@@ -69,7 +69,7 @@ On the Two-Step Verification tab of Settings > ETBS Account Guard, you can requi
 
 If Access Restriction ever locks everyone out, add `define( 'ACGD_DISABLE_RESTRICTION', true );` to `wp-config.php`. This stops Access Restriction only; Login Name Protection keeps working.
 
-If nobody can sign in because verification codes do not arrive, add `define( 'ACGD_DISABLE_TWO_STEP', true );` to `wp-config.php`. This stops Two-Step Verification only; Access Restriction and Login Name Protection keep working. Define it also on a copy of your site whose email sending is turned off. The two switches are independent. While a switch is on, a warning is shown on the admin screens.
+If nobody can sign in because verification codes do not arrive, add `define( 'ACGD_DISABLE_TWO_STEP', true );` to `wp-config.php`. This stops Two-Step Verification only; Access Restriction and Login Name Protection keep working. Define it also on a copy of your site whose email sending is turned off. When the switch is taken off again, users who need a code and signed in while it was on are signed out once on their next request. The two switches are independent. While a switch is on, a warning is shown on the admin screens.
 
 = What it does not do =
 
@@ -90,6 +90,8 @@ Authenticator apps (TOTP), login attempt limits, CAPTCHA and firewalls are not i
 * Application passwords do not go through Two-Step Verification.
 * Users who need a code cannot use sign-in methods of other plugins (magic links, social login and so on).
 * Two-Step Verification is not available on multisite.
+* The save-time checks of Two-Step Verification (your own receive check, a valid email address for others) run only on the Two-Step Verification tab and the user edit screen. A role or email address changed elsewhere (bulk role changes on the Users screen, the REST API, WP-CLI, imports) is not checked, and a user who needs a code but has no working email address can then no longer sign in.
+* Two-Step Verification is not meant for roles with many users, such as the WooCommerce customer role: the save-time checks read every user of the chosen roles.
 * Do not combine it with another two-factor plugin for the same user. Plugins that recreate the session during sign-in (such as Two Factor) create a session without this plugin's mark, which is then signed out.
 
 == Installation ==

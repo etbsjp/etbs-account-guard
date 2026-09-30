@@ -953,7 +953,7 @@ class ACGD_Two_Step {
 			? "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'off')"
 			: "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'off')";
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared -- See the note above these helpers; $sql is one of two fixed strings and is prepared here.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- See the note above these helpers; $sql is one of two fixed strings and is prepared here.
 		$result = $wpdb->query( $wpdb->prepare( $sql, $name, $value ) );
 
 		return 1 === (int) $result;
@@ -1758,7 +1758,11 @@ class ACGD_Two_Step {
 	 */
 	private static function send_screen_headers() {
 		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
-			define( 'DONOTCACHEPAGE', true ); // For page cache plugins that cache the login screen. / ログイン画面をキャッシュするプラグインへの対策。
+			// For page cache plugins that cache the login screen. The name is theirs (WP Super Cache, W3 Total Cache
+			// and others read DONOTCACHEPAGE), so it cannot carry this plugin's prefix.
+			// ログイン画面をキャッシュするプラグインへの対策。名前はそれらのプラグインが決めたもの（WP Super Cache・
+			// W3 Total Cache などが DONOTCACHEPAGE を読む）なので、このプラグインの接頭辞は付けられない。
+			define( 'DONOTCACHEPAGE', true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- The page cache plugins' own constant (see above).
 		}
 		if ( ! headers_sent() ) {
 			nocache_headers();
@@ -2387,7 +2391,16 @@ class ACGD_Two_Step {
 			<?php
 			do_action( 'login_footer' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core's own action.
 			if ( ! empty( $attempt['customize'] ) ) {
-				wp_print_inline_script_tag( "setTimeout( function(){ new wp.customize.Messenger({ url: '" . esc_url_raw( wp_customize_url() ) . "', channel: 'login' }).send('login') }, 1000 );" );
+				$script = "setTimeout( function(){ new wp.customize.Messenger({ url: '" . esc_url_raw( wp_customize_url() ) . "', channel: 'login' }).send('login') }, 1000 );";
+				// wp_print_inline_script_tag() exists from WordPress 5.7; no minimum WordPress version is declared
+				// (docs/spec.md 3.3), so older versions print the tag directly, as wp-login.php itself did then.
+				// wp_print_inline_script_tag() は WordPress 5.7 から。WordPress の下限は宣言していない（docs/spec.md 3.3）
+				// ので、それより前では当時の wp-login.php と同じくタグを直接出す。
+				if ( function_exists( 'wp_print_inline_script_tag' ) ) {
+					wp_print_inline_script_tag( $script );
+				} else {
+					echo '<script>' . $script . '</script>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- A fixed script; the only variable part went through esc_url_raw() above.
+				}
 			}
 			?>
 			</body></html>
@@ -3798,6 +3811,7 @@ ACGD_JS;
 						),
 						esc_html__( 'This stops two-step verification only; Access Restriction and Login Name Protection keep working.', 'etbs-account-guard' ),
 						esc_html__( 'Define it also on a copy of this site whose email sending is turned off.', 'etbs-account-guard' ),
+						esc_html__( 'When the switch is taken off again, users who need a code and signed in while it was on are signed out once on their next request.', 'etbs-account-guard' ),
 					)
 				),
 				acgd_allowed_sentence_html()
