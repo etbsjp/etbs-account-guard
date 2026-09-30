@@ -4,9 +4,11 @@
  * 設定画面「設定 > ETBS Account Guard」（画面ID settings_page_etbs-account-guard）。
  *
  * The screen is built as tabs, added to get_tabs() with one renderer each: Login Name Protection (1.0.0),
- * and Access Restriction and Denial Log (1.1.0).
+ * Access Restriction and Denial Log (1.1.0), and Two-Step Verification (1.3.0; its body is
+ * ACGD_Two_Step::render_settings_tab(), and the tab is not added on multisite).
  * 画面はタブの形で作る。get_tabs() に項目を足し、それぞれに描画関数を持たせる：
- * 「ログイン名の保護」（1.0.0）、「アクセス制限」「拒否の記録」（1.1.0）。
+ * 「ログイン名の保護」（1.0.0）、「アクセス制限」「拒否の記録」（1.1.0）、「2段階認証」（1.3.0。中身は
+ * ACGD_Two_Step::render_settings_tab()。マルチサイトではタブ自体を足さない）。
  *
  * @package etbs-account-guard
  */
@@ -139,11 +141,17 @@ class ACGD_Settings {
 	 * @return string[] Tabs. / タブ。
 	 */
 	public static function get_tabs() {
-		return array(
+		$tabs = array(
 			'login-name' => __( 'Login Name Protection', 'etbs-account-guard' ),
 			'access'     => __( 'Access Restriction', 'etbs-account-guard' ),
-			'log'        => __( 'Denial Log', 'etbs-account-guard' ),
 		);
+		// Two-Step Verification is not offered on multisite (docs/spec.md 7.1). / マルチサイトでは2段階認証を出さない（docs/spec.md 7.1）。
+		if ( ACGD_Two_Step::is_available() ) {
+			$tabs[ ACGD_Two_Step::TAB ] = __( 'Two-Step Verification', 'etbs-account-guard' );
+		}
+		$tabs['log'] = __( 'Denial Log', 'etbs-account-guard' );
+
+		return $tabs;
 	}
 
 	/**
@@ -461,6 +469,8 @@ class ACGD_Settings {
 				self::render_login_name_tab();
 			} elseif ( 'access' === $current ) {
 				self::render_access_tab();
+			} elseif ( ACGD_Two_Step::TAB === $current ) {
+				ACGD_Two_Step::render_settings_tab();
 			} elseif ( 'log' === $current ) {
 				self::render_log_tab();
 			}
@@ -967,6 +977,23 @@ class ACGD_Settings {
 	 * @return void
 	 */
 	private static function render_access_tab() {
+		// Two-Step Verification is a separate axis with its own tab (docs/spec.md 7.10). / 2段階認証は別の軸で、タブも別（docs/spec.md 7.10）。
+		if ( ACGD_Two_Step::is_available() ) {
+			?>
+			<p>
+				<?php
+				echo wp_kses(
+					sprintf(
+						/* translators: %s: URL of the Two-Step Verification tab of the settings screen */
+						__( 'Two-step verification is set on its own <a href="%s">Two-Step Verification tab</a>.', 'etbs-account-guard' ),
+						esc_url( self::get_page_url( ACGD_Two_Step::TAB ) )
+					),
+					array( 'a' => array( 'href' => true ) )
+				);
+				?>
+			</p>
+			<?php
+		}
 		// Printed ahead of the options.php form, on purpose: it has its own "Run diagnosis" <form>, and a
 		// <form> cannot be nested inside another one (the outer form below is the Settings API's). See the
 		// method's own docblock for the UX placement reasoning (before any mode is chosen).
@@ -1518,7 +1545,9 @@ class ACGD_Settings {
 	/**
 	 * Describes one denial log context in words. / 拒否の記録の場面を文字で表す。
 	 *
-	 * @param string $context One of 'login', 'session', 'rest' or 'basic'. / 'login'・'session'・'rest'・'basic' のいずれか。
+	 * @param string $context One of 'login', 'session', 'rest', 'basic', or one of the two_step_* contexts of
+	 *                        docs/spec.md 7.13. / 'login'・'session'・'rest'・'basic'、または docs/spec.md 7.13 の
+	 *                        two_step_* のいずれか。
 	 * @return string Description, not escaped. / 説明（未エスケープ）。
 	 */
 	private static function describe_denial_context( $context ) {
@@ -1531,6 +1560,20 @@ class ACGD_Settings {
 				return __( 'REST API', 'etbs-account-guard' );
 			case 'basic':
 				return __( 'BASIC authentication', 'etbs-account-guard' );
+			case 'two_step_wrong':
+				return __( 'Two-step verification: wrong code', 'etbs-account-guard' );
+			case 'two_step_expired':
+				return __( 'Two-step verification: expired code', 'etbs-account-guard' );
+			case 'two_step_limit':
+				return __( 'Two-step verification: limit reached', 'etbs-account-guard' );
+			case 'two_step_noninteractive':
+				return __( 'Two-step verification: sign-in without a screen', 'etbs-account-guard' );
+			case 'two_step_xmlrpc':
+				return __( 'Two-step verification: XML-RPC', 'etbs-account-guard' );
+			case 'two_step_mail_failed':
+				return __( 'Two-step verification: email not sent', 'etbs-account-guard' );
+			case 'two_step_session':
+				return __( 'Two-step verification: unverified session discarded', 'etbs-account-guard' );
 			default:
 				return $context;
 		}
