@@ -1576,7 +1576,7 @@ msgstr "メールアドレスの確認"
 #: inc/class-acgd-two-step.php:4588
 #, php-format
 msgid "Application passwords: %s."
-msgstr "アプリケーションパスワード: %s 件。"
+msgstr "アプリケーションパスワード: %s件。"
 
 #: inc/class-acgd-two-step.php:4591
 msgid "They work without a verification code."
@@ -1590,7 +1590,7 @@ msgstr "見直す"
 #: inc/class-acgd-two-step.php:4634
 #, php-format
 msgid "Trusted devices: %s."
-msgstr "信頼した端末: %s 台。"
+msgstr "信頼した端末: %s台。"
 
 #. translators: 1: date and time the device was trusted, 2: date and time the trust ends, 3: browser (User-Agent) of the device, as sent by it
 #: inc/class-acgd-two-step.php:4648
