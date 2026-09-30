@@ -2638,21 +2638,33 @@ class ACGD_Two_Step {
 			</p>
 			<?php if ( $trust_days > 0 ) : ?>
 				<?php // Unchecked by default; not shown while trusting is turned off (7.8). / 既定は未チェック。信頼しない設定なら出さない（7.8）。 ?>
-				<p>
-					<input type="checkbox" name="<?php echo esc_attr( self::TRUST_FIELD ); ?>" id="acgd-trust-device" value="1" aria-describedby="acgd-trust-device-note" />
-					<label for="acgd-trust-device">
-						<?php
-						echo esc_html(
-							sprintf(
-								/* translators: %d: number of days (7 or 30) */
-								_n( 'Skip the verification code on this device for %d day', 'Skip the verification code on this device for %d days', $trust_days, 'etbs-account-guard' ),
-								$trust_days
-							)
-						);
-						?>
-					</label>
-				</p>
-				<p id="acgd-trust-device-note" class="description" style="margin-bottom:16px;"><?php esc_html_e( 'Do not check this on a shared computer.', 'etbs-account-guard' ); ?></p>
+				<?php
+				// Box and label side by side, like "Remember Me" (.forgetmenot, not reused: it floats beside the button). A long label
+				// wraps under its own first letter, and the note sits in the label's column. The box's cell is one label line high
+				// (.login label: 14px × 1.5) and centers the box in it, since its size differs on narrow screens (16px / 25px).
+				// ボックスとラベルを横に並べる（「ログイン状態を保存する」と同じ。.forgetmenot はボタンの横に回り込むため流用しない）。
+				// 長いラベルは自身の頭に揃えて折り返し、注意書きもラベルの列に置く。ボックスの枠はラベル1行分の高さ
+				// （.login label：14px × 1.5）にして中央に置く。狭い画面ではボックスの大きさが変わるため（16px／25px）。
+				?>
+				<div style="display:flex;align-items:flex-start;gap:4px;margin-bottom:16px;">
+					<span style="display:flex;flex:none;align-items:center;height:21px;">
+						<input type="checkbox" name="<?php echo esc_attr( self::TRUST_FIELD ); ?>" id="acgd-trust-device" value="1" aria-describedby="acgd-trust-device-note" style="margin:0;" />
+					</span>
+					<div>
+						<label for="acgd-trust-device" style="margin:0;">
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %d: number of days (7 or 30) */
+									_n( 'Skip the verification code on this device for %d day', 'Skip the verification code on this device for %d days', $trust_days, 'etbs-account-guard' ),
+									$trust_days
+								)
+							);
+							?>
+						</label>
+						<p id="acgd-trust-device-note" class="description" style="margin:4px 0 0;"><?php esc_html_e( 'Do not check this on a shared computer.', 'etbs-account-guard' ); ?></p>
+					</div>
+				</div>
 			<?php endif; ?>
 			<input type="hidden" name="<?php echo esc_attr( self::ATTEMPT_FIELD ); ?>" value="<?php echo esc_attr( $attempt_id ); ?>" />
 			<?php wp_nonce_field( $nonce_act, self::CODE_NONCE_FIELD, false ); ?>
@@ -4261,31 +4273,43 @@ ACGD_JS;
 	private static function render_role_table( $resubmitted ) {
 		$settings = self::get_settings();
 		$methods  = null !== $resubmitted ? $resubmitted : $settings['roles'];
+
+		// The same markup as the per-role table of Access Restriction (a Settings API row), so both tabs look alike and
+		// the core stylesheet stacks it on narrow screens instead of pushing the select out of the page.
+		// アクセス制限の権限ごとの表（Settings API の行）と同じマークアップにする。2つのタブの見た目を揃え、
+		// 狭い画面では本体の CSS が縦に積むので、select が画面の外へはみ出さない。
 		?>
-		<table class="widefat fixed striped" style="max-width:600px;">
-			<thead>
-				<tr>
-					<th scope="col"><?php esc_html_e( 'Role', 'etbs-account-guard' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'Two-step verification', 'etbs-account-guard' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php foreach ( wp_roles()->get_names() as $role => $label ) : ?>
-					<?php
-					$role_label = translate_user_role( $label );
-					$method     = isset( $methods[ $role ] ) ? $methods[ $role ] : self::METHOD_NONE;
-					?>
-					<tr>
-						<th scope="row"><?php echo esc_html( $role_label ); ?></th>
-						<td>
-							<select name="<?php echo esc_attr( self::OPTION . '[roles][' . $role . ']' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name, such as Editor */ __( 'Two-step verification for %s', 'etbs-account-guard' ), $role_label ) ); ?>">
-								<option value="none" <?php selected( self::METHOD_NONE, $method ); ?>><?php esc_html_e( 'None', 'etbs-account-guard' ); ?></option>
-								<option value="email" <?php selected( self::METHOD_EMAIL, $method ); ?>><?php esc_html_e( 'Verification code (email)', 'etbs-account-guard' ); ?></option>
-							</select>
-						</td>
-					</tr>
-				<?php endforeach; ?>
-			</tbody>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Roles', 'etbs-account-guard' ); ?></th>
+				<td>
+					<table class="widefat fixed striped" style="max-width:600px;">
+						<thead>
+							<tr>
+								<th scope="col"><?php esc_html_e( 'Role', 'etbs-account-guard' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Two-step verification', 'etbs-account-guard' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( wp_roles()->get_names() as $role => $label ) : ?>
+								<?php
+								$role_label = translate_user_role( $label );
+								$method     = isset( $methods[ $role ] ) ? $methods[ $role ] : self::METHOD_NONE;
+								?>
+								<tr>
+									<th scope="row"><?php echo esc_html( $role_label ); ?></th>
+									<td>
+										<select name="<?php echo esc_attr( self::OPTION . '[roles][' . $role . ']' ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: role name, such as Editor */ __( 'Two-step verification for %s', 'etbs-account-guard' ), $role_label ) ); ?>">
+											<option value="none" <?php selected( self::METHOD_NONE, $method ); ?>><?php esc_html_e( 'None', 'etbs-account-guard' ); ?></option>
+											<option value="email" <?php selected( self::METHOD_EMAIL, $method ); ?>><?php esc_html_e( 'Verification code (email)', 'etbs-account-guard' ); ?></option>
+										</select>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</td>
+			</tr>
 		</table>
 		<?php
 	}
