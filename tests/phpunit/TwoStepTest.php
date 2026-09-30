@@ -179,6 +179,7 @@ class TwoStepTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		acgd_test_reset_options();
+		acgd_test_reset_user_meta();
 		$GLOBALS['wpdb'] = new ACGD_Test_Wpdb();
 	}
 
@@ -746,9 +747,11 @@ class TwoStepTest extends TestCase {
 
 	/**
 	 * Tests ACGD_Two_Step::on_wp_set_password() with one, two and three arguments (7.8: the action passes two
-	 * arguments before WordPress 6.7 and three from 6.7; neither may be a fatal error), and what it clears.
+	 * arguments before WordPress 6.7 and three from 6.7; neither may be a fatal error), and what it clears:
+	 * the attempts and send record (7.5) and the trusted devices (7.8) of that user only.
 	 * ACGD_Two_Step::on_wp_set_password() を引数1つ・2つ・3つで呼ぶテスト（7.8：このアクションは WordPress 6.7
-	 * より前は2引数、6.7 から3引数。どちらでも Fatal にならないこと）と、何を消すか。
+	 * より前は2引数、6.7 から3引数。どちらでも Fatal にならないこと）と、何を消すか：その人の試行と送信の記録
+	 * （7.5）と信頼した端末（7.8）だけ。
 	 *
 	 * @return void
 	 */
@@ -765,21 +768,25 @@ class TwoStepTest extends TestCase {
 				'test_condition_name' => '引数1つ => Fatal にならず、何も消さない（ユーザーが分からない）',
 				'args'                => array( 'new' ),
 				'expected_deleted'    => array(),
+				'expected_trusted'    => true,
 			),
 			array(
-				'test_condition_name' => '引数2つ（WP 6.2〜6.6） => その人の送信の記録と試行を消す（他人の試行は残す）',
+				'test_condition_name' => '引数2つ（WP 6.2〜6.6） => その人の送信の記録・試行・信頼した端末を消す（他人のものは残す）',
 				'args'                => array( 'new', 5 ),
 				'expected_deleted'    => array( 'acgd_2s_send_5', 'acgd_2s_' . $attempt_hash, 'acgd_2s_n_' . $attempt_hash ),
+				'expected_trusted'    => false,
 			),
 			array(
 				'test_condition_name' => '引数3つ・本物の変更 => 消す',
 				'args'                => array( 'new', 5, $old ),
 				'expected_deleted'    => array( 'acgd_2s_send_5', 'acgd_2s_' . $attempt_hash, 'acgd_2s_n_' . $attempt_hash ),
+				'expected_trusted'    => false,
 			),
 			array(
 				'test_condition_name' => '引数3つ・ログイン時の作り直し（同じパスワード） => 消さない',
 				'args'                => array( 'kept', 5, $old ),
 				'expected_deleted'    => array(),
+				'expected_trusted'    => true,
 			),
 		);
 
@@ -793,11 +800,16 @@ class TwoStepTest extends TestCase {
 				'acgd_2s_n_' . $other_hash   => '0',
 			);
 			$GLOBALS['wpdb'] = $wpdb;
+			acgd_test_reset_user_meta();
+			update_user_meta( 5, 'acgd_trusted_devices', array( $attempt_hash => array() ) );
+			update_user_meta( 6, 'acgd_trusted_devices', array( $other_hash => array() ) );
 
 			call_user_func_array( array( 'ACGD_Two_Step', 'on_wp_set_password' ), $case['args'] );
 
 			$this->assertSame( $case['expected_deleted'], $wpdb->deleted, $case['test_condition_name'] );
 			$this->assertArrayHasKey( 'acgd_2s_' . $other_hash, $wpdb->rows, $case['test_condition_name'] . '（他人の試行は残る）' );
+			$this->assertSame( $case['expected_trusted'], '' !== get_user_meta( 5, 'acgd_trusted_devices', true ), $case['test_condition_name'] . '（その人の信頼した端末）' );
+			$this->assertNotSame( '', get_user_meta( 6, 'acgd_trusted_devices', true ), $case['test_condition_name'] . '（他人の信頼した端末は残る）' );
 		}
 	}
 
@@ -866,6 +878,411 @@ class TwoStepTest extends TestCase {
 			if ( null !== $case['expected_value'] ) {
 				$this->assertMatchesRegularExpression( $case['expected_value'], $wpdb->rows['acgd_2s_send_9'], $case['test_condition_name'] );
 			}
+		}
+	}
+
+	/**
+	 * Tests ACGD_Two_Step::trusted_device_hash(): the sha256 of the cookie value, never the value itself (7.2).
+	 * ACGD_Two_Step::trusted_device_hash() のテスト。Cookie の値の sha256 で、値そのものではない（7.2）。
+	 *
+	 * @return void
+	 */
+	public function test_trusted_device_hash() {
+		$token = str_repeat( 'ab', 32 );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'sha256 そのもの',
+				'actual'              => ACGD_Two_Step::trusted_device_hash( $token ),
+				'expected'            => hash( 'sha256', $token ),
+			),
+			array(
+				'test_condition_name' => '元の値とは一致しない',
+				'actual'              => ACGD_Two_Step::trusted_device_hash( $token ) === $token,
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], $case['actual'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * Tests ACGD_Two_Step::sanitize_trusted_devices(): well formed entries are kept, anything else is dropped.
+	 * ACGD_Two_Step::sanitize_trusted_devices() のテスト。形の正しい項目は残し、それ以外は捨てる。
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_trusted_devices() {
+		$hash = str_repeat( 'c', 64 );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '保存が無い（get_user_meta の空文字） => 空の一覧',
+				'raw'                 => '',
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '正しい項目 => 整数にして残す',
+				'raw'                 => array(
+					$hash => array(
+						'created' => '100',
+						'expires' => 200,
+						'ua_hint' => 'Firefox',
+					),
+				),
+				'expected'            => array(
+					$hash => array(
+						'created' => 100,
+						'expires' => 200,
+						'ua_hint' => 'Firefox',
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'ua_hint が無い・文字列でない => 空文字',
+				'raw'                 => array(
+					$hash => array(
+						'created' => 1,
+						'expires' => 2,
+						'ua_hint' => array( 'x' ),
+					),
+				),
+				'expected'            => array(
+					$hash => array(
+						'created' => 1,
+						'expires' => 2,
+						'ua_hint' => '',
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'キーがハッシュの形でない・時刻が無い・項目が配列でない => 捨てる',
+				'raw'                 => array(
+					'not-a-hash'          => array(
+						'created' => 1,
+						'expires' => 2,
+					),
+					str_repeat( 'd', 64 ) => array( 'created' => 1 ),
+					str_repeat( 'e', 64 ) => 'x',
+				),
+				'expected'            => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], ACGD_Two_Step::sanitize_trusted_devices( $case['raw'] ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * Tests ACGD_Two_Step::trusted_until() (7.8: cut by the current setting at every check, counted from the
+	 * registered time; off trusts nothing).
+	 * ACGD_Two_Step::trusted_until() のテスト（7.8：照合のたびに今の設定で打ち切る。登録日から数える。
+	 * 無効なら何も信頼しない）。
+	 *
+	 * @return void
+	 */
+	public function test_trusted_until() {
+		$created = 1800000000;
+		$entry30 = array(
+			'created' => $created,
+			'expires' => $created + 30 * DAY_IN_SECONDS,
+			'ua_hint' => '',
+		);
+		$entry7  = array(
+			'created' => $created,
+			'expires' => $created + 7 * DAY_IN_SECONDS,
+			'ua_hint' => '',
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '30日で登録・今も30日 => 登録日＋30日',
+				'entry'               => $entry30,
+				'days'                => 30,
+				'expected'            => $created + 30 * DAY_IN_SECONDS,
+			),
+			array(
+				'test_condition_name' => '30日で登録・今は7日 => 登録日＋7日で切る',
+				'entry'               => $entry30,
+				'days'                => 7,
+				'expected'            => $created + 7 * DAY_IN_SECONDS,
+			),
+			array(
+				'test_condition_name' => '7日で登録・今は30日 => 登録時の期限（7日）より延びない',
+				'entry'               => $entry7,
+				'days'                => 30,
+				'expected'            => $created + 7 * DAY_IN_SECONDS,
+			),
+			array(
+				'test_condition_name' => '今は無効（0） => 0',
+				'entry'               => $entry30,
+				'days'                => 0,
+				'expected'            => 0,
+			),
+			array(
+				'test_condition_name' => '項目が壊れている => 0',
+				'entry'               => array( 'created' => $created ),
+				'days'                => 30,
+				'expected'            => 0,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], ACGD_Two_Step::trusted_until( $case['entry'], $case['days'] ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * Tests ACGD_Two_Step::matches_trusted_device() (7.8): the cookie value must hash to an entry of the user's
+	 * own list that is still trusted under the current setting.
+	 * ACGD_Two_Step::matches_trusted_device() のテスト（7.8）。Cookie の値のハッシュが、そのユーザー自身の一覧の、
+	 * 今の設定でまだ信頼されている項目と一致しなければならない。
+	 *
+	 * @return void
+	 */
+	public function test_matches_trusted_device() {
+		$now     = 1800000000;
+		$token_a = str_repeat( '1a', 32 );
+		$token_b = str_repeat( '2b', 32 );
+		$fresh   = array(
+			'created' => $now - DAY_IN_SECONDS,
+			'expires' => $now + 29 * DAY_IN_SECONDS,
+			'ua_hint' => '',
+		);
+		$old     = array(
+			'created' => $now - 10 * DAY_IN_SECONDS,
+			'expires' => $now + 20 * DAY_IN_SECONDS,
+			'ua_hint' => '',
+		);
+		// User A trusts token_a, user B trusts token_b. / ユーザー A は token_a、B は token_b を信頼している。
+		$devices_a = array( ACGD_Two_Step::trusted_device_hash( $token_a ) => $fresh );
+		$devices_b = array( ACGD_Two_Step::trusted_device_hash( $token_b ) => $fresh );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '本人の Cookie・期限内 => 信頼する',
+				'devices'             => $devices_a,
+				'token'               => $token_a,
+				'days'                => 30,
+				'now'                 => $now,
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'ユーザー A の Cookie で B としてログイン => 信頼しない',
+				'devices'             => $devices_b,
+				'token'               => $token_a,
+				'days'                => 30,
+				'now'                 => $now,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '登録時の期限を過ぎた => 信頼しない',
+				'devices'             => $devices_a,
+				'token'               => $token_a,
+				'days'                => 30,
+				'now'                 => $now + 29 * DAY_IN_SECONDS,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '期限の1秒前 => 信頼する（陽性対照）',
+				'devices'             => $devices_a,
+				'token'               => $token_a,
+				'days'                => 30,
+				'now'                 => $now + 29 * DAY_IN_SECONDS - 1,
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '設定を無効にした => 信頼しない',
+				'devices'             => $devices_a,
+				'token'               => $token_a,
+				'days'                => 0,
+				'now'                 => $now,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '30日→7日に縮めた・登録から10日 => 信頼しない',
+				'devices'             => array( ACGD_Two_Step::trusted_device_hash( $token_a ) => $old ),
+				'token'               => $token_a,
+				'days'                => 7,
+				'now'                 => $now,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '同じ端末で30日のまま => 信頼する（上の陽性対照）',
+				'devices'             => array( ACGD_Two_Step::trusted_device_hash( $token_a ) => $old ),
+				'token'               => $token_a,
+				'days'                => 30,
+				'now'                 => $now,
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'Cookie にハッシュそのものを入れた（DB から盗んだ値） => 信頼しない',
+				'devices'             => $devices_a,
+				'token'               => ACGD_Two_Step::trusted_device_hash( $token_a ),
+				'days'                => 30,
+				'now'                 => $now,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '形の違う Cookie（短い・16進でない・文字列でない） => 信頼しない',
+				'devices'             => $devices_a,
+				'token'               => array( $token_a ),
+				'days'                => 30,
+				'now'                 => $now,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '一覧が空 => 信頼しない',
+				'devices'             => array(),
+				'token'               => $token_a,
+				'days'                => 30,
+				'now'                 => $now,
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], ACGD_Two_Step::matches_trusted_device( $case['devices'], $case['token'], $case['days'], $case['now'] ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * Tests ACGD_Two_Step::add_trusted_device() (7.8): at most 20 devices, the oldest dropped first, and devices
+	 * no longer trusted dropped before counting.
+	 * ACGD_Two_Step::add_trusted_device() のテスト（7.8）。最大20台で古い順に捨て、もう信頼されない端末は数える前に捨てる。
+	 *
+	 * @return void
+	 */
+	public function test_add_trusted_device() {
+		$now = 1800000000;
+		$new = array(
+			'created' => $now,
+			'expires' => $now + 30 * DAY_IN_SECONDS,
+			'ua_hint' => 'new',
+		);
+
+		// 20 devices registered one hour apart, stored newest first (so storage order is not age order).
+		// 1時間おきに登録した20台を、新しい順に保存しておく（保存順と古さの順を変えるため）。
+		$twenty = array();
+		for ( $i = 20; $i >= 1; $i-- ) {
+			$twenty[ sprintf( '%064x', $i ) ] = array(
+				'created' => $now - $i * HOUR_IN_SECONDS,
+				'expires' => $now - $i * HOUR_IN_SECONDS + 30 * DAY_IN_SECONDS,
+				'ua_hint' => 'd' . $i,
+			);
+		}
+		$oldest = sprintf( '%064x', 20 );
+
+		$expired_one = $twenty;
+		$expired_one[ sprintf( '%064x', 5 ) ]['expires'] = $now - 1;
+		// Two devices, one registered 8 days ago with 30 days: still trusted under 30, not under 7.
+		// 2台のうち1台は8日前に30日で登録：30日なら信頼されたまま、7日なら信頼されない。
+		$eight_days_old = array(
+			sprintf( '%064x', 3 ) => array(
+				'created' => $now - 8 * DAY_IN_SECONDS,
+				'expires' => $now + 22 * DAY_IN_SECONDS,
+				'ua_hint' => 'eight',
+			),
+			sprintf( '%064x', 4 ) => array(
+				'created' => $now - HOUR_IN_SECONDS,
+				'expires' => $now - HOUR_IN_SECONDS + 30 * DAY_IN_SECONDS,
+				'ua_hint' => 'one hour',
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '空に1台 => 1台',
+				'devices'             => array(),
+				'days'                => 30,
+				'expected_count'      => 1,
+				'expected_gone'       => array(),
+			),
+			array(
+				'test_condition_name' => '20台に21台目 => 20台で、一番古い1台が消える',
+				'devices'             => $twenty,
+				'days'                => 30,
+				'expected_count'      => 20,
+				'expected_gone'       => array( $oldest ),
+			),
+			array(
+				'test_condition_name' => '20台のうち1台が期限切れ => それだけ消え、一番古い端末は残る',
+				'devices'             => $expired_one,
+				'days'                => 30,
+				'expected_count'      => 20,
+				'expected_gone'       => array( sprintf( '%064x', 5 ) ),
+			),
+			array(
+				'test_condition_name' => '今の設定が7日 => 登録から8日の1台が消える',
+				'devices'             => $eight_days_old,
+				'days'                => 7,
+				'expected_count'      => 2,
+				'expected_gone'       => array( sprintf( '%064x', 3 ) ),
+			),
+			array(
+				'test_condition_name' => '同じ一覧で30日のまま => 何も消えない（上の陽性対照）',
+				'devices'             => $eight_days_old,
+				'days'                => 30,
+				'expected_count'      => 3,
+				'expected_gone'       => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = ACGD_Two_Step::add_trusted_device( $case['devices'], str_repeat( 'f', 64 ), $new, $case['days'], $now, 20 );
+
+			$this->assertCount( $case['expected_count'], $result, $case['test_condition_name'] );
+			$this->assertSame( $new, $result[ str_repeat( 'f', 64 ) ], $case['test_condition_name'] . '（新しい端末が入る）' );
+			foreach ( $case['expected_gone'] as $gone ) {
+				$this->assertArrayNotHasKey( $gone, $result, $case['test_condition_name'] . '（消える端末）' );
+			}
+			foreach ( array_diff( array_keys( $case['devices'] ), $case['expected_gone'] ) as $kept ) {
+				$this->assertArrayHasKey( $kept, $result, $case['test_condition_name'] . '（残る端末）' );
+			}
+		}
+	}
+
+	/**
+	 * Tests ACGD_Two_Step::ua_hint() (7.8: the visitor decides the value; tags and control characters out,
+	 * length cut).
+	 * ACGD_Two_Step::ua_hint() のテスト（7.8：値は訪問者が決められる。タグと制御文字を除き、長さを切る）。
+	 *
+	 * @return void
+	 */
+	public function test_ua_hint() {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '普通の User-Agent => そのまま',
+				'raw'                 => 'Mozilla/5.0 (Macintosh) Firefox/130.0',
+				'expected'            => 'Mozilla/5.0 (Macintosh) Firefox/130.0',
+			),
+			array(
+				'test_condition_name' => 'タグ入り => タグを除く',
+				'raw'                 => 'Evil <script>alert(1)</script><b>UA</b>',
+				'expected'            => 'Evil UA',
+			),
+			array(
+				'test_condition_name' => '改行・タブ・制御文字 => 空白1つにまとめ、制御文字を除く',
+				'raw'                 => "A\r\n\tB\x07C",
+				'expected'            => 'A BC',
+			),
+			array(
+				'test_condition_name' => '長い => 120文字で切る',
+				'raw'                 => str_repeat( 'x', 500 ),
+				'expected'            => str_repeat( 'x', 120 ),
+			),
+			array(
+				'test_condition_name' => '文字列でない => 空文字',
+				'raw'                 => null,
+				'expected'            => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], ACGD_Two_Step::ua_hint( $case['raw'] ), $case['test_condition_name'] );
 		}
 	}
 }
