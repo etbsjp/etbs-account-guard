@@ -4,17 +4,15 @@
  * password has been accepted (docs/spec.md 7).
  * 2段階認証：パスワードが合った後に、登録メールアドレスへ送った確認コードの入力を求める（docs/spec.md 7）。
  *
- * What is here (PR-B, docs/spec.md 7.15): who is a target (7.1), the data (7.2), the save-time checks and the
- * receive check (7.3), the login flow and the code screen (7.4, 7.5, 7.10), the session mark (7.6), the
- * bypass routes (7.7), the emails (7.9), the settings tab, the user edit screen section and the Users list
- * column (7.10), failure handling and the emergency switch (7.11) and the denial log entries (7.13).
- * Trusted devices (7.8) are PR-C; only the place in the login flow where they will be checked is kept
- * (is_trusted_device()).
- * ここにあるもの（PR-B。docs/spec.md 7.15）：対象の決め方（7.1）、データ（7.2）、保存時のチェックと受信確認（7.3）、
- * ログインの流れとコード入力画面（7.4・7.5・7.10）、セッションの印（7.6）、迂回経路（7.7）、メール（7.9）、
- * 設定タブ・ユーザー編集画面の区画・ユーザー一覧の列（7.10）、失敗したときと非常用スイッチ（7.11）、
- * 拒否の記録の場面（7.13）。信頼した端末（7.8）は PR-C で、ログインの流れの中でそれを確かめる場所
- * （is_trusted_device()）だけを置いている。
+ * What is here (docs/spec.md 7.15: PR-B and PR-C): who is a target (7.1), the data (7.2), the save-time checks
+ * and the receive check (7.3), the login flow and the code screen (7.4, 7.5, 7.10), the session mark (7.6), the
+ * bypass routes (7.7), trusted devices (7.8), the emails (7.9), the settings tab, the user edit screen section
+ * and the Users list column (7.10), failure handling and the emergency switch (7.11) and the denial log
+ * entries (7.13).
+ * ここにあるもの（docs/spec.md 7.15：PR-B と PR-C）：対象の決め方（7.1）、データ（7.2）、保存時のチェックと
+ * 受信確認（7.3）、ログインの流れとコード入力画面（7.4・7.5・7.10）、セッションの印（7.6）、迂回経路（7.7）、
+ * 信頼した端末（7.8）、メール（7.9）、設定タブ・ユーザー編集画面の区画・ユーザー一覧の列（7.10）、
+ * 失敗したときと非常用スイッチ（7.11）、拒否の記録の場面（7.13）。
  *
  * ★ Unlike Access Restriction (5.5), this feature fails closed, and it has a fault record of its own: it
  * never calls ACGD_Access_Restriction::record_fault() / is_disabled() (7.11).
@@ -51,6 +49,62 @@ class ACGD_Two_Step {
 	 * @var string
 	 */
 	const USER_METHOD_META = 'acgd_two_step_method';
+
+	/**
+	 * User meta that lists one user's trusted devices (7.2, 7.8): sha256 of the cookie value => registered
+	 * time, expiry and a browser hint. The cookie value itself is never stored.
+	 * ユーザーの信頼した端末の一覧を持つユーザーメタ（7.2・7.8）：Cookie の値の sha256 => 登録日時・期限・
+	 * ブラウザの手がかり。Cookie の値そのものは保存しない。
+	 *
+	 * @var string
+	 */
+	const TRUSTED_META = 'acgd_trusted_devices';
+
+	/**
+	 * The choices of the number of days a device is trusted (7.8). 0 turns trusting off.
+	 * 端末を信頼する日数の選択肢（7.8）。0 は信頼しない。
+	 *
+	 * @var int[]
+	 */
+	const TRUST_DAYS_CHOICES = array( 0, 7, 30 );
+
+	/**
+	 * Default number of days a device is trusted (7.2). / 端末を信頼する日数の既定値（7.2）。
+	 *
+	 * @var int
+	 */
+	const TRUST_DAYS_DEFAULT = 30;
+
+	/**
+	 * Maximum number of trusted devices kept per user; the oldest ones go first (7.8).
+	 * ユーザーごとに持つ信頼した端末の上限。超えたら古い順に捨てる（7.8）。
+	 *
+	 * @var int
+	 */
+	const TRUSTED_MAX = 20;
+
+	/**
+	 * Maximum length of the browser hint kept with a trusted device (7.8: the visitor decides its value).
+	 * 信頼した端末に添えるブラウザの手がかりの最大長（7.8：値は訪問者が決められる）。
+	 *
+	 * @var int
+	 */
+	const UA_HINT_MAX = 120;
+
+	/**
+	 * Name of the "trust this device" checkbox of the code screen (7.8, 7.10). / コード入力画面の「この端末を信頼する」の名前（7.8・7.10）。
+	 *
+	 * @var string
+	 */
+	const TRUST_FIELD = 'acgd_trust_device';
+
+	/**
+	 * Name of the "revoke all trusted devices on save" checkbox of the user edit screen (7.8, 7.10).
+	 * ユーザー編集画面の「保存時に、信頼した端末をすべて解除する」の名前（7.8・7.10）。
+	 *
+	 * @var string
+	 */
+	const REVOKE_FIELD = 'acgd_revoke_trusted_devices';
 
 	/**
 	 * Option that records a fault of this feature (7.11). Written with add_option(), so an existing record is
@@ -318,6 +372,24 @@ class ACGD_Two_Step {
 	private static $validated_methods = array();
 
 	/**
+	 * Whether "revoke all trusted devices on save" was checked, by user ID, waiting for the validation of the same
+	 * save (7.8; read, validated and written in three steps like the method). / 「保存時に、信頼した端末をすべて
+	 * 解除する」にチェックがあったか（ユーザー ID ごと）。同じ保存の検証を待つ（7.8。方式と同じく読む・検証する・
+	 * 書くの3段で扱う）。
+	 *
+	 * @var bool[]
+	 */
+	private static $pending_revokes = array();
+
+	/**
+	 * Users whose trusted devices are revoked by profile_update once core has saved the profile.
+	 * 本体がプロフィールを保存した後の profile_update で、信頼した端末を解除するユーザー。
+	 *
+	 * @var bool[]
+	 */
+	private static $validated_revokes = array();
+
+	/**
 	 * Whether this request has already issued the login cookie after a correct code (complete_login()).
 	 * このリクエストが、正しいコードの後にログインの Cookie をもう出したか（complete_login()）。
 	 *
@@ -366,10 +438,15 @@ class ACGD_Two_Step {
 		add_action( 'template_redirect', array( __CLASS__, 'check_session_on_request' ) );
 		add_filter( 'rest_authentication_errors', array( __CLASS__, 'filter_rest_authentication_errors' ), ACGD_Access_Restriction::REST_AUTHENTICATION_PRIORITY + 10 );
 
-		// A password change clears this user's attempts and send records (7.5). / パスワードの変更で試行・送信の記録を消す（7.5）。
+		// A password change clears this user's attempts, send records (7.5) and trusted devices (7.8).
+		// パスワードの変更で試行・送信の記録（7.5）と信頼した端末（7.8）を消す。
 		add_action( 'after_password_reset', array( __CLASS__, 'on_after_password_reset' ), 10, 1 );
 		add_action( 'profile_update', array( __CLASS__, 'on_profile_update' ), 10, 2 );
 		add_action( 'wp_set_password', array( __CLASS__, 'on_wp_set_password' ), 10, 3 );
+
+		// Saving "do not trust devices" revokes every trusted device (7.8). / 「信頼しない」の保存で全員の信頼した端末を消す（7.8）。
+		add_action( 'add_option_' . self::OPTION, array( __CLASS__, 'on_settings_added' ), 10, 2 );
+		add_action( 'update_option_' . self::OPTION, array( __CLASS__, 'on_settings_updated' ), 10, 2 );
 
 		// Receive check (7.3). / 受信確認（7.3）。
 		add_action( 'wp_ajax_' . self::RC_NONCE_ACTION, array( __CLASS__, 'ajax_receive_check' ) );
@@ -434,14 +511,14 @@ class ACGD_Two_Step {
 	 * @param mixed $raw Stored value, or null when the option does not exist. / 保存値。オプションが無ければ null。
 	 * @return array {
 	 *     @type string[] $roles      Role => 'none' | 'email'. / 権限 => 方式。
-	 *     @type int      $trust_days 0, 7 or 30 (7.8; used by PR-C). / 0・7・30（7.8。PR-C で使う）。
+	 *     @type int      $trust_days 0, 7 or 30 (7.8). / 0・7・30（7.8）。
 	 *     @type bool     $broken     Whether the stored value is broken. / 保存値が壊れているか。
 	 * }
 	 */
 	public static function parse_settings( $raw ) {
 		$parsed = array(
 			'roles'      => array(),
-			'trust_days' => 30,
+			'trust_days' => self::TRUST_DAYS_DEFAULT,
 			'broken'     => false,
 		);
 
@@ -468,7 +545,7 @@ class ACGD_Two_Step {
 		}
 
 		if ( array_key_exists( 'trust_days', $raw ) ) {
-			if ( is_int( $raw['trust_days'] ) && in_array( $raw['trust_days'], array( 0, 7, 30 ), true ) ) {
+			if ( is_int( $raw['trust_days'] ) && in_array( $raw['trust_days'], self::TRUST_DAYS_CHOICES, true ) ) {
 				$parsed['trust_days'] = $raw['trust_days'];
 			} else {
 				$parsed['broken'] = true;
@@ -917,6 +994,162 @@ class ACGD_Two_Step {
 		$old_id = isset( $old_user_data->ID ) ? (int) $old_user_data->ID : '';
 
 		return (bool) wp_check_password( (string) $password, $old_user_data->user_pass, $old_id );
+	}
+
+	/*-------------------------------------------*/
+	/* Trusted devices, pure part (7.8) / 信頼した端末の純粋な処理（7.8）
+	/*-------------------------------------------*/
+
+	/**
+	 * Returns what is stored for a trusted device cookie value: its sha256 (7.2, 7.8). / 信頼 Cookie の値について
+	 * 保存するもの（sha256）を返す（7.2・7.8）。
+	 *
+	 * @param string $token Cookie value (64 hex characters). / Cookie の値（16進64文字）。
+	 * @return string Hex hash. / 16進のハッシュ。
+	 */
+	public static function trusted_device_hash( $token ) {
+		return hash( 'sha256', (string) $token );
+	}
+
+	/**
+	 * Reads a stored list of trusted devices into a known shape, dropping entries that are not well formed.
+	 * Pure. / 保存された信頼した端末の一覧を決まった形に読む。形の崩れた項目は捨てる。副作用なし。
+	 *
+	 * @param mixed $raw Stored value of TRUSTED_META. / TRUSTED_META の保存値。
+	 * @return array[] Hash => { created, expires, ua_hint }. / ハッシュ => 登録日時・期限・ブラウザの手がかり。
+	 */
+	public static function sanitize_trusted_devices( $raw ) {
+		$devices = array();
+		if ( ! is_array( $raw ) ) {
+			return $devices;
+		}
+
+		foreach ( $raw as $hash => $entry ) {
+			if ( ! is_string( $hash ) || ! preg_match( '/\A[0-9a-f]{64}\z/', $hash ) || ! is_array( $entry ) ) {
+				continue;
+			}
+			if ( ! isset( $entry['created'], $entry['expires'] ) || ! is_numeric( $entry['created'] ) || ! is_numeric( $entry['expires'] ) ) {
+				continue;
+			}
+			$devices[ $hash ] = array(
+				'created' => (int) $entry['created'],
+				'expires' => (int) $entry['expires'],
+				'ua_hint' => isset( $entry['ua_hint'] ) && is_string( $entry['ua_hint'] ) ? $entry['ua_hint'] : '',
+			);
+		}
+
+		return $devices;
+	}
+
+	/**
+	 * Returns until when a trusted device is trusted under the current setting (7.8: cut by the current
+	 * setting at every check). The earlier of the expiry stored at registration and "registered + the current
+	 * number of days"; 0 when trusting is turned off. Pure.
+	 * いまの設定のもとで、信頼した端末がいつまで信頼されるかを返す（7.8：照合のたびに今の設定で打ち切る）。
+	 * 登録時に保存した期限と「登録日時＋いまの日数」の早いほう。信頼しない設定なら 0。副作用なし。
+	 *
+	 * @param array $entry      One entry of sanitize_trusted_devices(). / sanitize_trusted_devices() の1項目。
+	 * @param int   $trust_days Current number of days (0, 7 or 30). / いまの日数（0・7・30）。
+	 * @return int Unix time until which it is trusted, or 0. / 信頼される期限の Unix 時刻、または 0。
+	 */
+	public static function trusted_until( $entry, $trust_days ) {
+		$trust_days = (int) $trust_days;
+		if ( $trust_days < 1 || ! is_array( $entry ) || ! isset( $entry['created'], $entry['expires'] ) ) {
+			return 0;
+		}
+
+		return min( (int) $entry['expires'], (int) $entry['created'] + $trust_days * DAY_IN_SECONDS );
+	}
+
+	/**
+	 * Tells whether a cookie value matches a trusted device of the list that is still trusted (7.8). The hash
+	 * is compared with hash_equals() against every entry, not looked up as an array key. Pure.
+	 * Cookie の値が、一覧の中のまだ信頼されている端末と一致するかを返す（7.8）。ハッシュは配列のキーとして
+	 * 引かず、全項目と hash_equals() で比べる。副作用なし。
+	 *
+	 * @param array[] $devices    Result of sanitize_trusted_devices() for the user signing in. / ログインしようとしているユーザーの一覧。
+	 * @param string  $token      Cookie value. / Cookie の値。
+	 * @param int     $trust_days Current number of days. / いまの日数。
+	 * @param int     $now        Current time. / 現在時刻。
+	 * @return bool Whether trusted. / 信頼されているか。
+	 */
+	public static function matches_trusted_device( $devices, $token, $trust_days, $now ) {
+		if ( ! is_string( $token ) || ! preg_match( '/\A[0-9a-f]{64}\z/', $token ) ) {
+			return false;
+		}
+
+		$hash    = self::trusted_device_hash( $token );
+		$matched = false;
+		foreach ( (array) $devices as $stored_hash => $entry ) {
+			if ( hash_equals( (string) $stored_hash, $hash ) && self::trusted_until( $entry, $trust_days ) > (int) $now ) {
+				$matched = true;
+			}
+		}
+
+		return $matched;
+	}
+
+	/**
+	 * Returns the list with a new device added: devices no longer trusted under the current setting are dropped,
+	 * and then the oldest ones (by registered time) until at most $max remain, the new one included (7.8). Pure.
+	 * 新しい端末を足した一覧を返す。いまの設定でもう信頼されない端末を捨て、そのうえで新しい端末を含めて
+	 * $max 台以下になるまで古い順（登録日時）に捨てる（7.8）。副作用なし。
+	 *
+	 * @param array[] $devices    Result of sanitize_trusted_devices(). / sanitize_trusted_devices() の結果。
+	 * @param string  $hash       Hash of the new device. / 新しい端末のハッシュ。
+	 * @param array   $entry      New entry { created, expires, ua_hint }. / 新しい項目。
+	 * @param int     $trust_days Current number of days. / いまの日数。
+	 * @param int     $now        Current time. / 現在時刻。
+	 * @param int     $max        Maximum number of devices. / 台数の上限。
+	 * @return array[] New list. / 新しい一覧。
+	 */
+	public static function add_trusted_device( $devices, $hash, $entry, $trust_days, $now, $max ) {
+		$kept = array();
+		foreach ( (array) $devices as $stored_hash => $stored ) {
+			if ( self::trusted_until( $stored, $trust_days ) > (int) $now ) {
+				$kept[ $stored_hash ] = $stored;
+			}
+		}
+
+		// Oldest first; ties keep their stored order. / 古い順。同時刻は保存順のまま。
+		$order = array_keys( $kept );
+		usort(
+			$order,
+			function ( $a, $b ) use ( $kept, $order ) {
+				$diff = $kept[ $a ]['created'] - $kept[ $b ]['created'];
+
+				return 0 !== $diff ? $diff : array_search( $a, $order, true ) - array_search( $b, $order, true );
+			}
+		);
+		// Leave room for the new one. / 新しい1台の分を空ける。
+		$drop = count( $order ) - max( 0, (int) $max - 1 );
+		foreach ( array_slice( $order, 0, max( 0, $drop ) ) as $oldest ) {
+			unset( $kept[ $oldest ] );
+		}
+
+		$kept[ (string) $hash ] = $entry;
+
+		return $kept;
+	}
+
+	/**
+	 * Returns the browser hint kept with a trusted device (7.8): the User-Agent, plain text, cut to
+	 * UA_HINT_MAX characters. The visitor decides this value, so it is only ever shown escaped. Pure.
+	 * 信頼した端末に添えるブラウザの手がかりを返す（7.8）。User-Agent をテキストにして UA_HINT_MAX 文字で切る。
+	 * 値は訪問者が決められるので、表示は必ずエスケープする。副作用なし。
+	 *
+	 * @param mixed $user_agent Raw User-Agent (already unslashed), or null. / User-Agent（unslash 済み）、または null。
+	 * @return string Hint. / 手がかり。
+	 */
+	public static function ua_hint( $user_agent ) {
+		if ( ! is_string( $user_agent ) ) {
+			return '';
+		}
+		// Control characters and tags out, white space folded. / 制御文字とタグを除き、空白をまとめる。
+		$hint = trim( (string) preg_replace( '/\s+/u', ' ', wp_strip_all_tags( $user_agent ) ) );
+		$hint = (string) preg_replace( '/[\x00-\x1F\x7F]/', '', $hint );
+
+		return function_exists( 'mb_substr' ) ? mb_substr( $hint, 0, self::UA_HINT_MAX, 'UTF-8' ) : substr( $hint, 0, self::UA_HINT_MAX );
 	}
 
 	/*-------------------------------------------*/
@@ -1463,8 +1696,14 @@ class ACGD_Two_Step {
 				return $user;
 			}
 
-			// 2-6: a trusted device (7.8, PR-C). / 2-6：信頼した端末（7.8。PR-C）。
-			if ( self::is_trusted_device( $user ) ) {
+			// 2-6: a trusted device (7.8). Only the second step is skipped: the password (and IP restriction,
+			// before this filter) was already required, and BASIC authentication still follows. The session gets
+			// the mark like after a code (7.6). Not for XML-RPC: the ordinary password is always refused there
+			// (7.7), trusted cookie or not.
+			// 2-6：信頼した端末（7.8）。省略するのは2段階目だけ：パスワード（とこのフィルタより前の IP 制限）は
+			// もう求めており、BASIC 認証もこの後に効く。セッションにはコードの後と同じく印を付ける（7.6）。
+			// XML-RPC は除く：そこでは普段のパスワードは信頼 Cookie の有無にかかわらず常に拒否する（7.7）。
+			if ( ! ( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST ) && self::is_trusted_device( $user ) ) {
 				self::$mark_user_id = (int) $user->ID;
 				return $user;
 			}
@@ -1567,18 +1806,226 @@ class ACGD_Two_Step {
 		return (int) $user_id;
 	}
 
+	/*-------------------------------------------*/
+	/* Trusted devices (7.8) / 信頼した端末（7.8）
+	/*-------------------------------------------*/
+
 	/**
-	 * Place of the trusted device check in the login flow (7.4-2-6). Trusted devices arrive with PR-C (7.8);
-	 * until then no device is trusted.
-	 * ログインの流れの中の、信頼した端末の確認の場所（7.4-2-6）。信頼した端末は PR-C（7.8）で入る。
-	 * それまではどの端末も信頼しない。
+	 * Returns the number of days a device is trusted, as it applies right now (7.8). 0 while the option is
+	 * broken: a broken option is judged narrowly and closed (7.11), so no device skips the code then.
+	 * いま効いている、端末を信頼する日数を返す（7.8）。option が壊れている間は 0：壊れた option は狭く閉じて
+	 * 判定する（7.11）ので、その間はどの端末もコードを省略しない。
+	 *
+	 * @return int 0, 7 or 30. / 0・7・30。
+	 */
+	public static function get_trust_days() {
+		$settings = self::get_settings();
+
+		return $settings['broken'] ? 0 : (int) $settings['trust_days'];
+	}
+
+	/**
+	 * Returns a user's trusted devices as stored (sanitize_trusted_devices()), including ones no longer trusted.
+	 * ユーザーの信頼した端末を保存どおりに返す（sanitize_trusted_devices()）。もう信頼されないものも含む。
+	 *
+	 * @param int $user_id User ID. / ユーザー ID。
+	 * @return array[] Hash => entry. / ハッシュ => 項目。
+	 */
+	public static function get_trusted_devices( $user_id ) {
+		return self::sanitize_trusted_devices( get_user_meta( (int) $user_id, self::TRUSTED_META, true ) );
+	}
+
+	/**
+	 * Returns how many of a user's devices are trusted right now (7.10). / ユーザーの端末のうち、いま信頼されて
+	 * いる台数を返す（7.10）。
+	 *
+	 * @param int $user_id User ID. / ユーザー ID。
+	 * @return int Count. / 台数。
+	 */
+	public static function count_trusted_devices( $user_id ) {
+		$days  = self::get_trust_days();
+		$now   = time();
+		$count = 0;
+		foreach ( self::get_trusted_devices( $user_id ) as $entry ) {
+			if ( self::trusted_until( $entry, $days ) > $now ) {
+				++$count;
+			}
+		}
+
+		return $count;
+	}
+
+	/**
+	 * Name of the trusted device cookie (per site, like the attempt cookie). / 信頼 Cookie の名前（試行の Cookie と同じくサイトごと）。
+	 *
+	 * @return string Name. / 名前。
+	 */
+	private static function trusted_cookie_name() {
+		return 'acgd_trusted_' . ( defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( home_url() ) );
+	}
+
+	/**
+	 * Reads the trusted device cookie, or '' when missing or not 64 hex characters. / 信頼 Cookie を読む。
+	 * 無い・16進64文字でなければ ''。
+	 *
+	 * @return string Cookie value. / Cookie の値。
+	 */
+	private static function read_trusted_cookie() {
+		$name = self::trusted_cookie_name();
+		if ( ! isset( $_COOKIE[ $name ] ) || ! is_string( $_COOKIE[ $name ] ) ) {
+			return '';
+		}
+		$value = sanitize_text_field( wp_unslash( $_COOKIE[ $name ] ) );
+
+		return preg_match( '/\A[0-9a-f]{64}\z/', $value ) ? $value : '';
+	}
+
+	/**
+	 * Tells whether this browser is a trusted device of the user signing in (7.4-2-6, 7.8), under the setting
+	 * as it is now. Only that user's own list is looked at, so another user's cookie never matches. Reads only.
+	 * この端末が、ログインしようとしているユーザーの信頼した端末かを、いまの設定で返す（7.4-2-6・7.8）。
+	 * 見るのはそのユーザー自身の一覧だけなので、別のユーザーの Cookie は一致しない。読むだけ。
 	 *
 	 * @param WP_User $user User. / ユーザー。
 	 * @return bool Whether this device is trusted for the user. / この端末がそのユーザーに信頼されているか。
 	 */
 	private static function is_trusted_device( $user ) {
-		unset( $user ); // Used by PR-C. / PR-C で使う。
-		return false;
+		$days = self::get_trust_days();
+		if ( $days < 1 ) {
+			return false;
+		}
+		$token = self::read_trusted_cookie();
+		if ( '' === $token ) {
+			return false;
+		}
+
+		return self::matches_trusted_device( self::get_trusted_devices( $user->ID ), $token, $days, time() );
+	}
+
+	/**
+	 * Trusts this browser for a user after a correct code (7.8): a random 32-byte cookie value, only its sha256
+	 * in the user's list (at most TRUSTED_MAX, oldest dropped), and the cookie, HttpOnly, Secure on HTTPS,
+	 * SameSite=Lax, on COOKIEPATH and also on SITECOOKIEPATH when it differs (the same as the attempt cookie).
+	 * 正しいコードの後に、この端末をユーザーについて信頼する（7.8）：Cookie の値はランダム32バイト、ユーザーの
+	 * 一覧にはその sha256 だけ（最大 TRUSTED_MAX 台。古い順に捨てる）。Cookie は HttpOnly・HTTPS なら Secure・
+	 * SameSite=Lax、path は COOKIEPATH で、SITECOOKIEPATH が違う構成では両方に出す（試行の Cookie と同じ）。
+	 *
+	 * @param int $user_id    User ID. / ユーザー ID。
+	 * @param int $trust_days Number of days (1 or more). / 日数（1以上）。
+	 * @return void
+	 */
+	private static function trust_this_device( $user_id, $trust_days ) {
+		if ( (int) $trust_days < 1 || headers_sent() ) {
+			return;
+		}
+
+		$token   = bin2hex( random_bytes( 32 ) );
+		$now     = time();
+		$expires = $now + (int) $trust_days * DAY_IN_SECONDS;
+		$ua      = isset( $_SERVER['HTTP_USER_AGENT'] ) && is_string( $_SERVER['HTTP_USER_AGENT'] ) ? wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- ua_hint() strips tags and control characters and cuts the length right below; the value is only ever printed with esc_html().
+
+		$devices = self::add_trusted_device(
+			self::get_trusted_devices( $user_id ),
+			self::trusted_device_hash( $token ),
+			array(
+				'created' => $now,
+				'expires' => $expires,
+				'ua_hint' => self::ua_hint( $ua ),
+			),
+			$trust_days,
+			$now,
+			self::TRUSTED_MAX
+		);
+		update_user_meta( (int) $user_id, self::TRUSTED_META, $devices );
+
+		$paths = array( COOKIEPATH );
+		if ( SITECOOKIEPATH !== COOKIEPATH ) {
+			$paths[] = SITECOOKIEPATH;
+		}
+		foreach ( $paths as $path ) {
+			setcookie(
+				self::trusted_cookie_name(),
+				$token,
+				array(
+					'expires'  => $expires,
+					'path'     => $path,
+					'domain'   => (string) COOKIE_DOMAIN,
+					'secure'   => is_ssl(),
+					'httponly' => true,
+					'samesite' => 'Lax',
+				)
+			);
+		}
+	}
+
+	/**
+	 * Tells whether a stored value of OPTION says "do not trust devices" (trust_days saved as 0). Only the saved
+	 * value counts: a broken option, which get_trust_days() treats as 0, does not. Pure.
+	 * OPTION の保存値が「端末を信頼しない」（trust_days が 0 で保存されている）かを返す。見るのは保存された値
+	 * だけで、get_trust_days() が 0 とみなす壊れた option は当たらない。副作用なし。
+	 *
+	 * @param mixed $value Stored value. / 保存値。
+	 * @return bool Whether trusting is turned off by the saved value. / 保存値で信頼しない設定か。
+	 */
+	public static function saved_trust_is_off( $value ) {
+		return is_array( $value ) && array_key_exists( 'trust_days', $value ) && 0 === $value['trust_days'];
+	}
+
+	/**
+	 * Revokes every trusted device of every user (7.8: saving "do not trust devices" clears the lists, so turning
+	 * it on again does not bring old devices back). / 全ユーザーの信頼した端末を解除する（7.8：「信頼しない」を
+	 * 保存した時点で一覧を消す。再び有効にしても古い端末は戻らない）。
+	 *
+	 * @return void
+	 */
+	public static function clear_all_trusted_devices() {
+		delete_metadata( 'user', 0, self::TRUSTED_META, '', true );
+	}
+
+	/**
+	 * add_option_{OPTION}: the very first save of the tab (the option did not exist). Hooked here and not in the
+	 * sanitize callback, which runs twice on the first save. / add_option_{OPTION}：タブの最初の保存（option が
+	 * 無かった）。sanitize は最初の保存で2回呼ばれるので、そこではなくここに掛ける。
+	 *
+	 * @param string $option Option name. / オプション名。
+	 * @param mixed  $value  Saved value. / 保存した値。
+	 * @return void
+	 */
+	public static function on_settings_added( $option, $value ) {
+		unset( $option );
+		if ( self::saved_trust_is_off( $value ) ) {
+			self::clear_all_trusted_devices();
+		}
+	}
+
+	/**
+	 * update_option_{OPTION}: a later save of the tab. / update_option_{OPTION}：2回目以降のタブの保存。
+	 *
+	 * @param mixed $old_value Previous value. / 前の値。
+	 * @param mixed $value     Saved value. / 保存した値。
+	 * @return void
+	 */
+	public static function on_settings_updated( $old_value, $value ) {
+		unset( $old_value );
+		if ( self::saved_trust_is_off( $value ) ) {
+			self::clear_all_trusted_devices();
+		}
+	}
+
+	/**
+	 * Revokes every trusted device of a user (7.8): a password change, or the checkbox of the user edit screen.
+	 * Cookies left in browsers no longer match anything. / ユーザーの信頼した端末をすべて解除する（7.8）：
+	 * パスワードの変更、またはユーザー編集画面のチェックボックス。ブラウザーに残った Cookie は何とも一致しなくなる。
+	 *
+	 * @param int $user_id User ID. / ユーザー ID。
+	 * @return void
+	 */
+	public static function clear_trusted_devices( $user_id ) {
+		$user_id = (int) $user_id;
+		if ( $user_id < 1 ) {
+			return;
+		}
+		delete_user_meta( $user_id, self::TRUSTED_META );
 	}
 
 	/**
@@ -1868,9 +2315,10 @@ class ACGD_Two_Step {
 				}
 
 				$typed  = isset( $_POST[ self::CODE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::CODE_FIELD ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_form() above checked the nonce.
+				$trust  = ! empty( $_POST[ self::TRUST_FIELD ] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_form() above checked the nonce. Presence only.
 				$result = self::check_code( $attempt_id, $attempt, $typed );
 				if ( 'ok' === $result['status'] ) {
-					self::complete_login( $attempt_id, $attempt );
+					self::complete_login( $attempt_id, $attempt, $trust );
 				}
 				if ( 'limit' === $result['status'] ) {
 					self::render_message_screen( acgd_join_sentences( array( __( 'The code was entered incorrectly too many times.', 'etbs-account-guard' ), __( 'Please sign in again with your password.', 'etbs-account-guard' ) ) ), self::start_over_url( $attempt ) );
@@ -2149,11 +2597,12 @@ class ACGD_Two_Step {
 	 * @return void
 	 */
 	private static function render_code_screen( $attempt_id, $attempt, $errors, $invalid, $status ) {
-		$user      = get_userdata( (int) $attempt['uid'] );
-		$email     = $user ? self::mask_email( $user->user_email ) : '•••';
-		$time_fmt  = get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
-		$args      = self::screen_args( $attempt );
-		$nonce_act = self::code_nonce_action( $attempt_id );
+		$user       = get_userdata( (int) $attempt['uid'] );
+		$email      = $user ? self::mask_email( $user->user_email ) : '•••';
+		$time_fmt   = get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
+		$args       = self::screen_args( $attempt );
+		$nonce_act  = self::code_nonce_action( $attempt_id );
+		$trust_days = self::get_trust_days();
 
 		self::set_interim_global( $attempt );
 		$message = '' === $status ? '' : '<p class="message" role="status">' . esc_html( $status ) . '</p>';
@@ -2187,6 +2636,24 @@ class ACGD_Two_Step {
 				<label for="acgd-code"><?php esc_html_e( 'Verification code (6 digits)', 'etbs-account-guard' ); ?></label>
 				<input type="text" name="<?php echo esc_attr( self::CODE_FIELD ); ?>" id="acgd-code" class="input" value="" size="20" inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"<?php echo $invalid ? ' aria-invalid="true" aria-describedby="login_error"' : ''; ?> />
 			</p>
+			<?php if ( $trust_days > 0 ) : ?>
+				<?php // Unchecked by default; not shown while trusting is turned off (7.8). / 既定は未チェック。信頼しない設定なら出さない（7.8）。 ?>
+				<p>
+					<input type="checkbox" name="<?php echo esc_attr( self::TRUST_FIELD ); ?>" id="acgd-trust-device" value="1" aria-describedby="acgd-trust-device-note" />
+					<label for="acgd-trust-device">
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: %d: number of days (7 or 30) */
+								_n( 'Skip the verification code on this device for %d day', 'Skip the verification code on this device for %d days', $trust_days, 'etbs-account-guard' ),
+								$trust_days
+							)
+						);
+						?>
+					</label>
+				</p>
+				<p id="acgd-trust-device-note" class="description" style="margin-bottom:16px;"><?php esc_html_e( 'Do not check this on a shared computer.', 'etbs-account-guard' ); ?></p>
+			<?php endif; ?>
 			<input type="hidden" name="<?php echo esc_attr( self::ATTEMPT_FIELD ); ?>" value="<?php echo esc_attr( $attempt_id ); ?>" />
 			<?php wp_nonce_field( $nonce_act, self::CODE_NONCE_FIELD, false ); ?>
 			<p class="submit">
@@ -2320,12 +2787,15 @@ class ACGD_Two_Step {
 	 * 4. Where it goes: wp-login.php's own post-login steps for a wp-login.php attempt; the form's own
 	 *    destination for any other form. / 行き先：wp-login.php の試行は wp-login.php 自身の後処理、他のフォームは
 	 *    そのフォームの行き先。
+	 * When "trust this device" was checked and trusting is on, this browser is trusted right after step 2 (7.8).
+	 * 「この端末を信頼する」にチェックがあり、信頼する設定なら、2 の直後にこの端末を信頼する（7.8）。
 	 *
 	 * @param string $attempt_id Attempt ID. / 試行 ID。
 	 * @param array  $attempt    Attempt. / 試行。
+	 * @param bool   $trust      Whether "trust this device" was checked. / 「この端末を信頼する」にチェックがあったか。
 	 * @return void
 	 */
-	private static function complete_login( $attempt_id, $attempt ) {
+	private static function complete_login( $attempt_id, $attempt, $trust = false ) {
 		$user_id = (int) $attempt['uid'];
 		clean_user_cache( $user_id );
 		$user = get_userdata( $user_id );
@@ -2347,6 +2817,19 @@ class ACGD_Two_Step {
 			self::render_message_screen( acgd_join_sentences( array( __( 'This sign-in can no longer be completed.', 'etbs-account-guard' ), __( 'Please sign in again.', 'etbs-account-guard' ) ) ), self::start_over_url( $attempt ) );
 		}
 		self::set_attempt_cookie( '', 0 );
+
+		// Trust this device (7.8), with the setting as it is now (it may have changed since the screen was shown).
+		// Failing here must not cost the sign-in the code has just earned: the device is simply not trusted, and
+		// the code is asked again next time.
+		// この端末を信頼する（7.8）。設定は今の値で見る（画面を出した後に変わっているかもしれない）。
+		// ここで失敗しても、コードを通したログインまで失わせない：端末を信頼しないだけで、次回またコードを求める。
+		if ( $trust ) {
+			try {
+				self::trust_this_device( $user->ID, self::get_trust_days() );
+			} catch ( Throwable $e ) {
+				unset( $e );
+			}
+		}
 
 		// The session created next carries the mark (7.6). / 次に作られるセッションに印を付ける（7.6）。
 		self::$mark_user_id = $user->ID;
@@ -2645,23 +3128,35 @@ class ACGD_Two_Step {
 	}
 
 	/*-------------------------------------------*/
-	/* Password changes (7.5) / パスワードの変更（7.5）
+	/* Password changes (7.5, 7.8) / パスワードの変更（7.5・7.8）
 	/*-------------------------------------------*/
 
 	/**
-	 * A password reset clears the user's attempts and send record (7.5). / パスワードの再設定で試行と送信の記録を消す（7.5）。
+	 * What a password change clears: the user's attempts and send record (7.5) and every trusted device (7.8).
+	 * パスワードの変更で消すもの：ユーザーの試行と送信の記録（7.5）と、信頼した端末のすべて（7.8）。
+	 *
+	 * @param int $user_id User ID. / ユーザー ID。
+	 * @return void
+	 */
+	private static function clear_on_password_change( $user_id ) {
+		self::clear_user_records( $user_id );
+		self::clear_trusted_devices( $user_id );
+	}
+
+	/**
+	 * A password reset clears the records and trusted devices (7.5, 7.8). / パスワードの再設定で記録と信頼した端末を消す（7.5・7.8）。
 	 *
 	 * @param WP_User $user User. / ユーザー。
 	 * @return void
 	 */
 	public static function on_after_password_reset( $user ) {
 		if ( $user instanceof WP_User ) {
-			self::clear_user_records( $user->ID );
+			self::clear_on_password_change( $user->ID );
 		}
 	}
 
 	/**
-	 * A profile save that changed the password clears the same records (7.5). / パスワードが変わったプロフィールの保存で同じ記録を消す（7.5）。
+	 * A profile save that changed the password clears the same (7.5, 7.8). / パスワードが変わったプロフィールの保存で同じものを消す（7.5・7.8）。
 	 *
 	 * @param int          $user_id       User ID. / ユーザー ID。
 	 * @param WP_User|null $old_user_data User before the save. / 保存前のユーザー。
@@ -2670,15 +3165,15 @@ class ACGD_Two_Step {
 	public static function on_profile_update( $user_id, $old_user_data = null ) {
 		$new = get_userdata( (int) $user_id );
 		if ( $new && is_object( $old_user_data ) && isset( $old_user_data->user_pass ) && $old_user_data->user_pass !== $new->user_pass ) {
-			self::clear_user_records( $user_id );
+			self::clear_on_password_change( $user_id );
 		}
 	}
 
 	/**
-	 * wp_set_password clears the same records, except when core only re-hashed the same password at login
+	 * wp_set_password clears the same, except when core only re-hashed the same password at login
 	 * (7.5, 7.8). Every argument after the first has a default: the action passes two arguments before
 	 * WordPress 6.7 and three from 6.7 on, and a required third argument would be a fatal error on 6.2 to 6.6.
-	 * wp_set_password で同じ記録を消す。ただしログイン時に本体が同じパスワードでハッシュを作り直しただけの
+	 * wp_set_password で同じものを消す。ただしログイン時に本体が同じパスワードでハッシュを作り直しただけの
 	 * ときは消さない（7.5・7.8）。2つ目以降の引数はすべて既定値を持つ：このアクションは WordPress 6.7 より前は
 	 * 2引数、6.7 から3引数で、第3引数を必須にすると 6.2〜6.6 で Fatal になる。
 	 *
@@ -2691,7 +3186,7 @@ class ACGD_Two_Step {
 		if ( (int) $user_id < 1 || self::is_password_rehash( $password, $old_user_data ) ) {
 			return;
 		}
-		self::clear_user_records( $user_id );
+		self::clear_on_password_change( $user_id );
 	}
 
 	/*-------------------------------------------*/
@@ -3429,6 +3924,27 @@ ACGD_JS;
 	}
 
 	/**
+	 * Reads the submitted number of days a device is trusted (7.8): one of TRUST_DAYS_CHOICES, otherwise the
+	 * saved value (default 30) is kept. An integer is accepted as well as a string: on the very first save the
+	 * Settings API runs the sanitize callback a second time on its own output (add_option()), where it is an int.
+	 * 送信された、端末を信頼する日数を読む（7.8）。TRUST_DAYS_CHOICES のどれかでなければ、保存済みの値
+	 * （既定 30）のままにする。文字列だけでなく整数も受け付ける：最初の保存では Settings API が sanitize を
+	 * 自分の出力に対してもう一度呼ぶ（add_option()）ので、そのときは整数で来る。
+	 *
+	 * @param mixed $input Submitted value, or null when the field was not sent. / 送信された値。欄が無ければ null。
+	 * @return int 0, 7 or 30. / 0・7・30。
+	 */
+	public static function sanitize_trust_days( $input ) {
+		$is_number = is_int( $input ) || ( is_string( $input ) && preg_match( '/\A[0-9]{1,3}\z/', $input ) );
+		if ( $is_number && in_array( (int) $input, self::TRUST_DAYS_CHOICES, true ) ) {
+			return (int) $input;
+		}
+		$settings = self::get_settings();
+
+		return (int) $settings['trust_days'];
+	}
+
+	/**
 	 * Keeps only known roles and methods from the submitted table. / 送信された表から既知の権限・方式だけを残す。
 	 *
 	 * @param mixed $input Submitted role => method. / 送信された 権限 => 方式。
@@ -3474,13 +3990,11 @@ ACGD_JS;
 		$existing = null === $existing ? array() : $existing;
 		$input    = is_array( $input ) ? $input : array();
 
-		$roles    = self::sanitize_role_methods( isset( $input['roles'] ) ? $input['roles'] : array() );
-		$settings = self::get_settings();
-		// The number of trusted days has no control until PR-C (7.8); the saved value (default 30) is kept.
-		// 信頼する日数の欄は PR-C（7.8）まで無い。保存済みの値（既定 30）をそのまま残す。
-		$new_value = array(
+		$roles      = self::sanitize_role_methods( isset( $input['roles'] ) ? $input['roles'] : array() );
+		$trust_days = self::sanitize_trust_days( isset( $input['trust_days'] ) ? $input['trust_days'] : null );
+		$new_value  = array(
 			'roles'      => $roles,
-			'trust_days' => $settings['trust_days'],
+			'trust_days' => $trust_days,
 		);
 
 		// While the emergency switch is on, nobody is asked for a code now, so "already a target" is not taken as
@@ -3499,7 +4013,7 @@ ACGD_JS;
 					)
 				)
 			);
-			self::stash_settings_resubmit( $roles );
+			self::stash_settings_resubmit( $new_value );
 			return $existing;
 		}
 
@@ -3533,7 +4047,7 @@ ACGD_JS;
 					)
 				)
 			);
-			self::stash_settings_resubmit( $roles );
+			self::stash_settings_resubmit( $new_value );
 			return $existing;
 		}
 
@@ -3586,24 +4100,31 @@ ACGD_JS;
 	/**
 	 * Stashes a rejected submission of the tab. / 拒否されたタブの送信内容を残す。
 	 *
-	 * @param string[] $roles Role => method. / 権限 => 方式。
+	 * @param array $submitted { roles, trust_days } as sanitized. / 検証済みの送信内容。
 	 * @return void
 	 */
-	private static function stash_settings_resubmit( $roles ) {
-		set_transient( self::SETTINGS_RESUBMIT_PREFIX . get_current_user_id(), array( 'roles' => $roles ), self::RESUBMIT_TTL );
+	private static function stash_settings_resubmit( $submitted ) {
+		set_transient( self::SETTINGS_RESUBMIT_PREFIX . get_current_user_id(), $submitted, self::RESUBMIT_TTL );
 	}
 
 	/**
 	 * Returns (and deletes) a rejected submission of the tab. / 拒否されたタブの送信内容を返し、消す。
 	 *
-	 * @return string[]|null Role => method, or null. / 権限 => 方式、または null。
+	 * @return array|null { roles, trust_days }, or null. / 送信内容、または null。
 	 */
 	private static function take_settings_resubmit() {
 		$key  = self::SETTINGS_RESUBMIT_PREFIX . get_current_user_id();
 		$data = get_transient( $key );
 		delete_transient( $key );
 
-		return ( is_array( $data ) && isset( $data['roles'] ) && is_array( $data['roles'] ) ) ? $data['roles'] : null;
+		if ( ! is_array( $data ) || ! isset( $data['roles'] ) || ! is_array( $data['roles'] ) ) {
+			return null;
+		}
+
+		return array(
+			'roles'      => $data['roles'],
+			'trust_days' => ( isset( $data['trust_days'] ) && in_array( $data['trust_days'], self::TRUST_DAYS_CHOICES, true ) ) ? $data['trust_days'] : null,
+		);
 	}
 
 	/**
@@ -3686,16 +4207,18 @@ ACGD_JS;
 	 * Prints the Two-Step Verification tab (7.10). Called from ACGD_Settings::render_page().
 	 * 「2段階認証」タブを出す（7.10）。ACGD_Settings::render_page() から呼ぶ。
 	 *
-	 * Order: explanation, your own receive check, per-role methods, target users, emergency switch (the part
-	 * the next one depends on comes first). The number of trusted days is added with PR-C (7.8).
-	 * 並び：説明・自分の受信確認・権限ごとの方式・対象者の一覧・非常用スイッチ（依存元が先）。
-	 * 信頼する日数は PR-C（7.8）で足す。
+	 * Order: explanation, your own receive check, per-role methods, days to trust a device (7.8), target users,
+	 * emergency switch (the part the next one depends on comes first). The methods and the days are one option,
+	 * so they share one form.
+	 * 並び：説明・自分の受信確認・権限ごとの方式・端末を信頼する日数（7.8）・対象者の一覧・非常用スイッチ
+	 * （依存元が先）。方式と日数は1つのオプションなので、1つのフォームにまとめる。
 	 *
 	 * @return void
 	 */
 	public static function render_settings_tab() {
 		self::render_state_notices();
-		$me = wp_get_current_user();
+		$me       = wp_get_current_user();
+		$resubmit = self::take_settings_resubmit();
 		?>
 		<p>
 			<?php
@@ -3720,7 +4243,8 @@ ACGD_JS;
 			<?php settings_fields( self::SETTINGS_GROUP ); ?>
 			<h2><?php esc_html_e( 'Two-step verification by role', 'etbs-account-guard' ); ?></h2>
 			<p><?php echo esc_html( acgd_join_sentences( array( __( 'A user\'s own setting on their user edit screen wins over the role.', 'etbs-account-guard' ), __( 'A user who holds more than one role needs a verification code if any of them requires one.', 'etbs-account-guard' ) ) ) ); ?></p>
-			<?php self::render_role_table(); ?>
+			<?php self::render_role_table( null !== $resubmit ? $resubmit['roles'] : null ); ?>
+			<?php self::render_trust_days_field( null !== $resubmit ? $resubmit['trust_days'] : null ); ?>
 			<?php submit_button(); ?>
 		</form>
 		<?php
@@ -3731,12 +4255,12 @@ ACGD_JS;
 	/**
 	 * Prints the per-role method table. / 権限ごとの方式の表を出す。
 	 *
+	 * @param string[]|null $resubmitted Role => method of a rejected submission, or null. / 拒否された送信の 権限 => 方式、または null。
 	 * @return void
 	 */
-	private static function render_role_table() {
-		$resubmit = self::take_settings_resubmit();
+	private static function render_role_table( $resubmitted ) {
 		$settings = self::get_settings();
-		$methods  = null !== $resubmit ? $resubmit : $settings['roles'];
+		$methods  = null !== $resubmitted ? $resubmitted : $settings['roles'];
 		?>
 		<table class="widefat fixed striped" style="max-width:600px;">
 			<thead>
@@ -3767,9 +4291,74 @@ ACGD_JS;
 	}
 
 	/**
-	 * Prints the users who are currently targets, with whether they have an email address and how many
-	 * application passwords they have (7.7, 7.10). / 今の対象者を、メールアドレスの有無とアプリケーション
-	 * パスワードの件数とともに出す（7.7・7.10）。
+	 * Prints the field of the number of days a device is trusted (7.8, 7.10). A change applies at once to devices
+	 * already trusted, since every check cuts by the current setting. / 端末を信頼する日数の欄を出す（7.8・7.10）。
+	 * 照合のたびに今の設定で打ち切るので、変更はすでに信頼された端末にもすぐ効く。
+	 *
+	 * @param int|null $resubmitted Days of a rejected submission, or null. / 拒否された送信の日数、または null。
+	 * @return void
+	 */
+	private static function render_trust_days_field( $resubmitted ) {
+		$settings = self::get_settings();
+		$days     = null !== $resubmitted ? (int) $resubmitted : (int) $settings['trust_days'];
+		?>
+		<h2><?php esc_html_e( 'Trusted devices', 'etbs-account-guard' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="acgd-trust-days"><?php esc_html_e( 'Days to trust a device', 'etbs-account-guard' ); ?></label></th>
+				<td>
+					<select name="<?php echo esc_attr( self::OPTION . '[trust_days]' ); ?>" id="acgd-trust-days" aria-describedby="acgd-trust-days-description">
+						<option value="0" <?php selected( 0, $days ); ?>><?php esc_html_e( 'Do not trust devices', 'etbs-account-guard' ); ?></option>
+						<?php foreach ( array( 7, 30 ) as $choice ) : ?>
+							<option value="<?php echo esc_attr( (string) $choice ); ?>" <?php selected( $choice, $days ); ?>>
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: %d: number of days (7 or 30) */
+										_n( '%d day', '%d days', $choice, 'etbs-account-guard' ),
+										$choice
+									)
+								);
+								?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+					<p class="description" id="acgd-trust-days-description">
+						<?php
+						echo esc_html(
+							acgd_join_sentences(
+								array(
+									__( 'On the verification code screen, a user can choose to skip the code on that browser for this many days.', 'etbs-account-guard' ),
+									__( 'The password is still needed every time, and IP restriction and BASIC authentication still apply.', 'etbs-account-guard' ),
+									__( 'A change here applies at once to devices that are already trusted.', 'etbs-account-guard' ),
+									__( 'Saving "Do not trust devices" revokes every trusted device of every user.', 'etbs-account-guard' ),
+								)
+							)
+						);
+						?>
+					</p>
+					<p class="description">
+						<?php
+						echo esc_html(
+							acgd_join_sentences(
+								array(
+									__( 'If a trusted device is lost, change the password of that account: every trusted device of the account is then revoked.', 'etbs-account-guard' ),
+									__( 'An administrator can also revoke them on the user edit screen.', 'etbs-account-guard' ),
+								)
+							)
+						);
+						?>
+					</p>
+				</td>
+			</tr>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Prints the users who are currently targets, with whether they have an email address, how many
+	 * application passwords and trusted devices they have (7.7, 7.8, 7.10). / 今の対象者を、メールアドレスの有無・
+	 * アプリケーションパスワードの件数・信頼した端末の数とともに出す（7.7・7.8・7.10）。
 	 *
 	 * @return void
 	 */
@@ -3792,6 +4381,7 @@ ACGD_JS;
 						<th scope="col"><?php esc_html_e( 'Login name (Username)', 'etbs-account-guard' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Email address', 'etbs-account-guard' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Application passwords', 'etbs-account-guard' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Trusted devices', 'etbs-account-guard' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -3816,6 +4406,7 @@ ACGD_JS;
 									<?php echo esc_html( number_format_i18n( $count ) ); ?>
 								<?php endif; ?>
 							</td>
+							<td><?php echo esc_html( number_format_i18n( self::count_trusted_devices( $user->ID ) ) ); ?></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
@@ -3982,6 +4573,10 @@ ACGD_JS;
 				</tr>
 			<?php endif; ?>
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Trusted devices', 'etbs-account-guard' ); ?></th>
+				<td><?php self::render_trusted_devices( $user ); ?></td>
+			</tr>
+			<tr>
 				<th scope="row"><?php esc_html_e( 'Application passwords', 'etbs-account-guard' ); ?></th>
 				<td>
 					<?php
@@ -4009,10 +4604,75 @@ ACGD_JS;
 	}
 
 	/**
-	 * Reads the method of the user edit screen, to be validated in validate_user_fields() (7.3). Hooked to
-	 * personal_options_update / edit_user_profile_update, which run before core has read the submitted email
-	 * and role, so nothing is judged or written here.
-	 * ユーザー編集画面の方式を読み、validate_user_fields() での検証に回す（7.3）。personal_options_update /
+	 * Prints the trusted devices of a user on the user edit screen (7.8, 7.10): how many are trusted now, each
+	 * one's registered time, expiry under the current setting and browser hint (escaped: the visitor decided it),
+	 * and the "revoke all on save" checkbox. / ユーザー編集画面に、ユーザーの信頼した端末を出す（7.8・7.10）：
+	 * いま信頼されている台数、1台ごとの登録日時・今の設定での期限・ブラウザの手がかり（訪問者が決めた値なので
+	 * エスケープする）、「保存時に、信頼した端末をすべて解除する」のチェックボックス。
+	 *
+	 * @param WP_User $user User being edited. / 編集対象のユーザー。
+	 * @return void
+	 */
+	private static function render_trusted_devices( $user ) {
+		$days     = self::get_trust_days();
+		$now      = time();
+		$time_fmt = get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
+		$trusted  = array();
+		foreach ( self::get_trusted_devices( $user->ID ) as $entry ) {
+			$until = self::trusted_until( $entry, $days );
+			if ( $until > $now ) {
+				$entry['until'] = $until;
+				$trusted[]      = $entry;
+			}
+		}
+		?>
+		<p>
+			<?php
+			echo esc_html(
+				sprintf(
+					/* translators: %s: number of trusted devices */
+					__( 'Trusted devices: %s.', 'etbs-account-guard' ),
+					number_format_i18n( count( $trusted ) )
+				)
+			);
+			?>
+		</p>
+		<?php if ( $trusted ) : ?>
+			<ul style="list-style:disc;margin-left:1.5em;">
+				<?php foreach ( $trusted as $entry ) : ?>
+					<li>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: date and time the device was trusted, 2: date and time the trust ends, 3: browser (User-Agent) of the device, as sent by it */
+								__( 'Trusted on %1$s, until %2$s: %3$s', 'etbs-account-guard' ),
+								ACGD_Time::format_local( $time_fmt, (int) $entry['created'] ),
+								ACGD_Time::format_local( $time_fmt, (int) $entry['until'] ),
+								'' !== $entry['ua_hint'] ? $entry['ua_hint'] : __( '(unknown browser)', 'etbs-account-guard' )
+							)
+						);
+						?>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		<?php endif; ?>
+		<?php if ( $days < 1 ) : ?>
+			<p class="description"><?php esc_html_e( 'Trusting devices is turned off on the Two-Step Verification tab, so no device skips the verification code.', 'etbs-account-guard' ); ?></p>
+		<?php endif; ?>
+		<label for="acgd-revoke-trusted-devices">
+			<input type="checkbox" name="<?php echo esc_attr( self::REVOKE_FIELD ); ?>" id="acgd-revoke-trusted-devices" value="1" />
+			<?php esc_html_e( 'Revoke all trusted devices on save', 'etbs-account-guard' ); ?>
+		</label>
+		<p class="description"><?php echo esc_html( acgd_join_sentences( array( __( 'Changing the password of this account also revokes them all.', 'etbs-account-guard' ), __( 'If a trusted device is lost, do one or the other.', 'etbs-account-guard' ) ) ) ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Reads the method and the "revoke all trusted devices" checkbox of the user edit screen, to be validated in
+	 * validate_user_fields() (7.3, 7.8). Hooked to personal_options_update / edit_user_profile_update, which run
+	 * before core has read the submitted email and role, so nothing is judged or written here.
+	 * ユーザー編集画面の方式と「信頼した端末をすべて解除する」を読み、validate_user_fields() での検証に回す
+	 * （7.3・7.8）。personal_options_update /
 	 * edit_user_profile_update に掛ける。これらは本体が送信されたメールアドレスと権限を読む前に動くので、
 	 * ここでは判定も書き込みもしない。
 	 *
@@ -4033,6 +4693,9 @@ ACGD_JS;
 		}
 
 		self::$pending_methods[ (int) $user_id ] = $method;
+		// "Revoke all trusted devices on save" (7.8): read here, written only when the whole save goes through.
+		// 「保存時に、信頼した端末をすべて解除する」（7.8）：ここで読み、保存全体が通ったときだけ書く。
+		self::$pending_revokes[ (int) $user_id ] = ! empty( $_POST[ self::REVOKE_FIELD ] );
 	}
 
 	/**
@@ -4100,21 +4763,29 @@ ACGD_JS;
 			self::stash_user_resubmit( $user_id, $method );
 		} elseif ( ! $errors->has_errors() ) {
 			self::$validated_methods[ $user_id ] = $method;
+			if ( ! empty( self::$pending_revokes[ $user_id ] ) ) {
+				self::$validated_revokes[ $user_id ] = true;
+			}
 		}
 
 		self::append_pending_error( $errors );
 	}
 
 	/**
-	 * Writes the validated method once core has saved the profile (profile_update). Nothing is written when
-	 * the save was refused, by this section or by core. / 本体がプロフィールを保存した後（profile_update）に、
-	 * 検証を通った方式を書く。この区画か本体が保存を拒んだときは何も書かない。
+	 * Writes the validated method, and revokes the trusted devices when that was checked (7.8), once core has
+	 * saved the profile (profile_update). Nothing is written when the save was refused, by this section or by
+	 * core. / 本体がプロフィールを保存した後（profile_update）に、検証を通った方式を書き、チェックがあれば
+	 * 信頼した端末を解除する（7.8）。この区画か本体が保存を拒んだときは何も書かない。
 	 *
 	 * @param int $user_id Saved user. / 保存されたユーザー。
 	 * @return void
 	 */
 	public static function write_user_fields( $user_id ) {
 		$user_id = (int) $user_id;
+		if ( ! empty( self::$validated_revokes[ $user_id ] ) ) {
+			self::clear_trusted_devices( $user_id );
+			unset( self::$validated_revokes[ $user_id ] );
+		}
 		if ( ! isset( self::$validated_methods[ $user_id ] ) ) {
 			return;
 		}

@@ -52,18 +52,19 @@ BASIC authentication is a third mode, alongside "no restriction" and "IP restric
 
 = Two-Step Verification (verification code by email) =
 
-On the Two-Step Verification tab of Settings > ETBS Account Guard, you can require a verification code, sent to the user's registered email address, after the password has been accepted. It is off by default: updating the plugin changes nothing until you turn it on for a role or a user.
+On the Two-Step Verification tab of Settings > ETBS Account Guard, you can require a verification code, sent to the user's registered email address, after the password has been accepted. It is off by default (see the FAQ).
 
-* **Who needs a code** – Choose "None" or "Verification code (email)" for each role, including the administrator role, and override it for a specific user on their user edit screen. A user's own setting wins over the role, and a user with more than one role needs a code if any of them requires one. Only users who can manage options can see or change these settings; users cannot turn it on or off for themselves.
+* **Who needs a code** – Choose "None" or "Verification code (email)" for each role, including administrator, and override it per user on the user edit screen. A user's own setting wins; with several roles, any one requiring a code is enough. Only users who can manage options can change this.
 * **Separate from Access Restriction** – A user held to both goes through both: the password and IP restriction first, then the verification code, then BASIC authentication on the next screen.
-* **The code** – Six digits, valid for 10 minutes, stored only as a hash. After 5 wrong entries the sign-in starts over from the password. At most 5 emails per user per hour, at least 60 seconds apart; sending a new code makes the previous one stop working. Accounts are never locked. Full-width digits, spaces and hyphens in the typed code are accepted.
-* **Where it applies** – Any login form that signs in through WordPress's own `wp_signon()`, including the WooCommerce My Account login form. No login cookie is issued until the code has been entered. Sign-ins that cannot show the code screen (XML-RPC with the ordinary password, AJAX sign-ins and similar) are refused with the same message as a wrong password, and the user receives an email saying so (not for XML-RPC).
-* **Application passwords** keep working for the REST API and XML-RPC without a code. They can only be created while signed in. The settings tab and the user edit screen show how many each user has.
-* **Sessions** – A session of a user who needs a code is kept only if it went through the code (or was created inside such a session). Sessions from before the feature was turned on, and sessions created by other plugins' sign-in methods, are signed out on their next request. The `acgd_two_step_session_exempt` filter can keep them.
-* **Turning it on for yourself** – First click "Send a confirmation code" at the top of the tab (or in the Two-Step Verification section of your own Profile screen) and enter the code you receive. A save that would turn two-step verification on for your own account is refused until you have done this within the last 10 minutes, so you cannot lock yourself out with an address that does not receive email. Turning it on for someone else requires that their account has a valid email address.
+* **The code** – Six digits, valid for 10 minutes, stored only as a hash. 5 wrong entries restart the sign-in from the password. At most 5 emails per user per hour, 60 seconds apart; a new code replaces the previous one. Accounts are never locked. Full-width digits, spaces and hyphens are accepted.
+* **Where it applies** – Any login form that goes through WordPress's `wp_signon()`, including WooCommerce My Account. No login cookie is issued before the code. Sign-ins that cannot show the code screen (XML-RPC with the ordinary password, AJAX sign-ins and similar; except from a trusted device, never for XML-RPC) get the same message as a wrong password, and the user is emailed (not for XML-RPC).
+* **Application passwords** keep working for the REST API and XML-RPC without a code (they can only be created while signed in). The settings tab and the user edit screen show how many each user has.
+* **Trusted devices** – A user can choose on the code screen to skip the code on that browser for 7 or 30 days (set on the tab, or turned off). Only the code is skipped: the password is needed every time. Changing the password revokes every trusted device of that user. See the FAQ for details.
+* **Sessions** – Sessions from before the feature was turned on, and sessions created by other plugins' sign-in methods, are signed out on their next request (see the FAQ).
+* **Turning it on for yourself** requires confirming first that your own email address receives codes (see the FAQ). Turning it on for someone else requires a valid email address.
 * **Emails** are plain text, without links, in the user's own language, and the code is never in the subject. They are sent from your site's usual sender address.
 * **Denial log** – Wrong or expired codes, limits, refused sign-ins, failed emails and discarded sessions are added to the Denial Log tab.
-* If its settings are broken, it keeps asking for a code from users set to a verification code and from users who can manage options (other users can still sign in), and shows a warning. Unlike Access Restriction, it never turns itself off.
+* If its settings are broken, it still asks users set to a code and users who can manage options for a code (others can sign in) and shows a warning. Unlike Access Restriction, it never turns itself off.
 
 = Emergency switch =
 
@@ -85,7 +86,8 @@ Authenticator apps (TOTP), login attempt limits, CAPTCHA and firewalls are not i
 * Whether the BASIC authentication confirmation screen (the browser's native sign-in prompt) can be shown on a device that goes through a corporate remote browser isolation service is untested; check this yourself before relying on it at such a site.
 * Two-Step Verification is only as strong as the user's email account. Password reset emails go to the same inbox, so anyone who controls the inbox can get past both the password and the code. Use it for users whose email account is protected with multi-factor authentication. Password reset is not blocked, to avoid adding another way to be locked out.
 * Two-Step Verification does not protect against relay (adversary-in-the-middle) phishing sites, or against someone who persuades the user to read out the code. The email says never to share it.
-* Someone who knows a user's password can use up that user's hourly sending limit and keep them out for up to an hour. Changing the password releases the limit.
+* Someone who knows a user's password can use up that user's hourly sending limit and keep them out for up to an hour. Changing the password releases the limit. A trusted device can still sign in.
+* Anyone who has both a user's password and the trusted device cookie of that user's browser can sign in without a code until the trust ends or the password is changed. A browser remembers one trusted device per site.
 * Repeated attacks can push older entries, including IP restriction and BASIC authentication denials, out of the Denial Log (the latest 100 are kept).
 * Application passwords do not go through Two-Step Verification.
 * Users who need a code cannot use sign-in methods of other plugins (magic links, social login and so on).
@@ -112,7 +114,7 @@ No. Each item returns to the behavior of WordPress itself when it is turned off.
 
 = What is removed when I delete the plugin? =
 
-Deleting the plugin removes the denial log of Access Restriction, the saved result of the BASIC authentication receive diagnosis (rebuilt the next time it is run), the sign-in attempts, send records and confirmations of Two-Step Verification, a few internal records and cached counts, and, if present, the update check data left behind by an earlier version distributed outside WordPress.org. All settings, including the per-role and per-user Access Restriction modes, IP lists, BASIC authentication IDs and password hashes, and the per-role and per-user Two-Step Verification settings, are kept so that they come back if you install the plugin again.
+Deleting the plugin removes the denial log of Access Restriction, the saved result of the BASIC authentication receive diagnosis (rebuilt the next time it is run), the sign-in attempts, send records, confirmations and trusted devices of Two-Step Verification, a few internal records and cached counts, and, if present, the update check data left behind by an earlier version distributed outside WordPress.org. All settings, including the per-role and per-user Access Restriction modes, IP lists, BASIC authentication IDs and password hashes, and the per-role and per-user Two-Step Verification settings (including the number of days a device is trusted), are kept so that they come back if you install the plugin again.
 
 = Does Two-Step Verification change anything right after updating? =
 
@@ -125,6 +127,18 @@ Wait a few minutes, check the spam folder, and send a new code from the code scr
 = Can users turn Two-Step Verification on for themselves? =
 
 No. Only users who can manage options can change it, on the settings tab or on the user edit screen.
+
+= How does "trust this device" work? =
+
+On the code screen, a user can check "Skip the verification code on this device for 30 days" (unchecked by default; do not check it on a shared computer). The number of days is set on the tab: 7, 30 (the default) or off. Only the code is skipped: the password is needed every time, and IP restriction and BASIC authentication still apply. The browser keeps a random value in an HttpOnly cookie, and the site stores only its hash (up to 20 devices per user; the oldest go first). A change of the number of days applies at once to devices already trusted, and saving "Do not trust devices" revokes every trusted device of every user. Changing the password (by a reset, on the profile screen or by any other means) revokes every trusted device of that user, and so does the "Revoke all trusted devices on save" checkbox on the user edit screen — use either if a device is lost. When another user trusts the same browser, the earlier user needs a code again there. Trusted devices do not apply to XML-RPC.
+
+= How do I turn Two-Step Verification on for my own account? =
+
+First click "Send a confirmation code" at the top of the tab (or in the Two-Step Verification section of your own Profile screen) and enter the code you receive. A save that would turn two-step verification on for your own account is refused until you have done this within the last 10 minutes, so you cannot lock yourself out with an address that does not receive email. Turning it on for someone else requires that their account has a valid email address.
+
+= Why were users signed out right after Two-Step Verification was turned on? =
+
+A session of a user who needs a code is kept only if it went through the code (or was created inside such a session). Sessions from before the feature was turned on, and sessions created by other plugins' sign-in methods, are signed out on their next request. The `acgd_two_step_session_exempt` filter can keep them.
 
 = Does it work on multisite? =
 

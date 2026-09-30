@@ -29,6 +29,9 @@ if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
 	define( 'MINUTE_IN_SECONDS', 60 );
 }
+if ( ! defined( 'DAY_IN_SECONDS' ) ) {
+	define( 'DAY_IN_SECONDS', 86400 );
+}
 
 // Same value as WordPress (wp-includes/wp-db.php / class-wpdb.php). / WordPress と同じ値。
 if ( ! defined( 'ARRAY_A' ) ) {
@@ -106,6 +109,106 @@ if ( ! function_exists( 'wp_check_password' ) ) {
 	function wp_check_password( $password, $hash, $user_id = '' ) {
 		unset( $user_id );
 		return password_verify( $password, $hash );
+	}
+}
+
+/**
+ * Clears the user meta store of the user meta stubs. Call it from each test's setUp().
+ * ユーザーメタのスタブのストアを空にする。各テストの setUp() から呼ぶ。
+ *
+ * @return void
+ */
+function acgd_test_reset_user_meta() {
+	$GLOBALS['acgd_test_user_meta'] = array();
+}
+
+if ( ! function_exists( 'get_user_meta' ) ) {
+	/**
+	 * Minimal stub of get_user_meta() with $single = true, backed by $GLOBALS['acgd_test_user_meta'].
+	 * $GLOBALS['acgd_test_user_meta'] を使う get_user_meta()（$single = true）の最小スタブ。
+	 *
+	 * @param int    $user_id User ID. / ユーザー ID。
+	 * @param string $key     Meta key. / メタキー。
+	 * @param bool   $single  Ignored (always single). / 無視（常に1件）。
+	 * @return mixed Value, or '' when missing (as core returns for $single). / 値。無ければ ''（本体の $single と同じ）。
+	 */
+	function get_user_meta( $user_id, $key = '', $single = false ) {
+		unset( $single );
+		return isset( $GLOBALS['acgd_test_user_meta'][ (int) $user_id ][ $key ] ) ? $GLOBALS['acgd_test_user_meta'][ (int) $user_id ][ $key ] : '';
+	}
+}
+
+if ( ! function_exists( 'update_user_meta' ) ) {
+	/**
+	 * Minimal stub of update_user_meta(). / update_user_meta() の最小スタブ。
+	 *
+	 * @param int    $user_id User ID. / ユーザー ID。
+	 * @param string $key     Meta key. / メタキー。
+	 * @param mixed  $value   Value. / 値。
+	 * @return bool Always true. / 常に true。
+	 */
+	function update_user_meta( $user_id, $key, $value ) {
+		$GLOBALS['acgd_test_user_meta'][ (int) $user_id ][ $key ] = $value;
+		return true;
+	}
+}
+
+if ( ! function_exists( 'delete_user_meta' ) ) {
+	/**
+	 * Minimal stub of delete_user_meta(). / delete_user_meta() の最小スタブ。
+	 *
+	 * @param int    $user_id User ID. / ユーザー ID。
+	 * @param string $key     Meta key. / メタキー。
+	 * @return bool Whether something was deleted. / 消したか。
+	 */
+	function delete_user_meta( $user_id, $key ) {
+		if ( ! isset( $GLOBALS['acgd_test_user_meta'][ (int) $user_id ][ $key ] ) ) {
+			return false;
+		}
+		unset( $GLOBALS['acgd_test_user_meta'][ (int) $user_id ][ $key ] );
+		return true;
+	}
+}
+
+if ( ! function_exists( 'delete_metadata' ) ) {
+	/**
+	 * Minimal stub of delete_metadata() for the user meta store; only $delete_all = true with an empty value is
+	 * reproduced (every user's key). / ユーザーメタのストア用の delete_metadata() の最小スタブ。再現するのは
+	 * $delete_all = true・値が空の形（全ユーザーのキー）だけ。
+	 *
+	 * @param string $meta_type  Only 'user'. / 'user' だけ。
+	 * @param int    $object_id  Ignored when $delete_all. / $delete_all なら無視。
+	 * @param string $meta_key   Meta key. / メタキー。
+	 * @param mixed  $meta_value Ignored. / 無視。
+	 * @param bool   $delete_all Must be true. / true であること。
+	 * @return bool Whether something was deleted. / 消したか。
+	 */
+	function delete_metadata( $meta_type, $object_id, $meta_key, $meta_value = '', $delete_all = false ) {
+		unset( $object_id, $meta_value );
+		$deleted = false;
+		if ( 'user' !== $meta_type || ! $delete_all || empty( $GLOBALS['acgd_test_user_meta'] ) ) {
+			return false;
+		}
+		foreach ( $GLOBALS['acgd_test_user_meta'] as $user_id => $meta ) {
+			if ( isset( $meta[ $meta_key ] ) ) {
+				unset( $GLOBALS['acgd_test_user_meta'][ $user_id ][ $meta_key ] );
+				$deleted = true;
+			}
+		}
+		return $deleted;
+	}
+}
+
+if ( ! function_exists( 'wp_strip_all_tags' ) ) {
+	/**
+	 * Same as core's wp_strip_all_tags() (without $remove_breaks). / 本体の wp_strip_all_tags() と同じ（$remove_breaks なし）。
+	 *
+	 * @param string $text Text. / 文字列。
+	 * @return string Text without tags. / タグを除いた文字列。
+	 */
+	function wp_strip_all_tags( $text ) {
+		$text = preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', $text );
+		return trim( strip_tags( $text ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags -- This is the stub of the alternative itself.
 	}
 }
 
