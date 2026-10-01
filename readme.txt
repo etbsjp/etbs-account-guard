@@ -4,7 +4,7 @@ Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
 Requires PHP:      7.3
 Tested up to:      7.1
-Stable tag:        1.2.2
+Stable tag:        1.3.0
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,9 @@ Two-Step Verification is not available on multisite: the login cookie can be sha
 5. The Denial Log tab, listing denied sign-ins and requests with the date and time, user, IP address and where it happened.
 
 == Changelog ==
+
+= 1.3.0 =
+* [ New Feature ] Added Two-Step Verification: a verification code sent by email can be required after the password, for each role (including administrator) or for a specific user, with an option to trust a device for 7 or 30 days. It is off by default.
 
 = 1.2.2 =
 * [ Bug Fix ] Fixed the dates and times in the Denial Log tab and the "Last run" time of the receive diagnosis being shown in UTC instead of the site's time zone.
