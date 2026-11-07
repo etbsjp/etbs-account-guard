@@ -1910,6 +1910,9 @@ class ACGD_Basic_Auth {
 	 *     @type string $status     One of 'success', 'not_received', 'server_basic_auth' or 'unknown'. / 'success'・'not_received'・'server_basic_auth'・'unknown' のいずれか。
 	 *     @type int    $checked_at When it was run (time()). / 実行した時刻（time()）。
 	 *     @type string $detail     Technical detail, English/raw, for the settings screen only. / 技術的な詳細（英語・生の文言。設定画面にだけ出す）。
+	 *     @type string $url        For 'server_basic_auth': the address that was challenged, not escaped; '' otherwise and for
+	 *                              results saved before it was added (issue #34). / 'server_basic_auth' のとき、認証を
+	 *                              求められたアドレス（未エスケープ）。それ以外と、この項目を足す前に保存された結果では ''（issue #34）。
 	 * }
 	 */
 	public static function get_diagnosis_result() {
@@ -1922,6 +1925,7 @@ class ACGD_Basic_Auth {
 			'status'     => (string) $result['status'],
 			'checked_at' => (int) $result['checked_at'],
 			'detail'     => isset( $result['detail'] ) ? (string) $result['detail'] : '',
+			'url'        => isset( $result['url'] ) && is_string( $result['url'] ) ? $result['url'] : '', // Absent from results saved before issue #34. / issue #34 より前に保存された結果には無い。
 		);
 	}
 
@@ -2014,6 +2018,7 @@ class ACGD_Basic_Auth {
 					'status'     => 'server_basic_auth',
 					'checked_at' => time(),
 					'detail'     => $check_url . ': ' . $www_authenticate,
+					'url'        => $check_url, // Shown next to the main message so the admin knows where to look (issue #34). / どこを直せばよいか分かるよう、主文の近くに出す（issue #34）。
 				);
 			}
 			$checked[] = $check_url . ': ' . (int) wp_remote_retrieve_response_code( $check );
@@ -2062,6 +2067,7 @@ class ACGD_Basic_Auth {
 				'status'     => 'server_basic_auth',
 				'checked_at' => time(),
 				'detail'     => home_url( '/' ) . ': ' . $www_authenticate, // Same form as the checks above. / 上の確認と同じ形。
+				'url'        => home_url( '/' ), // Without the probe's query (its token is single use and means nothing to the admin). / 診断のクエリは付けない（トークンは使い捨てで、管理者には意味が無い）。
 			);
 		}
 

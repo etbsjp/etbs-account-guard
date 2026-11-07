@@ -340,6 +340,7 @@ class BasicDiagnosisTest extends TestCase {
 
 		$this->assertSame( 'server_basic_auth', $result['status'] );
 		$this->assertSame( self::LOGIN . ': Basic realm="server"', $result['detail'] );
+		$this->assertSame( self::LOGIN, $result['url'], 'Where it was found, for the line under the main message (issue #34).' );
 		$this->assertSame( array( self::LOGIN ), self::requested(), 'Stops at the first challenge: no admin or front page request.' );
 		$this->assertSame( array(), $GLOBALS['acgd_test_transients'], 'No probe token is created.' );
 	}
@@ -352,6 +353,7 @@ class BasicDiagnosisTest extends TestCase {
 
 		$this->assertSame( 'server_basic_auth', $result['status'] );
 		$this->assertSame( self::ADMIN . ': Basic realm="server"', $result['detail'] );
+		$this->assertSame( self::ADMIN, $result['url'] );
 		$this->assertSame( array( self::LOGIN, self::ADMIN ), self::requested() );
 	}
 
@@ -404,6 +406,95 @@ class BasicDiagnosisTest extends TestCase {
 
 		$this->assertSame( 'server_basic_auth', $result['status'] );
 		$this->assertSame( self::HOME . ': Basic realm="site"', $result['detail'] );
+		$this->assertSame( self::HOME, $result['url'], 'The front page itself, without the probe query and its token (issue #34).' );
+	}
+
+	public function test_renamed_login_url_is_the_url() {
+		$GLOBALS['acgd_test_login_url'] = 'https://example.test/login-renamed/';
+		self::stub_clean_site();
+		$GLOBALS['acgd_test_responses']['https://example.test/login-renamed/'] = self::response( 401, array( 'WWW-Authenticate' => 'Basic realm="server"' ) );
+
+		$this->assertSame( 'https://example.test/login-renamed/', self::run_diagnosis()['url'] );
+	}
+
+	public function test_url_only_for_server_basic_auth() {
+		// Success and not received. / 成功と未受信。
+		foreach ( array( true, false ) as $received ) {
+			$this->setUp();
+			self::stub_clean_site( $received );
+			$this->assertArrayNotHasKey( 'url', self::run_diagnosis(), $received ? 'success' : 'not_received' );
+		}
+
+		// Unknown: a request error on the server checks, and an unexpected front page answer.
+		// 判定不能：サーバー側の確認での要求エラーと、トップページの想定外の応答。
+		$this->setUp();
+		self::stub_clean_site();
+		$GLOBALS['acgd_test_responses'][ self::ADMIN ] = new WP_Error( 'http_request_failed', 'timeout' );
+		$this->assertArrayNotHasKey( 'url', self::run_diagnosis() );
+
+		$this->setUp();
+		self::stub_clean_site();
+		$GLOBALS['acgd_test_responses'][ self::HOME ] = self::response( 500 );
+		$result = self::run_diagnosis();
+		$this->assertSame( 'unknown', $result['status'] );
+		$this->assertArrayNotHasKey( 'url', $result );
+	}
+
+	/* ---- get_diagnosis_result() ---- */
+
+	public function test_saved_result_keeps_url() {
+		acgd_test_set_option(
+			ACGD_Basic_Auth::DIAG_RESULT_OPTION,
+			array(
+				'status'     => 'server_basic_auth',
+				'checked_at' => 1700000000,
+				'detail'     => self::ADMIN . ': Basic realm="server"',
+				'url'        => self::ADMIN,
+			)
+		);
+
+		$this->assertSame(
+			array(
+				'status'     => 'server_basic_auth',
+				'checked_at' => 1700000000,
+				'detail'     => self::ADMIN . ': Basic realm="server"',
+				'url'        => self::ADMIN,
+			),
+			ACGD_Basic_Auth::get_diagnosis_result()
+		);
+	}
+
+	public function test_result_saved_before_url_was_added_reads_as_empty_url() {
+		// Saved by a version without the url item (issue #34): the location line is simply not shown.
+		// url の項目が無い版で保存された結果（issue #34）：場所の行を出さないだけにする。
+		acgd_test_set_option(
+			ACGD_Basic_Auth::DIAG_RESULT_OPTION,
+			array(
+				'status'     => 'server_basic_auth',
+				'checked_at' => 1700000000,
+				'detail'     => self::LOGIN . ': Basic realm="server"',
+			)
+		);
+
+		$result = ACGD_Basic_Auth::get_diagnosis_result();
+		$this->assertSame( '', $result['url'] );
+		$this->assertSame( self::LOGIN . ': Basic realm="server"', $result['detail'], 'The detail is shown as before.' );
+		$this->assertFalse( ACGD_Basic_Auth::diagnosis_allows_basic_mode() );
+	}
+
+	public function test_non_string_saved_url_reads_as_empty_url() {
+		foreach ( array( null, array( self::LOGIN ), 1 ) as $url ) {
+			acgd_test_set_option(
+				ACGD_Basic_Auth::DIAG_RESULT_OPTION,
+				array(
+					'status'     => 'server_basic_auth',
+					'checked_at' => 1700000000,
+					'detail'     => '',
+					'url'        => $url,
+				)
+			);
+			$this->assertSame( '', ACGD_Basic_Auth::get_diagnosis_result()['url'], gettype( $url ) );
+		}
 	}
 
 	public function test_non_401_answers_pass_through() {
