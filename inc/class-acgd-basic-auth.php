@@ -970,11 +970,27 @@ class ACGD_Basic_Auth {
 	 * ダイアログが一切出ない稀なケース（リモートブラウザ分離サービスなど。docs/spec.md 5.3 は未検証と
 	 * 明記している）向けの一言。
 	 *
+	 * When the request has already passed the server's own BASIC authentication, no 401 is sent at all and
+	 * send_server_auth_overlap_response() explains why instead (issue #32): the only credentials that can
+	 * reach PHP there are the server's, so this plugin's check fails every time and a 401 would only make the
+	 * browser ask again forever.
+	 * リクエストがサーバー自身の BASIC 認証を既に通っているときは 401 を一切送らず、
+	 * send_server_auth_overlap_response() で理由を示す（issue #32）：そこで PHP に届く資格情報はサーバー側の
+	 * ものだけなので、このプラグインの照合は毎回失敗し、401 を返してもブラウザが入力を求め続けるだけになる。
+	 *
 	 * @param string $retry_url URL to reload to try again (already validated). / 再試行のために再読み込みする URL（検証済み）。
 	 * @param bool   $failed    Whether this follows a wrong attempt (changes the wording only). / 誤答の後かどうか（文言だけが変わる）。
 	 * @return void
 	 */
 	private static function send_challenge_response( $retry_url, $failed ) {
+		// Checked here, right before the 401, and nowhere earlier: credentials that do match this plugin
+		// (the server's and this plugin's happen to be the same) have already gone on before this point.
+		// 401 を返す直前のここでだけ見る。それより前に置くと、照合に通る資格情報（サーバー側と
+		// このプラグインの ID・パスワードがたまたま同じ）まで止めてしまう。
+		if ( self::has_passed_server_auth() ) {
+			self::send_server_auth_overlap_response( $retry_url );
+		}
+
 		nocache_headers();
 		header( 'WWW-Authenticate: Basic realm="' . self::get_realm() . '", charset="UTF-8"' );
 		status_header( 401 );
@@ -996,6 +1012,19 @@ class ACGD_Basic_Auth {
 			__( 'If you no longer have the second username and password, contact your site administrator.', 'etbs-account-guard' ),
 		);
 
+		// Server-level BASIC authentication that leaves no trace in $_SERVER (nginx, a CDN) cannot be told
+		// apart here, so a failed attempt at least names the possibility (issue #32).
+		// $_SERVER に印を残さないサーバー側の BASIC 認証（nginx・CDN）はここでは見分けられないため、
+		// 失敗したときに可能性だけは示す（issue #32）。
+		if ( $failed ) {
+			$lines[] = acgd_join_sentences(
+				array(
+					esc_html__( 'If you are asked again and again even with the correct username and password, BASIC authentication of the server (or another plugin) may be overlapping with this one.', 'etbs-account-guard' ),
+					esc_html__( 'Contact your site administrator.', 'etbs-account-guard' ),
+				)
+			);
+		}
+
 		self::render_minimal_page(
 			$title,
 			$lines,
@@ -1011,6 +1040,102 @@ class ACGD_Basic_Auth {
 					'url'     => $logout_url,
 					'label'   => __( 'Log out', 'etbs-account-guard' ),
 					'primary' => false,
+				),
+			)
+		);
+		exit;
+	}
+
+	/**
+	 * Tells whether this request has already passed BASIC (or Digest) authentication required by the server
+	 * itself (issue #32). The mark is AUTH_TYPE being Basic or Digest (case-insensitive) together with a
+	 * non-empty REMOTE_USER, as set by Apache (PHP-FPM) and LiteSpeed. Both are required: REMOTE_USER alone is
+	 * also filled by sign-on systems that do not use the Authorization header at all (a cookie-based single
+	 * sign-on, for example), and those leave this plugin's BASIC authentication usable. nginx with its default
+	 * fastcgi_params sets neither, so it is never detected here (it falls back to the plain 401). No side
+	 * effects: reads $_SERVER only.
+	 * このリクエストが、サーバー自身が求める BASIC（または Digest）認証を既に通っているかを返す（issue #32）。
+	 * 印は、AUTH_TYPE が Basic か Digest（大文字小文字を区別しない）で、かつ REMOTE_USER が空でないこと
+	 * （Apache（PHP-FPM）と LiteSpeed がこう埋める）。両方を条件にするのは、REMOTE_USER だけなら
+	 * Authorization ヘッダーを使わない仕組み（Cookie 型のシングルサインオンなど）でも埋まり、その場合は
+	 * このプラグインの BASIC 認証を使えるため。既定の fastcgi_params の nginx はどちらも埋めないので、
+	 * ここでは検出されない（通常の 401 に落ちる）。副作用は無い（$_SERVER を読むだけ）。
+	 *
+	 * @return bool Whether the server's own authentication has already been passed. / サーバー自身の認証を既に通っているか。
+	 */
+	public static function has_passed_server_auth() {
+		// sanitize_text_field() also trims, so surrounding whitespace is dropped from both values.
+		// sanitize_text_field() は前後の空白も落とすので、どちらの値も前後の空白は数えない。
+		$auth_type   = isset( $_SERVER['AUTH_TYPE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['AUTH_TYPE'] ) ) : '';
+		$remote_user = isset( $_SERVER['REMOTE_USER'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_USER'] ) ) : '';
+
+		if ( ! in_array( strtolower( $auth_type ), array( 'basic', 'digest' ), true ) ) {
+			return false;
+		}
+
+		return '' !== $remote_user;
+	}
+
+	/**
+	 * Sends the explanation shown instead of the 401 when the server's own BASIC authentication overlaps with
+	 * this plugin's (issue #32), then exits. Status 403 and no WWW-Authenticate, so the browser does not ask
+	 * for credentials again. The only action is "Log out": "Try again" is left out because retrying always
+	 * ends the same way. The wp-config.php emergency switch is shown only to people with manage_options: an
+	 * administrator who saved BASIC mode for themselves may have no other way back into the admin screens,
+	 * and only someone who passed both the WordPress login and the server's BASIC authentication reaches
+	 * this screen.
+	 * サーバー自身の BASIC 認証がこのプラグインのものと重なっているときに、401 の代わりに出す説明を送って
+	 * exit する（issue #32）。状態は 403 で WWW-Authenticate は送らず、ブラウザに入力を求め直させない。
+	 * 操作は「ログアウト」だけ：やり直しても必ず同じ結果になるので「もう一度試す」は出さない。
+	 * wp-config.php の非常用スイッチは manage_options を持つ人にだけ示す：自分を BASIC モードで保存した
+	 * 管理者には、管理画面へ戻る道がほかに無いことがあり、この画面に来られるのは WordPress のログインと
+	 * サーバーの BASIC 認証の両方を通った人だけだから。
+	 *
+	 * @param string $retry_url URL of the screen being shown (already validated), used as the destination after logging out. / いま出している画面の URL（検証済み）。ログアウト後の戻り先に使う。
+	 * @return void
+	 */
+	private static function send_server_auth_overlap_response( $retry_url ) {
+		nocache_headers();
+		status_header( 403 );
+		header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
+
+		$lines = array(
+			acgd_join_sentences(
+				array(
+					esc_html__( 'This request has already passed a BASIC authentication sign-in required by the server (or another plugin).', 'etbs-account-guard' ),
+					esc_html__( 'Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be completed here.', 'etbs-account-guard' ),
+				)
+			),
+			acgd_join_sentences(
+				array(
+					esc_html__( 'To use it, that sign-in needs to be removed, or narrowed so that it does not cover the login and admin screens.', 'etbs-account-guard' ),
+					esc_html__( 'Otherwise, use IP address restriction instead.', 'etbs-account-guard' ),
+					esc_html__( 'Contact your site administrator.', 'etbs-account-guard' ),
+				)
+			),
+		);
+
+		if ( current_user_can( 'manage_options' ) ) {
+			$lines[] = acgd_join_sentences(
+				array(
+					sprintf(
+						/* translators: %s: PHP code to add to wp-config.php, define( 'ACGD_DISABLE_RESTRICTION', true ); */
+						esc_html__( 'If you cannot reach the admin screens to change this, add %s to wp-config.php.', 'etbs-account-guard' ),
+						esc_html( "define( 'ACGD_DISABLE_RESTRICTION', true );" )
+					),
+					esc_html__( 'This stops Access Restriction only.', 'etbs-account-guard' ),
+				)
+			);
+		}
+
+		self::render_minimal_page(
+			__( 'BASIC authentication cannot be used here', 'etbs-account-guard' ),
+			$lines,
+			array(
+				array(
+					'url'     => wp_logout_url( $retry_url ), // Core adds its own nonce. / 本体が自前で nonce を付ける。
+					'label'   => __( 'Log out', 'etbs-account-guard' ),
+					'primary' => true,
 				),
 			)
 		);
@@ -1783,12 +1908,13 @@ class ACGD_Basic_Auth {
 	}
 
 	/**
-	 * Prints a minimal, self-contained HTML page. No theme template is used: this is the body of a 401, and
-	 * it must never leak the markup of the page it is standing in for. Adapted from PageGuard's
-	 * inc/class-auth.php render_page(). The caller is the one that exits (send_challenge_response()).
+	 * Prints a minimal, self-contained HTML page. No theme template is used: this is the body of a 401 (or of
+	 * the 403 shown instead of it, issue #32), and it must never leak the markup of the page it is standing in
+	 * for. Adapted from PageGuard's inc/class-auth.php render_page(). The caller is the one that exits
+	 * (send_challenge_response() / send_server_auth_overlap_response()).
 	 *
-	 * Where this runs: the only caller is send_challenge_response(), reached from handle_challenge() and
-	 * handle_verify(), both of which are registered on login_form_{action} -- so this always runs inside
+	 * Where this runs: the only callers are send_challenge_response() and send_server_auth_overlap_response(),
+	 * reached from handle_challenge() and handle_verify(), both of which are registered on login_form_{action} -- so this always runs inside
 	 * wp-login.php, well after 'init' and 'wp_loaded'. That is what makes the style calls below safe.
 	 *
 	 * The CSS is registered with no src and printed with wp_add_inline_style()/wp_print_styles() rather than
@@ -1797,11 +1923,12 @@ class ACGD_Basic_Auth {
 	 * blocks direct access to wp-content, or that already runs BASIC authentication site-wide) a stylesheet
 	 * fetched as a subresource is exactly the thing that would not arrive. Passing a handle to
 	 * wp_print_styles() also skips do_action( 'wp_print_styles' ), so no other plugin can print into it.
-	 * 最小限の自己完結した HTML ページを出力する。テーマのテンプレートは使わない：これは 401 の本文であり、
-	 * 身代わりになっているページのマークアップを漏らしてはならないため。PageGuard の inc/class-auth.php の
-	 * render_page() を参考にしている。exit するのは呼び出し元（send_challenge_response()）のほう。
+	 * 最小限の自己完結した HTML ページを出力する。テーマのテンプレートは使わない：これは 401 の本文（または
+	 * その代わりに出す 403 の本文。issue #32）であり、身代わりになっているページのマークアップを漏らしては
+	 * ならないため。PageGuard の inc/class-auth.php の render_page() を参考にしている。exit するのは
+	 * 呼び出し元（send_challenge_response()／send_server_auth_overlap_response()）のほう。
 	 *
-	 * どこで動くか：呼び出し元は send_challenge_response() だけで、そこへ来るのは handle_challenge() と
+	 * どこで動くか：呼び出し元は send_challenge_response() と send_server_auth_overlap_response() だけで、そこへ来るのは handle_challenge() と
 	 * handle_verify()。どちらも login_form_{action} に登録しているので、これは常に wp-login.php の中、
 	 * 'init' も 'wp_loaded' も十分に終わった後に動く。下のスタイルの呼び出しが安全なのはこのため。
 	 *

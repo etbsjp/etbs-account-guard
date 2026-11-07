@@ -44,11 +44,11 @@ msgstr "ETBS (DAI)"
 msgid "https://etbs.jp"
 msgstr "https://etbs.jp"
 
-#: inc/class-acgd-basic-auth.php:986
+#: inc/class-acgd-basic-auth.php:1002
 msgid "The username or password was not accepted"
 msgstr "ユーザー名またはパスワードが受け付けられませんでした"
 
-#: inc/class-acgd-basic-auth.php:987 inc/class-acgd-basic-auth.php:990
+#: inc/class-acgd-basic-auth.php:1003 inc/class-acgd-basic-auth.php:1006
 msgid ""
 "This screen protects your account with a second username and password (BASIC "
 "authentication), separate from your WordPress login."
@@ -56,11 +56,11 @@ msgstr ""
 "この画面は、WordPress のログインとは別の2つ目のユーザー名とパスワード (BASIC "
 "認証) でアカウントを守っています。"
 
-#: inc/class-acgd-basic-auth.php:989
+#: inc/class-acgd-basic-auth.php:1005
 msgid "A second sign-in is required"
 msgstr "2つ目のサインインが必要です"
 
-#: inc/class-acgd-basic-auth.php:995
+#: inc/class-acgd-basic-auth.php:1011
 msgid ""
 "If a username/password prompt did not appear, use the link below to try "
 "again."
@@ -68,7 +68,7 @@ msgstr ""
 "ユーザー名とパスワードの入力欄が表示されなかった場合は、下のリンクからもう一"
 "度お試しください。"
 
-#: inc/class-acgd-basic-auth.php:996
+#: inc/class-acgd-basic-auth.php:1012
 msgid ""
 "If you no longer have the second username and password, contact your site "
 "administrator."
@@ -76,28 +76,87 @@ msgstr ""
 "2つ目のユーザー名とパスワードが分からなくなった場合は、サイトの管理者にお問い"
 "合わせください。"
 
-#: inc/class-acgd-basic-auth.php:1007
+#: inc/class-acgd-basic-auth.php:1022
+msgid ""
+"If you are asked again and again even with the correct username and "
+"password, BASIC authentication of the server (or another plugin) may be "
+"overlapping with this one."
+msgstr ""
+"正しいユーザー名とパスワードを入れても繰り返し求められる場合は、サーバー (ま"
+"たは他のプラグイン) の BASIC 認証と重なっている可能性があります。"
+
+#: inc/class-acgd-basic-auth.php:1023 inc/class-acgd-basic-auth.php:1113
+msgid "Contact your site administrator."
+msgstr "サイトの管理者にお問い合わせください。"
+
+#: inc/class-acgd-basic-auth.php:1036
 msgid "Try again"
 msgstr "もう一度試す"
 
-#: inc/class-acgd-basic-auth.php:1012
+#: inc/class-acgd-basic-auth.php:1041 inc/class-acgd-basic-auth.php:1137
 msgid "Log out"
 msgstr "ログアウト"
 
+#: inc/class-acgd-basic-auth.php:1105
+msgid ""
+"This request has already passed a BASIC authentication sign-in required by "
+"the server (or another plugin)."
+msgstr ""
+"このリクエストは、サーバー (または他のプラグイン) が求める BASIC 認証をすでに"
+"通っています。"
+
+#: inc/class-acgd-basic-auth.php:1106
+msgid ""
+"Only one such credential can be sent per request, so this plugin's BASIC "
+"authentication cannot be completed here."
+msgstr ""
+"1回のリクエストに送れる資格情報は1つだけのため、ここではこのプラグインの "
+"BASIC 認証を完了できません。"
+
+#: inc/class-acgd-basic-auth.php:1111
+msgid ""
+"To use it, that sign-in needs to be removed, or narrowed so that it does not "
+"cover the login and admin screens."
+msgstr ""
+"使うには、その BASIC 認証を外すか、ログイン画面と管理画面に掛からないように範"
+"囲を狭める必要があります。"
+
+#: inc/class-acgd-basic-auth.php:1112
+msgid "Otherwise, use IP address restriction instead."
+msgstr "または IP アドレスによる制限を使ってください。"
+
+#. translators: %s: PHP code to add to wp-config.php, define( 'ACGD_DISABLE_RESTRICTION', true );
+#: inc/class-acgd-basic-auth.php:1123
+#, php-format
+msgid ""
+"If you cannot reach the admin screens to change this, add %s to wp-"
+"config.php."
+msgstr ""
+"設定を変えるために管理画面へ入れない場合は、wp-config.php に %s を足してくだ"
+"さい。"
+
+#: inc/class-acgd-basic-auth.php:1126
+msgid "This stops Access Restriction only."
+msgstr "止まるのはアクセス制限だけです。"
+
+#: inc/class-acgd-basic-auth.php:1132
+msgid "BASIC authentication cannot be used here"
+msgstr "ここでは BASIC 認証を使えません"
+
 #. translators: %s: site name, used as the realm shown in the browser's BASIC authentication prompt
-#: inc/class-acgd-basic-auth.php:1045
+#: inc/class-acgd-basic-auth.php:1170
 #, php-format
 msgid "%s Staff Access"
 msgstr "%s 関係者専用"
 
-#: inc/class-acgd-basic-auth.php:1237 inc/class-acgd-basic-auth.php:1531
-#: inc/class-acgd-basic-auth.php:1940 inc/class-acgd-two-step.php:3624
+#: inc/class-acgd-basic-auth.php:1362 inc/class-acgd-basic-auth.php:1656
+#: inc/class-acgd-basic-auth.php:2067 inc/class-acgd-two-step.php:3624
 #: inc/class-acgd-two-step.php:3650
 msgid "You do not have permission to do this."
 msgstr "この操作を行う権限がありません。"
 
 #. translators: %d: HTTP status code of the diagnosis request's response
-#: inc/class-acgd-basic-auth.php:2026
+#: inc/class-acgd-basic-auth.php:2202
 #, php-format
 msgid "Unexpected response to the diagnosis request (status: %d)."
 msgstr "診断リクエストへの応答が想定外でした (ステータス: %d)。"
