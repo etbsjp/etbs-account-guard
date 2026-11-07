@@ -1087,7 +1087,16 @@ class ACGD_Settings {
 			),
 			'server_basic_auth' => array(
 				'class' => 'notice-error',
-				'text'  => __( 'A BASIC authentication sign-in is already required by the server (or another plugin) — for the whole site, or for the login or admin screens. Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be turned on at the same time. To use it, remove that sign-in or narrow it so it does not cover these screens, then run the diagnosis again. Otherwise, use IP address restriction instead.', 'etbs-account-guard' ),
+				// One sentence per translation, joined by the translatable separator (already escaped; esc_html() below does not encode it twice).
+				// 1文ずつ翻訳し、翻訳できる区切りでつなぐ（エスケープ済み。下の esc_html() は二重にエンコードしない）。
+				'text'  => acgd_join_sentences(
+					array(
+						esc_html__( 'A BASIC authentication sign-in is already required by the server (or another plugin) — for the whole site, or for the login or admin screens.', 'etbs-account-guard' ),
+						esc_html__( 'Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be turned on at the same time.', 'etbs-account-guard' ),
+						esc_html__( 'To use it, remove that sign-in or narrow it so it does not cover these screens, then run the diagnosis again.', 'etbs-account-guard' ),
+						esc_html__( 'Otherwise, use IP address restriction instead.', 'etbs-account-guard' ),
+					)
+				),
 			),
 			'unknown'           => array(
 				'class' => 'notice-warning',

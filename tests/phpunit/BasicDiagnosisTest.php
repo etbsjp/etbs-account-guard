@@ -417,26 +417,40 @@ class BasicDiagnosisTest extends TestCase {
 		$this->assertSame( 'https://example.test/login-renamed/', self::run_diagnosis()['url'] );
 	}
 
-	public function test_url_only_for_server_basic_auth() {
-		// Success and not received. / 成功と未受信。
-		foreach ( array( true, false ) as $received ) {
-			$this->setUp();
-			self::stub_clean_site( $received );
-			$this->assertArrayNotHasKey( 'url', self::run_diagnosis(), $received ? 'success' : 'not_received' );
+	/**
+	 * Sites whose diagnosis ends in anything but server_basic_auth. / 診断が server_basic_auth 以外で終わるサイト。
+	 *
+	 * @return array
+	 */
+	public function provide_results_without_url() {
+		return array(
+			'success'                  => array( 'success', null, true ),
+			'not received'             => array( 'not_received', null, false ),
+			'admin request error'      => array( 'unknown', self::ADMIN, 'error' ),
+			'unexpected front page'    => array( 'unknown', self::HOME, 500 ),
+			'front page request error' => array( 'unknown', self::HOME, 'error' ),
+		);
+	}
+
+	/**
+	 * The url item is only set when the result is server_basic_auth. / url の項目は server_basic_auth のときだけ入る。
+	 *
+	 * @dataProvider provide_results_without_url
+	 *
+	 * @param string      $status   Expected status. / 期待する状態。
+	 * @param string|null $url      Address whose answer is replaced, or null. / 応答を差し替えるアドレス。無ければ null。
+	 * @param mixed       $answer   'error', a status code, or the probe's "received" when $url is null. / 'error'・状態コード、または $url が null のときの診断の received。
+	 * @return void
+	 */
+	public function test_url_only_for_server_basic_auth( $status, $url, $answer ) {
+		self::stub_clean_site( null === $url ? $answer : true );
+		if ( null !== $url ) {
+			$GLOBALS['acgd_test_responses'][ $url ] = 'error' === $answer ? new WP_Error( 'http_request_failed', 'timeout' ) : self::response( $answer );
 		}
 
-		// Unknown: a request error on the server checks, and an unexpected front page answer.
-		// 判定不能：サーバー側の確認での要求エラーと、トップページの想定外の応答。
-		$this->setUp();
-		self::stub_clean_site();
-		$GLOBALS['acgd_test_responses'][ self::ADMIN ] = new WP_Error( 'http_request_failed', 'timeout' );
-		$this->assertArrayNotHasKey( 'url', self::run_diagnosis() );
-
-		$this->setUp();
-		self::stub_clean_site();
-		$GLOBALS['acgd_test_responses'][ self::HOME ] = self::response( 500 );
 		$result = self::run_diagnosis();
-		$this->assertSame( 'unknown', $result['status'] );
+
+		$this->assertSame( $status, $result['status'] );
 		$this->assertArrayNotHasKey( 'url', $result );
 	}
 
