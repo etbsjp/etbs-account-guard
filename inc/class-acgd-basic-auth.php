@@ -1955,7 +1955,9 @@ class ACGD_Basic_Auth {
 	 * per request, so this plugin's own cannot coexist with it). The third case is detected from the loopback
 	 * response itself — a 401 with its own WWW-Authenticate header — never from inside the probe endpoint,
 	 * which never executes when the server intercepts the request first. Adapted from PageGuard's
-	 * inc/class-settings.php run_diagnosis(), extended with this 401/WWW-Authenticate distinction.
+	 * inc/class-settings.php run_diagnosis(), extended with this 401/WWW-Authenticate distinction. The same
+	 * 401/WWW-Authenticate check is made first on diagnosis_server_check_urls() (wp-login.php and wp-admin/),
+	 * since a server's own BASIC authentication is often set on those alone (issue #31).
 	 * 受信の診断を実行する：ダミーの BASIC Authorization ヘッダーを付けた自サイトへのループバックリクエストを
 	 * 送り、その応答から3つの結果を見分ける（docs/spec.md 5.3）：ヘッダーが PHP まで届く（成功）、
 	 * 届かない（.htaccess の回避策が要る CGI/FastCGI 構成）、WordPress が動く前にサーバー自身の BASIC 認証に
@@ -1963,11 +1965,60 @@ class ACGD_Basic_Auth {
 	 * とは共存できない）。3つ目は、応答そのもの（自前の WWW-Authenticate を伴う 401）から判定する。
 	 * サーバーがリクエストを先に横取りする場合、応答エンドポイント自体は一度も実行されないため。
 	 * PageGuard の inc/class-settings.php の run_diagnosis() を参考にし、この 401/WWW-Authenticate の
-	 * 区別を加えて拡張している。
+	 * 区別を加えて拡張している。同じ 401/WWW-Authenticate の確認を、先に diagnosis_server_check_urls()
+	 * （wp-login.php と wp-admin/）にも行う。サーバー自身の BASIC 認証はそこにだけ掛かっていることが多いため
+	 * （issue #31）。
 	 *
 	 * @return array See get_diagnosis_result(). / get_diagnosis_result() を参照。
 	 */
 	private static function run_diagnosis() {
+		/*
+		 * First, the two places this plugin's BASIC authentication is actually used: the confirmation screen
+		 * and the "Verify" round trip (wp_login_url()), and the admin screens (admin_url()). A web server's own
+		 * BASIC authentication is often set on these only (an .htaccess for wp-login.php and wp-admin/), in
+		 * which case the front page below answers 200 and the diagnosis used to report success — and the
+		 * confirmation screen then answered 401 over and over (issue #31).
+		 * 先に、このプラグインの BASIC 認証が実際に使う2か所を見る：確認画面と「確認」の往復
+		 * （wp_login_url()）と、管理画面（admin_url()）。Web サーバー自身の BASIC 認証はここにだけ掛かって
+		 * いることが多く（wp-login.php と wp-admin/ 向けの .htaccess）、その場合は下のトップページが 200 を
+		 * 返すので、以前の診断は成功と報告していた——そして確認画面は 401 を繰り返した（issue #31）。
+		 */
+		$checked = array(); // "URL: status" of each address, kept in the detail for later investigation. / 各アドレスの「URL: 状態コード」。後から調べられるよう detail に残す。
+		foreach ( self::diagnosis_server_check_urls() as $check_url ) {
+			// No Authorization header: a dummy one would leave an authentication failure in the server's error log
+			// (and could trip something like fail2ban against this server's own address); the challenge is
+			// returned without it anyway.
+			// Authorization ヘッダーは付けない：ダミーを付けるとサーバーのエラーログに認証失敗が残り（fail2ban
+			// のような仕組みが自サーバーの IP を締め出すおそれもある）、要求は付けなくても返ってくるため。
+			$check = wp_remote_get(
+				$check_url,
+				array(
+					'timeout'     => 5, // A single GET without redirects; keeps the worst case of the whole diagnosis at 20 seconds. / リダイレクトを追わない GET 1回。診断全体の最悪の待ち時間を20秒に抑える。
+					'redirection' => 0, // Judge each address by its own answer: admin_url() redirects to wp-login.php, which is checked on its own. / 各アドレスはそれ自身の応答で判定する（admin_url() は wp-login.php へ転送するが、そちらは別に見る）。
+					'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // Same reasoning as the probe below. / 下の診断リクエストと同じ考え方。
+				)
+			);
+
+			if ( is_wp_error( $check ) ) {
+				// Fail closed: whether this address is challenged cannot be told. / 安全側に倒す：このアドレスが要求されるか判定できない。
+				return array(
+					'status'     => 'unknown',
+					'checked_at' => time(),
+					'detail'     => $check_url . ': ' . $check->get_error_message(),
+				);
+			}
+
+			$www_authenticate = self::server_challenge_of( $check );
+			if ( '' !== $www_authenticate ) {
+				return array(
+					'status'     => 'server_basic_auth',
+					'checked_at' => time(),
+					'detail'     => $check_url . ': ' . $www_authenticate,
+				);
+			}
+			$checked[] = $check_url . ': ' . (int) wp_remote_retrieve_response_code( $check );
+		}
+
 		$token = bin2hex( random_bytes( 16 ) );
 		set_transient( self::DIAG_TOKEN_PREFIX . $token, 1, 60 ); // 60 seconds is comfortably more than a loopback needs. / 60秒はループバックに要る時間より十分長い。
 
@@ -2003,17 +2054,15 @@ class ACGD_Basic_Auth {
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
 
-		if ( 401 === $code ) {
-			$www_authenticate = wp_remote_retrieve_header( $response, 'www-authenticate' );
-			if ( $www_authenticate ) {
-				// The web server itself challenged for BASIC authentication before WordPress ran at all.
-				// WordPress が動く前に、Web サーバー自身が BASIC 認証を要求した。
-				return array(
-					'status'     => 'server_basic_auth',
-					'checked_at' => time(),
-					'detail'     => (string) $www_authenticate,
-				);
-			}
+		$www_authenticate = self::server_challenge_of( $response );
+		if ( '' !== $www_authenticate ) {
+			// The web server itself challenged for BASIC authentication before WordPress ran at all.
+			// WordPress が動く前に、Web サーバー自身が BASIC 認証を要求した。
+			return array(
+				'status'     => 'server_basic_auth',
+				'checked_at' => time(),
+				'detail'     => home_url( '/' ) . ': ' . $www_authenticate, // Same form as the checks above. / 上の確認と同じ形。
+			);
 		}
 
 		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
@@ -2032,8 +2081,47 @@ class ACGD_Basic_Auth {
 		return array(
 			'status'     => ! empty( $body['received'] ) ? 'success' : 'not_received',
 			'checked_at' => time(),
-			'detail'     => '',
+			'detail'     => implode( '; ', $checked ),
 		);
+	}
+
+	/**
+	 * Returns the addresses run_diagnosis() checks for a web server's own authentication challenge before
+	 * its probe of the front page: the ones this plugin's BASIC authentication itself sends the browser to.
+	 * run_diagnosis() がトップページへの診断の前に、Web サーバー自身の認証要求が無いかを確かめるアドレスを
+	 * 返す。このプラグインの BASIC 認証自身がブラウザを向かわせる場所。
+	 *
+	 * @return string[] URLs, not escaped. / URL（未エスケープ）。
+	 */
+	public static function diagnosis_server_check_urls() {
+		return array(
+			wp_login_url(), // The confirmation screen and "Verify" (challenge_url() / verify_url()). / 確認画面と「確認」（challenge_url()／verify_url()）。
+			admin_url(),    // The admin screens themselves. / 管理画面そのもの。
+		);
+	}
+
+	/**
+	 * Returns the WWW-Authenticate header of a 401 response, or '' for anything else. Any authentication
+	 * scheme counts, not only Basic: every scheme a browser answers with the Authorization header (Basic,
+	 * Digest, ...) takes the one slot this plugin's own BASIC credentials need.
+	 * 401 の応答なら WWW-Authenticate ヘッダーを、それ以外なら '' を返す。Basic に限らずどの方式も数える：
+	 * ブラウザが Authorization ヘッダーで答える方式（Basic・Digest など）はどれも、このプラグイン自身の
+	 * BASIC の資格情報が必要とする1つしかない枠を使ってしまうため。
+	 *
+	 * @param array $response Response from wp_remote_get() (not a WP_Error). / wp_remote_get() の応答（WP_Error ではないもの）。
+	 * @return string Header value, '' when not challenged. / ヘッダーの値。要求されていなければ ''。
+	 */
+	public static function server_challenge_of( $response ) {
+		if ( 401 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			return '';
+		}
+
+		$header = wp_remote_retrieve_header( $response, 'www-authenticate' );
+		if ( is_array( $header ) ) {
+			$header = implode( ', ', $header ); // Several challenges in one response. / 1つの応答に複数の要求。
+		}
+
+		return trim( (string) $header );
 	}
 
 	/**
