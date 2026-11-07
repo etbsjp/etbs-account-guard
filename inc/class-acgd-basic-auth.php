@@ -163,6 +163,28 @@ class ACGD_Basic_Auth {
 	const MINIMAL_PAGE_STYLE_HANDLE = 'acgd-minimal-page';
 
 	/**
+	 * Which screen a BASIC prompt is being sent from: the confirmation screen (CHALLENGE_ACTION, after a
+	 * WordPress login). Passed to send_challenge_response() so the 403 shown when the server's own BASIC
+	 * authentication overlaps can offer the right way out (issue #32).
+	 * BASIC の入力を求めている画面の種類：確認画面（CHALLENGE_ACTION。WordPress のログインの後）。
+	 * send_challenge_response() に渡し、サーバー自身の BASIC 認証と重なったときの 403 で、その画面に合った
+	 * 抜け道を出せるようにする（issue #32）。
+	 *
+	 * @var string
+	 */
+	const SCREEN_CHALLENGE = 'challenge';
+
+	/**
+	 * Which screen a BASIC prompt is being sent from: the "Verify" round trip (VERIFY_ACTION, started from
+	 * the profile screen). See SCREEN_CHALLENGE.
+	 * BASIC の入力を求めている画面の種類：「確認」の往復（VERIFY_ACTION。プロフィール画面から始まる）。
+	 * SCREEN_CHALLENGE を参照。
+	 *
+	 * @var string
+	 */
+	const SCREEN_VERIFY = 'verify';
+
+	/**
 	 * How long the pending-verification and verified-confirmation transients live. Long enough for the
 	 * confirmation round trip (including a browser's native BASIC dialog, which a person may take a moment to
 	 * fill in); short enough that a confirmation from one attempt cannot resurface for a later, unrelated one.
@@ -947,13 +969,13 @@ class ACGD_Basic_Auth {
 
 		$submitted = self::get_submitted_credentials();
 		if ( null === $submitted ) {
-			self::send_challenge_response( self::challenge_url( $redirect_to ), false );
+			self::send_challenge_response( self::challenge_url( $redirect_to ), false, self::SCREEN_CHALLENGE );
 		}
 
 		// Credentials were submitted (and, per request_satisfies() above, did not match this user).
 		// 資格情報は送信されたが（上の request_satisfies() の結果どおり）このユーザーとは一致しなかった。
 		ACGD_Access_Restriction::log_denial( $user->ID, ACGD_Access_Restriction::get_remote_addr(), 'basic' );
-		self::send_challenge_response( self::challenge_url( $redirect_to ), true );
+		self::send_challenge_response( self::challenge_url( $redirect_to ), true, self::SCREEN_CHALLENGE );
 	}
 
 	/**
@@ -980,15 +1002,17 @@ class ACGD_Basic_Auth {
 	 *
 	 * @param string $retry_url URL to reload to try again (already validated). / 再試行のために再読み込みする URL（検証済み）。
 	 * @param bool   $failed    Whether this follows a wrong attempt (changes the wording only). / 誤答の後かどうか（文言だけが変わる）。
+	 * @param string $screen    SCREEN_CHALLENGE or SCREEN_VERIFY: which screen this is sent from. / SCREEN_CHALLENGE か SCREEN_VERIFY：どの画面から送るか。
+	 * @param string $back_url  For SCREEN_VERIFY, the profile screen to go back to (already validated); unused otherwise. / SCREEN_VERIFY のとき、戻り先のプロフィール画面（検証済み）。それ以外では使わない。
 	 * @return void
 	 */
-	private static function send_challenge_response( $retry_url, $failed ) {
+	private static function send_challenge_response( $retry_url, $failed, $screen, $back_url = '' ) {
 		// Checked here, right before the 401, and nowhere earlier: credentials that do match this plugin
 		// (the server's and this plugin's happen to be the same) have already gone on before this point.
 		// 401 を返す直前のここでだけ見る。それより前に置くと、照合に通る資格情報（サーバー側と
 		// このプラグインの ID・パスワードがたまたま同じ）まで止めてしまう。
 		if ( self::has_passed_server_auth() ) {
-			self::send_server_auth_overlap_response( $retry_url );
+			self::send_server_auth_overlap_response( $retry_url, $screen, $back_url );
 		}
 
 		nocache_headers();
@@ -1081,22 +1105,32 @@ class ACGD_Basic_Auth {
 	/**
 	 * Sends the explanation shown instead of the 401 when the server's own BASIC authentication overlaps with
 	 * this plugin's (issue #32), then exits. Status 403 and no WWW-Authenticate, so the browser does not ask
-	 * for credentials again. The only action is "Log out": "Try again" is left out because retrying always
-	 * ends the same way. The wp-config.php emergency switch is shown only to people with manage_options: an
+	 * for credentials again. On the confirmation screen the only action is "Log out" ("Try again" is left out
+	 * because retrying always ends the same way), and the wp-config.php emergency switch is shown only to
+	 * people with manage_options: an
 	 * administrator who saved BASIC mode for themselves may have no other way back into the admin screens,
 	 * and only someone who passed both the WordPress login and the server's BASIC authentication reaches
 	 * this screen.
 	 * サーバー自身の BASIC 認証がこのプラグインのものと重なっているときに、401 の代わりに出す説明を送って
 	 * exit する（issue #32）。状態は 403 で WWW-Authenticate は送らず、ブラウザに入力を求め直させない。
-	 * 操作は「ログアウト」だけ：やり直しても必ず同じ結果になるので「もう一度試す」は出さない。
+	 * 確認画面での操作は「ログアウト」だけ（やり直しても必ず同じ結果になるので「もう一度試す」は出さない）で、
 	 * wp-config.php の非常用スイッチは manage_options を持つ人にだけ示す：自分を BASIC モードで保存した
 	 * 管理者には、管理画面へ戻る道がほかに無いことがあり、この画面に来られるのは WordPress のログインと
 	 * サーバーの BASIC 認証の両方を通った人だけだから。
 	 *
+	 * From the "Verify" round trip the person is not locked out (they started it from their profile screen),
+	 * so the switch is left out and "Back to your profile" is offered first instead; see
+	 * overlap_shows_emergency_switch() and overlap_actions().
+	 * 「確認」の往復から来た人は締め出されていない（プロフィール画面から始めている）ので、非常用スイッチは
+	 * 出さず、代わりに「プロフィールに戻る」を先に出す。overlap_shows_emergency_switch() と
+	 * overlap_actions() を参照。
+	 *
 	 * @param string $retry_url URL of the screen being shown (already validated), used as the destination after logging out. / いま出している画面の URL（検証済み）。ログアウト後の戻り先に使う。
+	 * @param string $screen    SCREEN_CHALLENGE or SCREEN_VERIFY. / SCREEN_CHALLENGE か SCREEN_VERIFY。
+	 * @param string $back_url  For SCREEN_VERIFY, the profile screen to go back to (already validated). / SCREEN_VERIFY のとき、戻り先のプロフィール画面（検証済み）。
 	 * @return void
 	 */
-	private static function send_server_auth_overlap_response( $retry_url ) {
+	private static function send_server_auth_overlap_response( $retry_url, $screen, $back_url ) {
 		nocache_headers();
 		status_header( 403 );
 		header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
@@ -1123,7 +1157,7 @@ class ACGD_Basic_Auth {
 			),
 		);
 
-		if ( current_user_can( 'manage_options' ) ) {
+		if ( self::overlap_shows_emergency_switch( $screen, current_user_can( 'manage_options' ) ) ) {
 			$lines[] = acgd_join_sentences(
 				array(
 					sprintf(
@@ -1139,15 +1173,63 @@ class ACGD_Basic_Auth {
 		self::render_minimal_page(
 			__( 'BASIC authentication cannot be used here', 'etbs-account-guard' ),
 			$lines,
-			array(
-				array(
-					'url'     => wp_logout_url( $retry_url ), // Core adds its own nonce. / 本体が自前で nonce を付ける。
-					'label'   => __( 'Log out', 'etbs-account-guard' ),
-					'primary' => true,
-				),
-			)
+			self::overlap_actions( $screen, $back_url, wp_logout_url( $retry_url ) ) // Core adds its own nonce to the logout URL. / ログアウトの URL には本体が自前で nonce を付ける。
 		);
 		exit;
+	}
+
+	/**
+	 * Tells whether the 403 of send_server_auth_overlap_response() shows the wp-config.php emergency switch:
+	 * only on the confirmation screen, and only to people with manage_options. On the "Verify" round trip the
+	 * person came from their profile screen and can go back to it, so the switch would only be a detour.
+	 * send_server_auth_overlap_response() の 403 に wp-config.php の非常用スイッチを出すかを返す：確認画面で、
+	 * かつ manage_options を持つ人にだけ。「確認」の往復ではプロフィール画面から来ていてそこへ戻れるので、
+	 * 非常用スイッチは遠回りにしかならない。
+	 *
+	 * @param string $screen             SCREEN_CHALLENGE or SCREEN_VERIFY. / SCREEN_CHALLENGE か SCREEN_VERIFY。
+	 * @param bool   $can_manage_options Whether the current user has manage_options. / 今のユーザーが manage_options を持つか。
+	 * @return bool Whether to show it. / 出すか。
+	 */
+	public static function overlap_shows_emergency_switch( $screen, $can_manage_options ) {
+		return self::SCREEN_CHALLENGE === $screen && $can_manage_options;
+	}
+
+	/**
+	 * Builds the buttons of the 403 of send_server_auth_overlap_response(). The confirmation screen gets
+	 * "Log out" only. The "Verify" round trip gets "Back to your profile" (primary) and "Log out". "Try again"
+	 * is never offered: retrying always ends the same way.
+	 * send_server_auth_overlap_response() の 403 のボタンを組み立てる。確認画面は「ログアウト」だけ。
+	 * 「確認」の往復は「プロフィールに戻る」（primary）と「ログアウト」。やり直しても必ず同じ結果になる
+	 * ので、「もう一度試す」はどちらにも出さない。
+	 *
+	 * @param string $screen     SCREEN_CHALLENGE or SCREEN_VERIFY. / SCREEN_CHALLENGE か SCREEN_VERIFY。
+	 * @param string $back_url   For SCREEN_VERIFY, the profile screen to go back to (already validated). / SCREEN_VERIFY のとき、戻り先のプロフィール画面（検証済み）。
+	 * @param string $logout_url Logout URL (with core's nonce). / ログアウトの URL（本体の nonce 付き）。
+	 * @return array Actions for render_minimal_page(). / render_minimal_page() に渡すリンク。
+	 */
+	public static function overlap_actions( $screen, $back_url, $logout_url ) {
+		$logout = array(
+			'url'     => $logout_url,
+			'label'   => __( 'Log out', 'etbs-account-guard' ),
+			'primary' => true,
+		);
+
+		// Only the confirmation screen, or a verify call without a destination, falls back to "Log out" alone.
+		// 確認画面（と、戻り先の無い「確認」の往復）は「ログアウト」だけにする。
+		if ( self::SCREEN_VERIFY !== $screen || '' === $back_url ) {
+			return array( $logout );
+		}
+
+		$logout['primary'] = false;
+
+		return array(
+			array(
+				'url'     => $back_url,
+				'label'   => __( 'Back to your profile', 'etbs-account-guard' ),
+				'primary' => true,
+			),
+			$logout,
+		);
 	}
 
 	/**
@@ -1692,7 +1774,7 @@ class ACGD_Basic_Auth {
 
 		$submitted = self::get_submitted_credentials();
 		if ( null === $submitted ) {
-			self::send_challenge_response( self::verify_url( $redirect_to ), false );
+			self::send_challenge_response( self::verify_url( $redirect_to ), false, self::SCREEN_VERIFY, $redirect_to );
 		}
 
 		if ( hash_equals( (string) $pending['id'], $submitted['username'] ) && hash_equals( (string) $pending['password'], $submitted['password'] ) ) {
@@ -1749,7 +1831,7 @@ class ACGD_Basic_Auth {
 			exit;
 		}
 
-		self::send_challenge_response( self::verify_url( $redirect_to ), true );
+		self::send_challenge_response( self::verify_url( $redirect_to ), true, self::SCREEN_VERIFY, $redirect_to );
 	}
 
 	/**

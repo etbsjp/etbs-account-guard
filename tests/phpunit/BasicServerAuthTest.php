@@ -40,6 +40,18 @@ if ( ! function_exists( 'sanitize_text_field' ) ) {
 	}
 }
 
+if ( ! function_exists( '__' ) ) {
+	/**
+	 * Stub returning the text unchanged. / 文字列をそのまま返すスタブ。
+	 *
+	 * @param string $text Text. / 文字列。
+	 * @return string
+	 */
+	function __( $text ) {
+		return $text;
+	}
+}
+
 require_once dirname( __DIR__, 2 ) . '/inc/class-acgd-basic-auth.php';
 
 /**
@@ -206,5 +218,78 @@ class BasicServerAuthTest extends TestCase {
 		ACGD_Basic_Auth::has_passed_server_auth();
 
 		$this->assertSame( $before, $_SERVER );
+	}
+
+	/**
+	 * The emergency switch is shown on the confirmation screen to manage_options only, never on "Verify".
+	 * 非常用スイッチは確認画面で manage_options の人にだけ出し、「確認」の往復では出さない。
+	 *
+	 * @return void
+	 */
+	public function test_overlap_shows_emergency_switch() {
+		$this->assertTrue( ACGD_Basic_Auth::overlap_shows_emergency_switch( ACGD_Basic_Auth::SCREEN_CHALLENGE, true ) );
+		$this->assertFalse( ACGD_Basic_Auth::overlap_shows_emergency_switch( ACGD_Basic_Auth::SCREEN_CHALLENGE, false ) );
+		$this->assertFalse( ACGD_Basic_Auth::overlap_shows_emergency_switch( ACGD_Basic_Auth::SCREEN_VERIFY, true ) );
+		$this->assertFalse( ACGD_Basic_Auth::overlap_shows_emergency_switch( ACGD_Basic_Auth::SCREEN_VERIFY, false ) );
+	}
+
+	/**
+	 * The confirmation screen gets "Log out" only. / 確認画面は「ログアウト」だけ。
+	 *
+	 * @return void
+	 */
+	public function test_overlap_actions_on_challenge() {
+		$actions = ACGD_Basic_Auth::overlap_actions( ACGD_Basic_Auth::SCREEN_CHALLENGE, 'https://example.test/wp-admin/profile.php', 'https://example.test/logout' );
+
+		$this->assertSame(
+			array(
+				array(
+					'url'     => 'https://example.test/logout',
+					'label'   => 'Log out',
+					'primary' => true,
+				),
+			),
+			$actions
+		);
+	}
+
+	/**
+	 * "Verify" gets "Back to your profile" (primary, to the given URL) and then "Log out".
+	 * 「確認」の往復は「プロフィールに戻る」（primary・渡した URL へ）、続いて「ログアウト」。
+	 *
+	 * @return void
+	 */
+	public function test_overlap_actions_on_verify() {
+		$actions = ACGD_Basic_Auth::overlap_actions( ACGD_Basic_Auth::SCREEN_VERIFY, 'https://example.test/wp-admin/profile.php', 'https://example.test/logout' );
+
+		$this->assertSame(
+			array(
+				array(
+					'url'     => 'https://example.test/wp-admin/profile.php',
+					'label'   => 'Back to your profile',
+					'primary' => true,
+				),
+				array(
+					'url'     => 'https://example.test/logout',
+					'label'   => 'Log out',
+					'primary' => false,
+				),
+			),
+			$actions
+		);
+	}
+
+	/**
+	 * "Verify" without a destination falls back to "Log out" only (no empty link).
+	 * 戻り先の無い「確認」の往復は「ログアウト」だけになる（空のリンクを出さない）。
+	 *
+	 * @return void
+	 */
+	public function test_overlap_actions_on_verify_without_back_url() {
+		$actions = ACGD_Basic_Auth::overlap_actions( ACGD_Basic_Auth::SCREEN_VERIFY, '', 'https://example.test/logout' );
+
+		$this->assertCount( 1, $actions );
+		$this->assertSame( 'Log out', $actions[0]['label'] );
+		$this->assertTrue( $actions[0]['primary'] );
 	}
 }
