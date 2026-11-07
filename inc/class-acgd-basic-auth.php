@@ -1015,12 +1015,14 @@ class ACGD_Basic_Auth {
 		// Server-level BASIC authentication that leaves no trace in $_SERVER (nginx, a CDN) cannot be told
 		// apart here, so a failed attempt at least names the possibility (issue #32).
 		// $_SERVER に印を残さないサーバー側の BASIC 認証（nginx・CDN）はここでは見分けられないため、
-		// 失敗したときに可能性だけは示す（issue #32）。
+		// 失敗したときに可能性だけは示す（issue #32）。Plain text, like the lines above (see
+		// send_server_auth_overlap_response()). / 上の行と同じくプレーンテキスト
+		// （send_server_auth_overlap_response() を参照）。
 		if ( $failed ) {
 			$lines[] = acgd_join_sentences(
 				array(
-					esc_html__( 'If you are asked again and again even with the correct username and password, BASIC authentication of the server (or another plugin) may be overlapping with this one.', 'etbs-account-guard' ),
-					esc_html__( 'Contact your site administrator.', 'etbs-account-guard' ),
+					__( 'If you are asked again and again even with the correct username and password, BASIC authentication of the server (or another plugin) may be overlapping with this one.', 'etbs-account-guard' ),
+					__( 'Contact your site administrator.', 'etbs-account-guard' ),
 				)
 			);
 		}
@@ -1099,18 +1101,24 @@ class ACGD_Basic_Auth {
 		status_header( 403 );
 		header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
 
+		// Plain text throughout: acgd_join_sentences() only puts the language's separator between the
+		// sentences (no space in Japanese), and render_minimal_page() escapes each line where it prints it,
+		// as in ACGD_Two_Step::mail_failed_message().
+		// すべてプレーンテキストのまま渡す：acgd_join_sentences() は文の間に言語ごとの区切り（日本語は
+		// 空白なし）を挟むだけで、各行は render_minimal_page() が出力するところでエスケープする
+		// （ACGD_Two_Step::mail_failed_message() と同じ書き方）。
 		$lines = array(
 			acgd_join_sentences(
 				array(
-					esc_html__( 'This request has already passed a BASIC authentication sign-in required by the server (or another plugin).', 'etbs-account-guard' ),
-					esc_html__( 'Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be completed here.', 'etbs-account-guard' ),
+					__( 'This request has already passed a BASIC authentication sign-in required by the server (or another plugin).', 'etbs-account-guard' ),
+					__( 'Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be completed here.', 'etbs-account-guard' ),
 				)
 			),
 			acgd_join_sentences(
 				array(
-					esc_html__( 'To use it, that sign-in needs to be removed, or narrowed so that it does not cover the login and admin screens.', 'etbs-account-guard' ),
-					esc_html__( 'Otherwise, use IP address restriction instead.', 'etbs-account-guard' ),
-					esc_html__( 'Contact your site administrator.', 'etbs-account-guard' ),
+					__( 'To use it, that sign-in needs to be removed, or narrowed so that it does not cover the login and admin screens.', 'etbs-account-guard' ),
+					__( 'Otherwise, use IP address restriction instead.', 'etbs-account-guard' ),
+					__( 'Contact your site administrator.', 'etbs-account-guard' ),
 				)
 			),
 		);
@@ -1120,10 +1128,10 @@ class ACGD_Basic_Auth {
 				array(
 					sprintf(
 						/* translators: %s: PHP code to add to wp-config.php, define( 'ACGD_DISABLE_RESTRICTION', true ); */
-						esc_html__( 'If you cannot reach the admin screens to change this, add %s to wp-config.php.', 'etbs-account-guard' ),
-						esc_html( "define( 'ACGD_DISABLE_RESTRICTION', true );" )
+						__( 'If you cannot reach the admin screens to change this, add %s to wp-config.php.', 'etbs-account-guard' ),
+						"define( 'ACGD_DISABLE_RESTRICTION', true );"
 					),
-					esc_html__( 'This stops Access Restriction only.', 'etbs-account-guard' ),
+					__( 'This stops Access Restriction only.', 'etbs-account-guard' ),
 				)
 			);
 		}
