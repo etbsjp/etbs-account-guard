@@ -4,7 +4,7 @@ Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
 Requires PHP:      7.3
 Tested up to:      7.1
-Stable tag:        1.3.0
+Stable tag:        1.3.1
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -145,6 +145,10 @@ A session of a user who needs a code is kept only if it went through the code (o
 
 Two-Step Verification is not available on multisite: the login cookie can be shared across the network, so a site without it would let people in. The other features work as before.
 
+= What if BASIC authentication of the server still overlaps with this plugin's? =
+
+When the server (or another plugin) asks for its own BASIC sign-in on the same address, only one username and password can be sent with each request, so the two cannot be used together. Where the server tells WordPress that its own sign-in was passed (Apache with PHP-FPM and LiteSpeed did in our tests; mod_php was not tested), the confirmation screen shows an explanation instead of asking again. Where it does not (nginx in its default setup, or a sign-in at a CDN or proxy), the prompt keeps coming back, and the page shown after cancelling it says that the two may be overlapping. Either way, remove that sign-in or narrow it so that it does not cover the login and admin screens, then run the receive diagnosis again, or use IP restriction instead.
+
 == Screenshots ==
 
 1. The Login Name Protection tab of Settings > ETBS Account Guard, where each place that can reveal login names (REST API, oEmbed, sitemap, class names, author ID links, login errors, author pages) can be turned on or off.
@@ -154,6 +158,11 @@ Two-Step Verification is not available on multisite: the login cookie can be sha
 5. The Denial Log tab, listing denied sign-ins and requests with the date and time, user, IP address and where it happened.
 
 == Changelog ==
+
+= 1.3.1 =
+* [ Bug Fix ] Fixed the receive diagnosis reporting success when the server's own BASIC authentication covered only the login and admin screens. If you use or plan to use BASIC authentication mode, run the receive diagnosis again after updating.
+* [ Bug Fix ] Fixed the receive diagnosis not saying where the server's own BASIC authentication was found or what to do next.
+* [ Bug Fix ] Fixed the BASIC authentication confirmation screen repeating its prompt without explanation when the server's own BASIC authentication covers the same address.
 
 = 1.3.0 =
 * [ New Feature ] Added Two-Step Verification: a verification code sent by email can be required after the password, for each role (including administrator) or for a specific user, with an option to trust a device for 7 or 30 days. It is off by default.
