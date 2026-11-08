@@ -4,7 +4,7 @@ Donate link:       https://etbs.jp/product/donate/
 Tags:              security, login, username, user enumeration, rest api
 Requires PHP:      7.3
 Tested up to:      7.1
-Stable tag:        1.3.0
+Stable tag:        1.3.1
 License:           GPL-2.0-or-later
 License URI:       https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -88,7 +88,7 @@ Authenticator apps (TOTP), login attempt limits, CAPTCHA and firewalls are not i
 * Two-Step Verification does not protect against relay (adversary-in-the-middle) phishing sites, or against someone who persuades the user to read out the code. The email says never to share it.
 * Someone who knows a user's password can use up that user's hourly sending limit and keep them out for up to an hour. Changing the password releases the limit. A trusted device can still sign in.
 * Anyone who has both a user's password and the trusted device cookie of that user's browser can sign in without a code until the trust ends or the password is changed. A browser remembers one trusted device per site.
-* The receive diagnosis checks this site from the server itself, so it cannot see server-level BASIC authentication that lets the server's own address through, or BASIC authentication set at a CDN or proxy in front of the site. In those setups the diagnosis succeeds although the two cannot be used together. After the diagnosis, check from another connection that the sign-in prompt appears only once before saving BASIC authentication mode.
+* The receive diagnosis checks this site from the server itself, so it cannot see server-level BASIC authentication that lets the server's own address through, or BASIC authentication set at a CDN or proxy in front of the site. In those setups the diagnosis succeeds although the two cannot be used together. After the diagnosis, check from another connection that the sign-in prompt appears only once before saving BASIC authentication mode. If the two overlap anyway, the confirmation screen explains this instead of repeating the prompt on servers that report their own sign-in to PHP (Apache and LiteSpeed do; nginx in its default setup does not, and there the prompt keeps coming back with a note below it).
 * Repeated attacks can push older entries, including IP restriction and BASIC authentication denials, out of the Denial Log (the latest 100 are kept).
 * Application passwords do not go through Two-Step Verification.
 * Users who need a code cannot use sign-in methods of other plugins (magic links, social login and so on).
@@ -154,6 +154,11 @@ Two-Step Verification is not available on multisite: the login cookie can be sha
 5. The Denial Log tab, listing denied sign-ins and requests with the date and time, user, IP address and where it happened.
 
 == Changelog ==
+
+= 1.3.1 =
+* [ Bug Fix ] Fixed the receive diagnosis reporting success when the server's own BASIC authentication covered only the login and admin screens. If your server uses BASIC authentication on those screens, run the receive diagnosis again.
+* [ Bug Fix ] Fixed the receive diagnosis not saying where the server's own BASIC authentication was found or what to do next.
+* [ Bug Fix ] Fixed the BASIC authentication confirmation screen repeating its prompt without explanation when the server's own BASIC authentication covers the same address.
 
 = 1.3.0 =
 * [ New Feature ] Added Two-Step Verification: a verification code sent by email can be required after the password, for each role (including administrator) or for a specific user, with an option to trust a device for 7 or 30 days. It is off by default.
