@@ -88,7 +88,7 @@ Authenticator apps (TOTP), login attempt limits, CAPTCHA and firewalls are not i
 * Two-Step Verification does not protect against relay (adversary-in-the-middle) phishing sites, or against someone who persuades the user to read out the code. The email says never to share it.
 * Someone who knows a user's password can use up that user's hourly sending limit and keep them out for up to an hour. Changing the password releases the limit. A trusted device can still sign in.
 * Anyone who has both a user's password and the trusted device cookie of that user's browser can sign in without a code until the trust ends or the password is changed. A browser remembers one trusted device per site.
-* The receive diagnosis checks this site from the server itself, so it cannot see server-level BASIC authentication that lets the server's own address through, or BASIC authentication set at a CDN or proxy in front of the site. In those setups the diagnosis succeeds although the two cannot be used together. After the diagnosis, check from another connection that the sign-in prompt appears only once before saving BASIC authentication mode. If the two overlap anyway, the confirmation screen explains this instead of repeating the prompt on servers that report their own sign-in to PHP (Apache and LiteSpeed do; nginx in its default setup does not, and there the prompt keeps coming back with a note below it).
+* The receive diagnosis checks this site from the server itself, so it cannot see server-level BASIC authentication that lets the server's own address through, or BASIC authentication set at a CDN or proxy in front of the site. In those setups the diagnosis succeeds although the two cannot be used together. After the diagnosis, check from another connection that the sign-in prompt appears only once before saving BASIC authentication mode.
 * Repeated attacks can push older entries, including IP restriction and BASIC authentication denials, out of the Denial Log (the latest 100 are kept).
 * Application passwords do not go through Two-Step Verification.
 * Users who need a code cannot use sign-in methods of other plugins (magic links, social login and so on).
@@ -145,6 +145,10 @@ A session of a user who needs a code is kept only if it went through the code (o
 
 Two-Step Verification is not available on multisite: the login cookie can be shared across the network, so a site without it would let people in. The other features work as before.
 
+= What if BASIC authentication of the server still overlaps with this plugin's? =
+
+When the server (or another plugin) asks for its own BASIC sign-in on the same address, only one username and password can be sent with each request, so the two cannot be used together. Where the server tells WordPress that its own sign-in was passed (Apache with PHP-FPM and LiteSpeed did in our tests; mod_php was not tested), the confirmation screen shows an explanation instead of asking again. Where it does not (nginx in its default setup, or a sign-in at a CDN or proxy), the prompt keeps coming back, and the page shown after cancelling it says that the two may be overlapping. Either way, remove that sign-in or narrow it so that it does not cover the login and admin screens, then run the receive diagnosis again, or use IP restriction instead.
+
 == Screenshots ==
 
 1. The Login Name Protection tab of Settings > ETBS Account Guard, where each place that can reveal login names (REST API, oEmbed, sitemap, class names, author ID links, login errors, author pages) can be turned on or off.
@@ -156,7 +160,7 @@ Two-Step Verification is not available on multisite: the login cookie can be sha
 == Changelog ==
 
 = 1.3.1 =
-* [ Bug Fix ] Fixed the receive diagnosis reporting success when the server's own BASIC authentication covered only the login and admin screens. If your server uses BASIC authentication on those screens, run the receive diagnosis again.
+* [ Bug Fix ] Fixed the receive diagnosis reporting success when the server's own BASIC authentication covered only the login and admin screens. If you use or plan to use BASIC authentication mode, run the receive diagnosis again after updating.
 * [ Bug Fix ] Fixed the receive diagnosis not saying where the server's own BASIC authentication was found or what to do next.
 * [ Bug Fix ] Fixed the BASIC authentication confirmation screen repeating its prompt without explanation when the server's own BASIC authentication covers the same address.
 

@@ -124,6 +124,9 @@ etbs のプラグイン共通ルールと既知の罠は `~/.claude/etbs-plugin-
   CI の matrix は `['7.3','7.4','8.3']`（#19 で 7.3 を追加。**宣言した下限を CI が検査していなかった**ため）。
   ★ 7.3 のジョブだけ `runs-on: ubuntu-22.04`（新しい runner では 7.3 を用意できないことがあるため）。
   ★★ **`ci.yml` は7本の repo にコピーされる共有ファイルで、原本の matrix は `['7.4','8.3']`。同期のときに 7.3 を落とさないこと**
+- ★ **`readme.txt` の Description（`== Description ==` から `== Installation ==` の前まで）は、wp.org の上限 2500 語に近い**（1.3.1 の時点で約 2476 語）。
+  超えると wp.org のページで末尾（Known limitations の最後の項目）が切れる。文を足すときは Plugin Check の `readme_parser_warnings_trimmed_section_description` が出ないことを確かめ、
+  長い説明は FAQ（上限 5000 語）へ置く（1.3.1 の監査で、足した1文で超えたことを実測した）
 - **`Requires at least` は無宣言。** WordPress 側に実在する下限を特定していないため（「実在する下限があるときだけ書く」）
 
 ## PHPUnit
