@@ -1087,7 +1087,16 @@ class ACGD_Settings {
 			),
 			'server_basic_auth' => array(
 				'class' => 'notice-error',
-				'text'  => __( 'This server already requires a BASIC authentication sign-in of its own for this address. Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be turned on at the same time.', 'etbs-account-guard' ),
+				// One sentence per translation, joined by the translatable separator (already escaped; esc_html() below does not encode it twice).
+				// 1文ずつ翻訳し、翻訳できる区切りでつなぐ（エスケープ済み。下の esc_html() は二重にエンコードしない）。
+				'text'  => acgd_join_sentences(
+					array(
+						esc_html__( 'A BASIC authentication sign-in is already required by the server (or another plugin) — for the whole site, or for the login or admin screens.', 'etbs-account-guard' ),
+						esc_html__( 'Only one such credential can be sent per request, so this plugin\'s BASIC authentication cannot be turned on at the same time.', 'etbs-account-guard' ),
+						esc_html__( 'To use it, remove that sign-in or narrow it so it does not cover these screens, then run the diagnosis again.', 'etbs-account-guard' ),
+						esc_html__( 'Otherwise, use IP address restriction instead.', 'etbs-account-guard' ),
+					)
+				),
 			),
 			'unknown'           => array(
 				'class' => 'notice-warning',
@@ -1098,6 +1107,18 @@ class ACGD_Settings {
 		?>
 		<div class="notice inline <?php echo esc_attr( $label['class'] ); ?>">
 			<p><strong><?php echo esc_html( $label['text'] ); ?></strong></p>
+			<?php if ( 'server_basic_auth' === $result['status'] && '' !== $result['url'] ) : ?>
+				<?php // Outside the detail block: where it was found is what the admin needs to act on (issue #34). Results saved before then have no URL, and this line is left out. / 詳細欄の外に出す：見つかった場所こそ、管理者が直すのに要る情報のため（issue #34）。それより前に保存された結果には URL が無く、この行は出さない。 ?>
+				<p>
+					<?php
+					printf(
+						/* translators: %s: URL of the page where the BASIC authentication sign-in was found, e.g. the login screen */
+						esc_html__( 'Found at: %s', 'etbs-account-guard' ),
+						'<code>' . esc_html( $result['url'] ) . '</code>'
+					);
+					?>
+				</p>
+			<?php endif; ?>
 			<p class="description">
 				<?php
 				printf(
